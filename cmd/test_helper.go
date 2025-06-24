@@ -92,6 +92,7 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 			handlers.ConfigureHttpServer,
 			kafka.ConfigureSaramaClient,
 			client.NewTestRestClient,
+			client.NewRestClient, // TODO use interface and mock
 		),
 		fx.Invoke(
 			cqrs.RunCqrsRouter,
