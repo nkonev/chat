@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
@@ -12,12 +11,14 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
-	"go.uber.org/fx"
-	"go.uber.org/fx/fxevent"
-	"go.uber.org/fx/fxtest"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/fx"
+	"go.uber.org/fx/fxevent"
+	"go.uber.org/fx/fxtest"
 )
 
 func TestMain(m *testing.M) {
@@ -90,7 +91,7 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 			handlers.NewBlogHandler,
 			handlers.ConfigureHttpServer,
 			kafka.ConfigureSaramaClient,
-			client.NewRestClient,
+			client.NewTestRestClient,
 		),
 		fx.Invoke(
 			cqrs.RunCqrsRouter,

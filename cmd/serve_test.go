@@ -2,9 +2,6 @@ package cmd
 
 import (
 	"context"
-	"github.com/IBM/sarama"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
@@ -13,11 +10,15 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
-	"go.uber.org/fx"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/IBM/sarama"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/fx"
 )
 
 func TestUnreads(t *testing.T) {

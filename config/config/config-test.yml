@@ -59,3 +59,8 @@ projections:
 logger:
   level: info
   json: false
+
+aaa:
+  url:
+    base: "http://localhost:8060"
+    getUsers: "/internal/user/list"

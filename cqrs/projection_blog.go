@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"go-cqrs-chat-example/db"
+	"go-cqrs-chat-example/dto"
 	"time"
 )
 
@@ -94,17 +95,8 @@ func (m *CommonProjection) isMessageBlogPost(ctx context.Context, co db.CommonOp
 	return blog, nil
 }
 
-// list view
-type BlogViewDto struct {
-	Id             int64     `json:"id"`
-	OwnerId        *int64    `json:"ownerId"`
-	Title          string    `json:"title"`
-	Preview        *string   `json:"preview"`
-	CreateDateTime time.Time `json:"createDateTime"`
-}
-
-func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int64, reverseOrder bool) ([]BlogViewDto, error) {
-	ma := []BlogViewDto{}
+func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int64, reverseOrder bool) ([]dto.BlogViewDto, error) {
+	ma := []dto.BlogViewDto{}
 
 	order := "asc"
 	if reverseOrder {
@@ -127,7 +119,7 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var cd BlogViewDto
+		var cd dto.BlogViewDto
 		err = rows.Scan(&cd.Id, &cd.OwnerId, &cd.Title, &cd.Preview, &cd.CreateDateTime)
 		if err != nil {
 			return ma, err
@@ -137,15 +129,7 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 	return ma, nil
 }
 
-type BlogDto struct {
-	Id             int64     `json:"id"`
-	OwnerId        *int64    `json:"ownerId"`
-	Title          string    `json:"title"`
-	Post           *string   `json:"post"`
-	CreateDateTime time.Time `json:"createDateTime"`
-}
-
-func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*BlogDto, error) {
+func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*dto.BlogDto, error) {
 	row := m.db.QueryRowContext(ctx, `
 		select 
 		    b.id,
@@ -165,7 +149,7 @@ func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*BlogDto,
 		return nil, row.Err()
 	}
 
-	var cd BlogDto
+	var cd dto.BlogDto
 	err := row.Scan(&cd.Id, &cd.OwnerId, &cd.Title, &cd.Post, &cd.CreateDateTime)
 	if err != nil {
 		return nil, err
@@ -187,16 +171,8 @@ func (m *CommonProjection) getBlogPostMessageId(ctx context.Context, co db.Commo
 	return messageId, nil
 }
 
-type CommentViewDto struct {
-	Id             int64      `json:"id"`
-	OwnerId        int64      `json:"ownerId"`
-	Content        string     `json:"content"`
-	CreateDateTime time.Time  `json:"createDateTime"`
-	UpdateDateTime *time.Time `json:"editDateTime"` // for sake compatibility
-}
-
-func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperations, blogId, postMessageId int64, size int32, offset int64, reverseOrder bool) ([]CommentViewDto, error) {
-	ma := []CommentViewDto{}
+func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperations, blogId, postMessageId int64, size int32, offset int64, reverseOrder bool) ([]dto.CommentViewDto, error) {
+	ma := []dto.CommentViewDto{}
 
 	order := "asc"
 	if reverseOrder {
@@ -215,7 +191,7 @@ func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperatio
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var cd CommentViewDto
+		var cd dto.CommentViewDto
 		err = rows.Scan(&cd.Id, &cd.OwnerId, &cd.Content, &cd.CreateDateTime, &cd.UpdateDateTime)
 		if err != nil {
 			return ma, err
@@ -225,20 +201,20 @@ func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperatio
 	return ma, nil
 }
 
-func (m *CommonProjection) GetComments(ctx context.Context, blogId int64, size int32, offset int64, reverseOrder bool) ([]CommentViewDto, error) {
-	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) ([]CommentViewDto, error) {
+func (m *CommonProjection) GetComments(ctx context.Context, blogId int64, size int32, offset int64, reverseOrder bool) ([]dto.CommentViewDto, error) {
+	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) ([]dto.CommentViewDto, error) {
 		postMessageId, err := m.getBlogPostMessageId(ctx, tx, blogId)
 		if err != nil {
-			return []CommentViewDto{}, err
+			return []dto.CommentViewDto{}, err
 		}
 		comments, err := m.getComments(ctx, tx, blogId, postMessageId, size, offset, reverseOrder)
 		if err != nil {
-			return []CommentViewDto{}, err
+			return []dto.CommentViewDto{}, err
 		}
 		return comments, nil
 	})
 	if errOuter != nil {
-		return []CommentViewDto{}, errOuter
+		return []dto.CommentViewDto{}, errOuter
 	}
 	return res, nil
 }

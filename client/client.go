@@ -5,27 +5,40 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"go-cqrs-chat-example/config"
-	"go-cqrs-chat-example/cqrs"
-	"go-cqrs-chat-example/handlers"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type RestClient struct {
 	*http.Client
-	tracer trace.Tracer
-	cfg    *config.AppConfig
-	lgr    *logger.LoggerWrapper
+	protocolHostPort string
+	tracer           trace.Tracer
+	cfg              *config.AppConfig
+	lgr              *logger.LoggerWrapper
+}
+
+func NewTestRestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *RestClient {
+	tr := &http.Transport{
+		MaxIdleConns:       cfg.RestClientConfig.MaxIdleConns,
+		IdleConnTimeout:    cfg.RestClientConfig.IdleConnTimeout,
+		DisableCompression: cfg.RestClientConfig.DisableCompression,
+	}
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	trR := otelhttp.NewTransport(tr)
+	client := &http.Client{Transport: trR}
+	trcr := otel.Tracer("test/rest/client")
+
+	return &RestClient{client, "http://localhost" + cfg.HttpServerConfig.Address, trcr, cfg, lgr}
 }
 
 func NewRestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *RestClient {
@@ -39,118 +52,13 @@ func NewRestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *RestClient
 	client := &http.Client{Transport: trR}
 	trcr := otel.Tracer("rest/client")
 
-	return &RestClient{client, trcr, cfg, lgr}
+	return &RestClient{client, cfg.AaaConfig.AaaUrlConfig.Base, trcr, cfg, lgr}
 }
 
-func (rc *RestClient) CreateChat(ctx context.Context, behalfUserId int64, chatName string) (int64, error) {
-	req := handlers.ChatCreateDto{
-		Title: chatName,
-	}
-	resp, err := query[handlers.ChatCreateDto, handlers.IdResponse](ctx, rc, behalfUserId, "POST", "/chat", "chat.Create", &req, nil)
-	if err != nil {
-		return 0, err
-	}
-	return resp.Id, nil
-}
-
-func (rc *RestClient) EditChat(ctx context.Context, chatId int64, chatName string, blog bool) error {
-	req := handlers.ChatEditDto{
-		Id: chatId,
-		ChatCreateDto: handlers.ChatCreateDto{
-			Title: chatName,
-		},
-		Blog: blog,
-	}
-	err := queryNoResponse[handlers.ChatEditDto](ctx, rc, 0, "PUT", "/chat", "chat.Edit", &req)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (rc *RestClient) PinChat(ctx context.Context, behalfUserId int64, chatId int64, pin bool) error {
-	return queryNoResponse[any](ctx, rc, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/pin?pin="+utils.ToString(pin), "chat.Pin", nil)
-}
-
-func (rc *RestClient) DeleteChat(ctx context.Context, chatId int64) error {
-	return queryNoResponse[any](ctx, rc, 0, "DELETE", "/chat/"+utils.ToString(chatId), "chat.Delete", nil)
-}
-
-func (rc *RestClient) GetChatsByUserId(ctx context.Context, behalfUserId int64, queryParams *url.Values) ([]cqrs.ChatViewDto, error) {
-	return query[any, []cqrs.ChatViewDto](ctx, rc, behalfUserId, "GET", "/chat/search", "chat.Search", nil, queryParams)
-}
-
-func (rc *RestClient) SearchBlogs(ctx context.Context) ([]cqrs.BlogViewDto, error) {
-	return query[any, []cqrs.BlogViewDto](ctx, rc, 0, "GET", "/blog/search", "blog.Search", nil, nil)
-}
-
-func (rc *RestClient) CreateMessage(ctx context.Context, behalfUserId int64, chatId int64, text string) (int64, error) {
-	req := handlers.MessageCreateDto{
-		Content: text,
-	}
-	resp, err := query[handlers.MessageCreateDto, handlers.IdResponse](ctx, rc, behalfUserId, "POST", "/chat/"+utils.ToString(chatId)+"/message", "message.Create", &req, nil)
-	if err != nil {
-		return 0, err
-	}
-	return resp.Id, nil
-}
-
-func (rc *RestClient) EditMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64, text string) error {
-	req := handlers.MessageEditDto{
-		Id: messageId,
-		MessageCreateDto: handlers.MessageCreateDto{
-			Content: text,
-		},
-	}
-	return queryNoResponse[handlers.MessageEditDto](ctx, rc, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/message", "message.Edit", &req)
-}
-
-func (rc *RestClient) DeleteMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
-	return queryNoResponse[any](ctx, rc, behalfUserId, "DELETE", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Delete", nil)
-}
-
-func (rc *RestClient) GetMessages(ctx context.Context, behalfUserId int64, chatId int64, queryParams *url.Values) ([]cqrs.MessageViewDto, error) {
-	return query[any, []cqrs.MessageViewDto](ctx, rc, behalfUserId, "GET", "/chat/"+utils.ToString(chatId)+"/message/search", "message.Search", nil, queryParams)
-}
-
-func (rc *RestClient) MakeMessageBlogPost(ctx context.Context, chatId, messageId int64) error {
-	return queryNoResponse[any](ctx, rc, 0, "PUT", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/blog-post", "message.MakeBlogPost", nil)
-}
-
-func (rc *RestClient) SearchBlogComments(ctx context.Context, blogId int64) ([]cqrs.CommentViewDto, error) {
-	return query[any, []cqrs.CommentViewDto](ctx, rc, 0, "GET", "/blog/"+utils.ToString(blogId)+"/comment/search", "blog.SearchComments", nil, nil)
-}
-
-func (rc *RestClient) AddChatParticipants(ctx context.Context, chatId int64, participantIds []int64) error {
-	req := handlers.ParticipantAddDto{
-		ParticipantIds: participantIds,
-	}
-	return queryNoResponse[handlers.ParticipantAddDto](ctx, rc, 0, "PUT", "/chat/"+utils.ToString(chatId)+"/participant", "participants.Add", &req)
-}
-
-func (rc *RestClient) DeleteChatParticipants(ctx context.Context, chatId int64, participantIds []int64) error {
-	req := handlers.ParticipantDeleteDto{
-		ParticipantIds: participantIds,
-	}
-	return queryNoResponse[handlers.ParticipantDeleteDto](ctx, rc, 0, "DELETE", "/chat/"+utils.ToString(chatId)+"/participant", "participants.Delete", &req)
-}
-
-func (rc *RestClient) GetChatParticipants(ctx context.Context, chatId int64) ([]int64, error) {
-	return query[any, []int64](ctx, rc, 0, "GET", "/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, nil)
-}
-
-func (rc *RestClient) ReadMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
-	return queryNoResponse[any](ctx, rc, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/read", "message.Read", nil)
-}
-
-func (rc *RestClient) HealthCheck(ctx context.Context) error {
-	return queryNoResponse[any](ctx, rc, 0, "GET", "/internal/health", "internal.HealthCheck", nil)
-}
-
-// You should call 	defer httpResp.Body.Close()
+// You should call defer httpResp.Body.Close()
 func queryRawResponse[ReqDto any](ctx context.Context, rc *RestClient, behalfUserId int64, method, url, opName string, req *ReqDto, queryParams *url.Values) (*http.Response, error) {
 	contentType := "application/json;charset=UTF-8"
-	fullUrl := utils.StringToUrl("http://localhost" + rc.cfg.HttpServerConfig.Address + url)
+	fullUrl := utils.StringToUrl(rc.protocolHostPort + url)
 	if queryParams != nil {
 		fullUrl.RawQuery = queryParams.Encode()
 	}
@@ -205,7 +113,7 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *RestClient, behalfUse
 	code := httpResp.StatusCode
 	if !(code >= 200 && code < 300) {
 		rc.lgr.WithTrace(ctx).Warn(fmt.Sprintf("%v response responded non-2xx code: ", opName), "code", code)
-		return nil, errors.New(fmt.Sprintf("%v response responded non-2xx code: %v", opName, code))
+		return nil, fmt.Errorf("%v response responded non-2xx code: %v", opName, code)
 	}
 
 	if rc.cfg.RestClientConfig.Dump {

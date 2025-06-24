@@ -1,12 +1,14 @@
 package handlers
 
 import (
-	"github.com/gin-gonic/gin"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
+	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ParticipantHandler struct {
@@ -40,7 +42,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 		return
 	}
 
-	ccd := new(ParticipantAddDto)
+	ccd := new(dto.ParticipantAddDto)
 
 	err = g.Bind(ccd)
 	if err != nil {
@@ -75,7 +77,7 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 		return
 	}
 
-	ccd := new(ParticipantDeleteDto)
+	ccd := new(dto.ParticipantDeleteDto)
 
 	err = g.Bind(ccd)
 	if err != nil {

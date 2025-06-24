@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/db"
+	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
 	"slices"
-	"time"
+
+	"github.com/jackc/pgtype"
 )
 
 func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32, offset int64) ([]int64, error) {
@@ -288,28 +289,8 @@ func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOper
 	return chatExists, nil
 }
 
-type ChatViewDto struct {
-	Id                 int64      `json:"id"`
-	Title              string     `json:"title"`
-	Pinned             bool       `json:"pinned"`
-	UnreadMessages     int64      `json:"unreadMessages"`
-	LastMessageId      *int64     `json:"lastMessageId"`
-	LastMessageOwnerId *int64     `json:"lastMessageOwnerId"`
-	LastMessageContent *string    `json:"lastMessageContent"`
-	ParticipantsCount  int64      `json:"participantsCount"`
-	ParticipantIds     []int64    `json:"participantIds"` // ids of last N participants
-	Blog               bool       `json:"blog"`
-	UpdateDateTime     *time.Time `json:"lastUpdateDateTime"` // for sake compatibility
-}
-
-type ChatId struct {
-	Pinned             bool
-	LastUpdateDateTime time.Time
-	Id                 int64
-}
-
-func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, size int32, startingFromItemId *ChatId, includeStartingFrom, reverse bool) ([]ChatViewDto, error) {
-	ma := []ChatViewDto{}
+func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool) ([]dto.ChatViewDto, error) {
+	ma := []dto.ChatViewDto{}
 
 	queryArgs := []any{participantId, size}
 
@@ -364,7 +345,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var cd ChatViewDto
+		var cd dto.ChatViewDto
 		var participantIds = pgtype.Int8Array{}
 		err = rows.Scan(&cd.Id, &cd.Title, &cd.Pinned, &cd.UnreadMessages, &cd.LastMessageId, &cd.LastMessageOwnerId, &cd.LastMessageContent, &cd.ParticipantsCount, &participantIds, &cd.Blog, &cd.UpdateDateTime)
 		if err != nil {

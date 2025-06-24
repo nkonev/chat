@@ -2,9 +2,6 @@ package cmd
 
 import (
 	"context"
-	"github.com/IBM/sarama"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
@@ -13,10 +10,14 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
-	"go.uber.org/fx"
-	"go.uber.org/fx/fxevent"
 	"os"
 	"testing"
+
+	"github.com/IBM/sarama"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/fx"
+	"go.uber.org/fx/fxevent"
 )
 
 func TestImport(t *testing.T) {

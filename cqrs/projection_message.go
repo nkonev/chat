@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go-cqrs-chat-example/db"
-	"time"
+	"go-cqrs-chat-example/dto"
 )
 
 func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageCreated) error {
@@ -295,17 +295,8 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 	return maxMessageId, nil
 }
 
-type MessageViewDto struct {
-	Id             int64      `json:"id"`
-	OwnerId        int64      `json:"ownerId"`
-	Content        string     `json:"text"` // for sake compatibility
-	BlogPost       bool       `json:"blogPost"`
-	CreateDateTime time.Time  `json:"createDateTime"`
-	UpdateDateTime *time.Time `json:"editDateTime"` // for sake compatibility
-}
-
-func (m *CommonProjection) GetMessages(ctx context.Context, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool) ([]MessageViewDto, error) {
-	ma := []MessageViewDto{}
+func (m *CommonProjection) GetMessages(ctx context.Context, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool) ([]dto.MessageViewDto, error) {
+	ma := []dto.MessageViewDto{}
 
 	queryArgs := []any{chatId, size}
 
@@ -346,7 +337,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, chatId int64, size i
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var cd MessageViewDto
+		var cd dto.MessageViewDto
 		err = rows.Scan(&cd.Id, &cd.OwnerId, &cd.Content, &cd.BlogPost, &cd.CreateDateTime, &cd.UpdateDateTime)
 		if err != nil {
 			return ma, err

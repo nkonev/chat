@@ -4,7 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"github.com/spf13/cobra"
+	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
@@ -12,9 +12,11 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
+	"os"
+
+	"github.com/spf13/cobra"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
-	"os"
 )
 
 // serveCmd represents the serve command
@@ -77,6 +79,7 @@ func RunServe() {
 			handlers.NewBlogHandler,
 			handlers.ConfigureHttpServer,
 			kafka.ConfigureSaramaClient,
+			client.NewRestClient,
 		),
 		fx.Invoke(
 			db.RunMigrations,

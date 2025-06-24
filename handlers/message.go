@@ -1,12 +1,14 @@
 package handlers
 
 import (
-	"github.com/gin-gonic/gin"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
+	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 type MessageHandler struct {
@@ -47,7 +49,7 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		return
 	}
 
-	mcd := new(MessageCreateDto)
+	mcd := new(dto.MessageCreateDto)
 
 	err = g.Bind(mcd)
 	if err != nil {
@@ -75,7 +77,7 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		return
 	}
 
-	m := IdResponse{Id: mid}
+	m := dto.IdResponse{Id: mid}
 
 	g.JSON(http.StatusOK, m)
 }
@@ -96,7 +98,7 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 		return
 	}
 
-	ccd := new(MessageEditDto)
+	ccd := new(dto.MessageEditDto)
 
 	err = g.Bind(ccd)
 	if err != nil {

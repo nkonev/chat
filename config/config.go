@@ -3,13 +3,13 @@ package config
 import (
 	"bytes"
 	"embed"
-	"errors"
 	"fmt"
-	"github.com/spf13/viper"
 	"go-cqrs-chat-example/app"
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 type KafkaConfig struct {
@@ -102,6 +102,15 @@ type LoggerConfig struct {
 	Json  bool   `mapstructure:"json"`
 }
 
+type AaaConfig struct {
+	AaaUrlConfig AaaUrlConfig `mapstructure:"url"`
+}
+
+type AaaUrlConfig struct {
+	Base     string `mapstructure:"base"`
+	GetUsers string `mapstructure:"getUsers"`
+}
+
 func (lc *LoggerConfig) GetLevel() slog.Leveler {
 	var lvl slog.Level
 	err := lvl.UnmarshalText([]byte(lc.Level))
@@ -120,6 +129,7 @@ type AppConfig struct {
 	RestClientConfig  RestClientConfig  `mapstructure:"http"`
 	ProjectionsConfig ProjectionsConfig `mapstructure:"projections"`
 	LoggerConfig      LoggerConfig      `mapstructure:"logger"`
+	AaaConfig         AaaConfig         `mapstructure:"aaa"`
 }
 
 //go:embed config
@@ -147,7 +157,7 @@ func createTypedConfig(filename string) (*AppConfig, error) {
 	viper.AutomaticEnv()
 	err := viper.GetViper().Unmarshal(&conf)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("config file loaded failed. %v\n", err))
+		return nil, fmt.Errorf("config file loaded failed. %v\n", err)
 	}
 
 	return &conf, nil

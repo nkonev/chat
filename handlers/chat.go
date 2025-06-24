@@ -1,14 +1,17 @@
 package handlers
 
 import (
-	"github.com/gin-gonic/gin"
+	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
+	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
 	"net/http"
 	"slices"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ChatHandler struct {
@@ -16,6 +19,7 @@ type ChatHandler struct {
 	eventBus         *cqrs.PartitionAwareEventBus
 	dbWrapper        *db.DB
 	commonProjection *cqrs.CommonProjection
+	restClient       *client.RestClient
 }
 
 func NewChatHandler(
@@ -23,17 +27,19 @@ func NewChatHandler(
 	eventBus *cqrs.PartitionAwareEventBus,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
+	restClient *client.RestClient,
 ) *ChatHandler {
 	return &ChatHandler{
 		lgr:              lgr,
 		eventBus:         eventBus,
 		dbWrapper:        dbWrapper,
 		commonProjection: commonProjection,
+		restClient:       restClient,
 	}
 }
 
 func (ch *ChatHandler) CreateChat(g *gin.Context) {
-	ccd := new(ChatCreateDto)
+	ccd := new(dto.ChatCreateDto)
 
 	err := g.Bind(ccd)
 	if err != nil {
@@ -66,13 +72,13 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		return
 	}
 
-	m := IdResponse{Id: chatId}
+	m := dto.IdResponse{Id: chatId}
 
 	g.JSON(http.StatusOK, m)
 }
 
 func (ch *ChatHandler) EditChat(g *gin.Context) {
-	ccd := new(ChatEditDto)
+	ccd := new(dto.ChatEditDto)
 
 	err := g.Bind(ccd)
 	if err != nil {
@@ -187,14 +193,73 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 		g.Status(http.StatusInternalServerError)
 		return
 	}
-	g.JSON(http.StatusOK, chats)
+
+	userIds := getUserIds(chats)
+	users, err := ch.restClient.GetUsers(g.Request.Context(), userIds)
+	if err != nil {
+		ch.lgr.WithTrace(g.Request.Context()).Warn("unable to get users")
+	}
+	chatsEnriched := enrichChats(chats, users)
+
+	g.JSON(http.StatusOK, chatsEnriched)
 }
 
-func (ch *ChatHandler) convertChatId(pinned *bool, lastUpdateDateTime *time.Time, id *int64) *cqrs.ChatId {
+func getUserIds(chats []dto.ChatViewDto) []int64 {
+	m := map[int64]struct{}{}
+
+	for _, ch := range chats {
+		for _, p := range ch.ParticipantIds {
+			m[p] = struct{}{}
+		}
+	}
+
+	r := []int64{}
+
+	for k, _ := range m {
+		r = append(r, k)
+	}
+	return r
+}
+
+func findUserById(users []dto.User, userId int64) *dto.User {
+	for _, u := range users {
+		if u.Id == userId {
+			return &u
+		}
+	}
+	return nil
+}
+
+func enrichChats(chats []dto.ChatViewDto, users []dto.User) []dto.ChatViewEnrichedDto {
+	res := make([]dto.ChatViewEnrichedDto, 0, len(users))
+	for _, ch := range chats {
+		che := dto.ChatViewEnrichedDto{
+			ChatViewDto:  ch,
+			Participants: makeParticipants(ch.ParticipantIds, users),
+		}
+		res = append(res, che)
+	}
+	return res
+}
+
+func makeParticipants(participantIds []int64, users []dto.User) []dto.User {
+	res := make([]dto.User, 0, len(participantIds))
+
+	for _, p := range participantIds {
+		u := findUserById(users, p)
+		if u != nil {
+			res = append(res, *u)
+		}
+	}
+
+	return res
+}
+
+func (ch *ChatHandler) convertChatId(pinned *bool, lastUpdateDateTime *time.Time, id *int64) *dto.ChatId {
 	if pinned == nil || lastUpdateDateTime == nil || id == nil {
 		return nil
 	}
-	return &cqrs.ChatId{
+	return &dto.ChatId{
 		Pinned:             *pinned,
 		LastUpdateDateTime: *lastUpdateDateTime,
 		Id:                 *id,
