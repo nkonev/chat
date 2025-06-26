@@ -17,9 +17,6 @@ type aaaRestClient struct {
 	restClient
 }
 
-//go:generate go get go.uber.org/mock/mockgen@v0.5.2
-//go:generate go run go.uber.org/mock/mockgen -source=aaa.go -destination mock/lock.go
-//go:generate go mod tidy
 type AaaRestClient interface {
 	GetUsers(ctx context.Context, userIds []int64) ([]dto.User, error)
 }

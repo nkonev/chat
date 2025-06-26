@@ -3,8 +3,12 @@ test-verbose:
 	# here is timeout for all tests
 	go test ./... -count=1 -test.v -test.timeout=180s -p 1
 
+.PHONY: download
+download:
+	go install github.com/vektra/mockery/v3@v3.5.0
+
 generate:
-	@go generate -v ./...
+	mockery
 
 .PHONY: test
 test: export CHAT_LOGGER.LEVEL = warn
