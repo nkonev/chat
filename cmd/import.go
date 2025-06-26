@@ -22,7 +22,7 @@ import (
 var importCmd = &cobra.Command{
 	Use:   "import",
 	Short: "Import events",
-	Long:  `Import events from stdin to the configured topic.`,
+	Long:  `Import events from stdin or a file to the event topic. If the topic already contains events, the events from the file are going to be appended.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		RunImport()
 	},

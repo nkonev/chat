@@ -18,7 +18,7 @@ import (
 var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export events",
-	Long:  `Export events from configured topic to stdout.`,
+	Long:  `Export events from configured topic to stdout or a file. The file is going to be overwritten.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		RunExport()
 	},
