@@ -19,7 +19,7 @@ type ChatHandler struct {
 	eventBus         *cqrs.PartitionAwareEventBus
 	dbWrapper        *db.DB
 	commonProjection *cqrs.CommonProjection
-	restClient       *client.RestClient
+	aaaRestClient    client.AaaRestClient
 }
 
 func NewChatHandler(
@@ -27,14 +27,14 @@ func NewChatHandler(
 	eventBus *cqrs.PartitionAwareEventBus,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
-	restClient *client.RestClient,
+	restClient client.AaaRestClient,
 ) *ChatHandler {
 	return &ChatHandler{
 		lgr:              lgr,
 		eventBus:         eventBus,
 		dbWrapper:        dbWrapper,
 		commonProjection: commonProjection,
-		restClient:       restClient,
+		aaaRestClient:    restClient,
 	}
 }
 
@@ -195,7 +195,7 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 	}
 
 	userIds := getUserIds(chats)
-	users, err := ch.restClient.GetUsers(g.Request.Context(), userIds)
+	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), userIds)
 	if err != nil {
 		ch.lgr.WithTrace(g.Request.Context()).Warn("unable to get users")
 	}

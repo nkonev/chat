@@ -4,6 +4,7 @@ import (
 	"context"
 	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/client"
+	mock_client "go-cqrs-chat-example/client/mock"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
@@ -11,6 +12,7 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
+	"go.uber.org/mock/gomock"
 	"os"
 	"testing"
 	"time"
@@ -61,8 +63,18 @@ func resetInfra(lgr *logger.LoggerWrapper, cfg *config.AppConfig) {
 	appFx.Run()
 }
 
+func aaaClientFactory(ctrl *gomock.Controller) func() client.AaaRestClient {
+	return func() client.AaaRestClient {
+		return mock_client.NewMockAaaRestClient(ctrl)
+	}
+}
+
 func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T, testFunc interface{}) {
 	var s fx.Shutdowner
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	appTestFx := fxtest.New(
 		t,
 		fx.Supply(cfg),
@@ -92,7 +104,7 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 			handlers.ConfigureHttpServer,
 			kafka.ConfigureSaramaClient,
 			client.NewTestRestClient,
-			client.NewRestClient, // TODO use interface and mock and the different type
+			aaaClientFactory(ctrl),
 		),
 		fx.Invoke(
 			cqrs.RunCqrsRouter,
@@ -118,7 +130,7 @@ func startAppFull(t *testing.T, testFunc interface{}) {
 	runTestFunc(lgr, cfg, t, testFunc)
 }
 
-func waitForHealthCheck(lgr *logger.LoggerWrapper, restClient *client.RestClient, cfg *config.AppConfig) {
+func waitForHealthCheck(lgr *logger.LoggerWrapper, restClient *client.TestRestClient, cfg *config.AppConfig) {
 	ctx := context.Background()
 
 	i := 0

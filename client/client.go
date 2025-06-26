@@ -3,7 +3,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"go-cqrs-chat-example/config"
@@ -14,12 +13,10 @@ import (
 	"net/http/httputil"
 	"net/url"
 
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
 
-type RestClient struct {
+type restClient struct {
 	*http.Client
 	protocolHostPort string
 	tracer           trace.Tracer
@@ -27,36 +24,8 @@ type RestClient struct {
 	lgr              *logger.LoggerWrapper
 }
 
-func NewTestRestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *RestClient {
-	tr := &http.Transport{
-		MaxIdleConns:       cfg.RestClientConfig.MaxIdleConns,
-		IdleConnTimeout:    cfg.RestClientConfig.IdleConnTimeout,
-		DisableCompression: cfg.RestClientConfig.DisableCompression,
-	}
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	trR := otelhttp.NewTransport(tr)
-	client := &http.Client{Transport: trR}
-	trcr := otel.Tracer("test/rest/client")
-
-	return &RestClient{client, "http://localhost" + cfg.HttpServerConfig.Address, trcr, cfg, lgr}
-}
-
-func NewRestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *RestClient {
-	tr := &http.Transport{
-		MaxIdleConns:       cfg.RestClientConfig.MaxIdleConns,
-		IdleConnTimeout:    cfg.RestClientConfig.IdleConnTimeout,
-		DisableCompression: cfg.RestClientConfig.DisableCompression,
-	}
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	trR := otelhttp.NewTransport(tr)
-	client := &http.Client{Transport: trR}
-	trcr := otel.Tracer("rest/client")
-
-	return &RestClient{client, cfg.AaaConfig.AaaUrlConfig.Base, trcr, cfg, lgr}
-}
-
 // You should call defer httpResp.Body.Close()
-func queryRawResponse[ReqDto any](ctx context.Context, rc *RestClient, behalfUserId int64, method, url, opName string, req *ReqDto, queryParams *url.Values) (*http.Response, error) {
+func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUserId int64, method, url, opName string, req *ReqDto, queryParams *url.Values) (*http.Response, error) {
 	contentType := "application/json;charset=UTF-8"
 	fullUrl := utils.StringToUrl(rc.protocolHostPort + url)
 	if queryParams != nil {
@@ -132,7 +101,7 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *RestClient, behalfUse
 	return httpResp, err
 }
 
-func query[ReqDto any, ResDto any](ctx context.Context, rc *RestClient, behalfUserId int64, method, url, opName string, req *ReqDto, queryParams *url.Values) (ResDto, error) {
+func query[ReqDto any, ResDto any](ctx context.Context, rc *restClient, behalfUserId int64, method, url, opName string, req *ReqDto, queryParams *url.Values) (ResDto, error) {
 	var resp ResDto
 	var err error
 	httpResp, err := queryRawResponse(ctx, rc, behalfUserId, method, url, opName, req, queryParams)
@@ -154,7 +123,7 @@ func query[ReqDto any, ResDto any](ctx context.Context, rc *RestClient, behalfUs
 	return resp, nil
 }
 
-func queryNoResponse[ReqDto any](ctx context.Context, rc *RestClient, behalfUserId int64, method, url, opName string, req *ReqDto) error {
+func queryNoResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUserId int64, method, url, opName string, req *ReqDto) error {
 	var err error
 	httpResp, err := queryRawResponse(ctx, rc, behalfUserId, method, url, opName, req, nil)
 	if err != nil {

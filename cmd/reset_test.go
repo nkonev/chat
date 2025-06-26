@@ -41,7 +41,7 @@ func TestReset(t *testing.T) {
 	runTestFunc(lgr, cfg, t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		lc fx.Lifecycle,
@@ -109,7 +109,7 @@ func TestReset(t *testing.T) {
 	runTestFunc(lgr, cfg, t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		lc fx.Lifecycle,

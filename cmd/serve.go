@@ -79,7 +79,7 @@ func RunServe() {
 			handlers.NewBlogHandler,
 			handlers.ConfigureHttpServer,
 			kafka.ConfigureSaramaClient,
-			client.NewRestClient,
+			client.NewAAARestClient,
 		),
 		fx.Invoke(
 			db.RunMigrations,

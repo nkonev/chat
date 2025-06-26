@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"go-cqrs-chat-example/client"
+	mock_client "go-cqrs-chat-example/client/mock"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
@@ -10,6 +11,7 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
+	"go.uber.org/mock/gomock"
 	"net/url"
 	"strings"
 	"testing"
@@ -25,7 +27,7 @@ func TestUnreads(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		lc fx.Lifecycle,
@@ -159,11 +161,15 @@ func TestPinChat(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
 	) {
+		mockAaaClient := aaaRestClient.(*mock_client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(gomock.Any(), gomock.Any()).Times(5)
+
 		const user1 int64 = 1
 		const user2 int64 = 2
 		const chat1Name = "new chat 1"
@@ -251,7 +257,7 @@ func TestDeleteChat(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		lc fx.Lifecycle,
@@ -331,7 +337,7 @@ func TestAddParticipant(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		lc fx.Lifecycle,
@@ -429,7 +435,7 @@ func TestDeleteParticipant(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		lc fx.Lifecycle,
@@ -519,7 +525,7 @@ func TestEditMessage(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		lc fx.Lifecycle,
@@ -617,7 +623,7 @@ func TestBlog(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		lc fx.Lifecycle,
@@ -665,7 +671,7 @@ func TestChatPaginate(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		dba *db.DB,
 		lc fx.Lifecycle,
@@ -724,7 +730,7 @@ func TestMessagePaginate(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
-		restClient *client.RestClient,
+		restClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		dba *db.DB,
 		lc fx.Lifecycle,
