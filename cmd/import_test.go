@@ -31,11 +31,22 @@ func TestImport(t *testing.T) {
 	lgr := logger.NewLogger(baseLogger)
 
 	const user1 int64 = 1
+	const user1Login = "admin"
 	const chat1Name = "new chat 1"
 	const message1Text = "new message 1"
 
 	var message1Id int64
 	var chat1Id int64
+
+	mockUser1 := dto.User{
+		Id:               user1,
+		Login:            user1Login,
+		Avatar:           nil,
+		ShortInfo:        nil,
+		LoginColor:       nil,
+		LastSeenDateTime: nil,
+		AdditionalData:   nil,
+	}
 
 	resetInfra(lgr, cfg)
 
@@ -50,7 +61,7 @@ func TestImport(t *testing.T) {
 		lc fx.Lifecycle,
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, []int64{user1}).Return([]dto.User{mockUser1}, nil)
 
 		ctx := context.Background()
 
@@ -74,7 +85,9 @@ func TestImport(t *testing.T) {
 
 		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in char participants")
-		assert.Equal(t, []int64{user1}, chat1Participants)
+		require.Equal(t, 1, len(chat1Participants))
+		assert.Equal(t, user1, chat1Participants[0].Id)
+		assert.Equal(t, user1Login, chat1Participants[0].Login)
 
 		chat1Messages, err := testRestClient.GetMessages(ctx, user1, chat1Id, nil)
 		require.NoError(t, err, "error in getting messages")
@@ -140,7 +153,7 @@ func TestImport(t *testing.T) {
 		lc fx.Lifecycle,
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, []int64{user1}).Return([]dto.User{mockUser1}, nil)
 
 		ctx := context.Background()
 
@@ -155,7 +168,9 @@ func TestImport(t *testing.T) {
 
 		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in char participants")
-		assert.Equal(t, []int64{user1}, chat1Participants)
+		require.Equal(t, 1, len(chat1Participants))
+		assert.Equal(t, user1, chat1Participants[0].Id)
+		assert.Equal(t, user1Login, chat1Participants[0].Login)
 
 		chat1Messages, err := testRestClient.GetMessages(ctx, user1, chat1Id, nil)
 		require.NoError(t, err, "error in getting messages")

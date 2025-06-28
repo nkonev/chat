@@ -124,8 +124,8 @@ func (rc *TestRestClient) DeleteChatParticipants(ctx context.Context, chatId int
 	return queryNoResponse[dto.ParticipantDeleteDto](ctx, &rc.restClient, 0, "DELETE", "/chat/"+utils.ToString(chatId)+"/participant", "participants.Delete", &req)
 }
 
-func (rc *TestRestClient) GetChatParticipants(ctx context.Context, chatId int64) ([]int64, error) {
-	return query[any, []int64](ctx, &rc.restClient, 0, "GET", "/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, nil)
+func (rc *TestRestClient) GetChatParticipants(ctx context.Context, chatId int64) ([]dto.User, error) {
+	return query[any, []dto.User](ctx, &rc.restClient, 0, "GET", "/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, nil)
 }
 
 func (rc *TestRestClient) ReadMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {

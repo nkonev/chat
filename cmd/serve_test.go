@@ -33,13 +33,47 @@ func TestUnreads(t *testing.T) {
 		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
 	) {
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
-
 		const user1 int64 = 1
 		const user2 int64 = 2
 		const user3 int64 = 3
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+		const user3Login = "admin3"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser3 := dto.User{
+			Id:               user3,
+			Login:            user3Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
 		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2, mockUser3}, nil)
 
 		ctx := context.Background()
 
@@ -89,7 +123,13 @@ func TestUnreads(t *testing.T) {
 
 		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in chat participants")
-		assert.Equal(t, []int64{user3, user2, user1}, chat1Participants)
+		require.Equal(t, 3, len(chat1Participants))
+		assert.Equal(t, user3, chat1Participants[0].Id)
+		assert.Equal(t, user3Login, chat1Participants[0].Login)
+		assert.Equal(t, user2, chat1Participants[1].Id)
+		assert.Equal(t, user2Login, chat1Participants[1].Login)
+		assert.Equal(t, user1, chat1Participants[2].Id)
+		assert.Equal(t, user1Login, chat1Participants[2].Login)
 
 		user2ChatsNew, err := testRestClient.GetChatsByUserId(ctx, user2, nil)
 		require.NoError(t, err, "error in getting chats")
@@ -171,12 +211,35 @@ func TestPinChat(t *testing.T) {
 		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
 	) {
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
-
 		const user1 int64 = 1
 		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
 		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2}, nil)
 
 		ctx := context.Background()
 
@@ -220,7 +283,9 @@ func TestPinChat(t *testing.T) {
 
 		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in chat participants")
-		assert.Equal(t, []int64{user2, user1}, chat1Participants)
+		require.Equal(t, 2, len(chat1Participants))
+		assert.Equal(t, user2, chat1Participants[0].Id)
+		assert.Equal(t, user1, chat1Participants[1].Id)
 
 		user2ChatsNew, err := testRestClient.GetChatsByUserId(ctx, user2, nil)
 		require.NoError(t, err, "error in getting chats")
@@ -267,12 +332,35 @@ func TestDeleteChat(t *testing.T) {
 		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
 	) {
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
-
 		const user1 int64 = 1
 		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
 		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2}, nil)
 
 		ctx := context.Background()
 
@@ -316,7 +404,9 @@ func TestDeleteChat(t *testing.T) {
 
 		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in chat participants")
-		assert.Equal(t, []int64{user2, user1}, chat1Participants)
+		require.Equal(t, 2, len(chat1Participants))
+		assert.Equal(t, user2, chat1Participants[0].Id)
+		assert.Equal(t, user1, chat1Participants[1].Id)
 
 		user2ChatsNew, err := testRestClient.GetChatsByUserId(ctx, user2, nil)
 		require.NoError(t, err, "error in getting chats")
@@ -351,12 +441,35 @@ func TestAddParticipant(t *testing.T) {
 		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
 	) {
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
-
 		const user1 int64 = 1
 		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
 		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2}, nil)
 
 		ctx := context.Background()
 
@@ -401,7 +514,9 @@ func TestAddParticipant(t *testing.T) {
 
 		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in chat participants")
-		assert.Equal(t, []int64{user2, user1}, chat1Participants)
+		require.Equal(t, 2, len(chat1Participants))
+		assert.Equal(t, user2, chat1Participants[0].Id)
+		assert.Equal(t, user1, chat1Participants[1].Id)
 
 		user2ChatsNew, err := testRestClient.GetChatsByUserId(ctx, user2, nil)
 		require.NoError(t, err, "error in getting chats")
@@ -453,12 +568,35 @@ func TestDeleteParticipant(t *testing.T) {
 		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
 	) {
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
-
 		const user1 int64 = 1
 		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
 		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2}, nil)
 
 		ctx := context.Background()
 
@@ -503,7 +641,9 @@ func TestDeleteParticipant(t *testing.T) {
 
 		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in chat participants")
-		assert.Equal(t, []int64{user2, user1}, chat1Participants)
+		require.Equal(t, 2, len(chat1Participants))
+		assert.Equal(t, user2, chat1Participants[0].Id)
+		assert.Equal(t, user1, chat1Participants[1].Id)
 
 		user2ChatsNew, err := testRestClient.GetChatsByUserId(ctx, user2, nil)
 		require.NoError(t, err, "error in getting chats")
@@ -526,7 +666,8 @@ func TestDeleteParticipant(t *testing.T) {
 
 		chat1Participants2, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in chat participants")
-		assert.Equal(t, []int64{user1}, chat1Participants2)
+		require.Equal(t, 1, len(chat1Participants2))
+		assert.Equal(t, user1, chat1Participants2[0].Id)
 
 		user1ChatsNew2, err := testRestClient.GetChatsByUserId(ctx, user1, nil)
 		require.NoError(t, err, "error in getting chats")

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -16,6 +17,7 @@ type ParticipantHandler struct {
 	eventBus         *cqrs.PartitionAwareEventBus
 	dbWrapper        *db.DB
 	commonProjection *cqrs.CommonProjection
+	aaaRestClient    client.AaaRestClient
 }
 
 func NewParticipantHandler(
@@ -23,12 +25,14 @@ func NewParticipantHandler(
 	eventBus *cqrs.PartitionAwareEventBus,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
+	restClient client.AaaRestClient,
 ) *ParticipantHandler {
 	return &ParticipantHandler{
 		lgr:              lgr,
 		eventBus:         eventBus,
 		dbWrapper:        dbWrapper,
 		commonProjection: commonProjection,
+		aaaRestClient:    restClient,
 	}
 }
 
@@ -123,5 +127,13 @@ func (ch *ParticipantHandler) GetParticipants(g *gin.Context) {
 		g.Status(http.StatusInternalServerError)
 		return
 	}
-	g.JSON(http.StatusOK, participants)
+
+	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), participants)
+	if err != nil {
+		ch.lgr.WithTrace(g.Request.Context()).Warn("unable to get users")
+	}
+
+	orderedEnrichedParticipants := makeParticipants(participants, users)
+
+	g.JSON(http.StatusOK, orderedEnrichedParticipants)
 }
