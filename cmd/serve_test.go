@@ -757,8 +757,12 @@ func TestMessagePaginate(t *testing.T) {
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		dba *db.DB,
+		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
 	) {
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
+
 		const user1 int64 = 1
 		const chat1Name = "new chat 1"
 		const num = 500

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -16,6 +17,7 @@ type MessageHandler struct {
 	eventBus         *cqrs.PartitionAwareEventBus
 	dbWrapper        *db.DB
 	commonProjection *cqrs.CommonProjection
+	aaaRestClient    client.AaaRestClient
 }
 
 func NewMessageHandler(
@@ -23,12 +25,14 @@ func NewMessageHandler(
 	eventBus *cqrs.PartitionAwareEventBus,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
+	restClient client.AaaRestClient,
 ) *MessageHandler {
 	return &MessageHandler{
 		lgr:              lgr,
 		eventBus:         eventBus,
 		dbWrapper:        dbWrapper,
 		commonProjection: commonProjection,
+		aaaRestClient:    restClient,
 	}
 }
 
@@ -273,5 +277,40 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 		g.Status(http.StatusInternalServerError)
 		return
 	}
-	g.JSON(http.StatusOK, messages)
+
+	userIds := getUserIdsFromMessages(messages)
+	users, err := mc.aaaRestClient.GetUsers(g.Request.Context(), userIds)
+	if err != nil {
+		mc.lgr.WithTrace(g.Request.Context()).Warn("unable to get users")
+	}
+	messagesEnriched := enrichMessages(messages, users)
+
+	g.JSON(http.StatusOK, messagesEnriched)
+}
+
+func getUserIdsFromMessages(messages []dto.MessageViewDto) []int64 {
+	m := map[int64]struct{}{}
+
+	for _, msg := range messages {
+		m[msg.OwnerId] = struct{}{}
+	}
+
+	r := []int64{}
+
+	for k, _ := range m {
+		r = append(r, k)
+	}
+	return r
+}
+
+func enrichMessages(messages []dto.MessageViewDto, users []dto.User) []dto.MessageViewEnrichedDto {
+	res := make([]dto.MessageViewEnrichedDto, 0, len(messages))
+	for _, m := range messages {
+		me := dto.MessageViewEnrichedDto{
+			MessageViewDto: m,
+			Owner:          findUserById(users, m.OwnerId),
+		}
+		res = append(res, me)
+	}
+	return res
 }

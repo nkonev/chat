@@ -10,3 +10,8 @@ type MessageViewDto struct {
 	CreateDateTime time.Time  `json:"createDateTime"`
 	UpdateDateTime *time.Time `json:"editDateTime"` // for sake compatibility
 }
+
+type MessageViewEnrichedDto struct {
+	MessageViewDto
+	Owner *User `json:"owner"`
+}

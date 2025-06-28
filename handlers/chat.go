@@ -194,7 +194,7 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 		return
 	}
 
-	userIds := getUserIds(chats)
+	userIds := getUserIdsFromChats(chats)
 	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), userIds)
 	if err != nil {
 		ch.lgr.WithTrace(g.Request.Context()).Warn("unable to get users")
@@ -204,7 +204,7 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 	g.JSON(http.StatusOK, chatsEnriched)
 }
 
-func getUserIds(chats []dto.ChatViewDto) []int64 {
+func getUserIdsFromChats(chats []dto.ChatViewDto) []int64 {
 	m := map[int64]struct{}{}
 
 	for _, ch := range chats {
@@ -231,7 +231,7 @@ func findUserById(users []dto.User, userId int64) *dto.User {
 }
 
 func enrichChats(chats []dto.ChatViewDto, users []dto.User) []dto.ChatViewEnrichedDto {
-	res := make([]dto.ChatViewEnrichedDto, 0, len(users))
+	res := make([]dto.ChatViewEnrichedDto, 0, len(chats))
 	for _, ch := range chats {
 		che := dto.ChatViewEnrichedDto{
 			ChatViewDto:  ch,
