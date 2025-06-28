@@ -36,13 +36,13 @@ func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
 	offset := utils.GetOffset(page, size)
 	reverse := utils.GetBooleanOr(g.Query(ReverseParam), true)
 
-	chats, err := ch.commonProjection.GetBlogs(g.Request.Context(), size, offset, reverse)
+	blogs, err := ch.commonProjection.GetBlogs(g.Request.Context(), size, offset, reverse)
 	if err != nil {
 		ch.lgr.WithTrace(g.Request.Context()).Error("Error getting blogs", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
-	g.JSON(http.StatusOK, chats)
+	g.JSON(http.StatusOK, blogs)
 }
 
 func (ch *BlogHandler) GetBlog(g *gin.Context) {
@@ -84,11 +84,11 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 	offset := utils.GetOffset(page, size)
 	reverse := utils.GetBooleanOr(g.Query(ReverseParam), false)
 
-	chats, err := ch.commonProjection.GetComments(g.Request.Context(), blogId, size, offset, reverse)
+	comments, err := ch.commonProjection.GetComments(g.Request.Context(), blogId, size, offset, reverse)
 	if err != nil {
 		ch.lgr.WithTrace(g.Request.Context()).Error("Error getting blog comments", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
-	g.JSON(http.StatusOK, chats)
+	g.JSON(http.StatusOK, comments)
 }
