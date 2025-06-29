@@ -11,6 +11,11 @@ type BlogViewDto struct {
 	CreateDateTime time.Time `json:"createDateTime"`
 }
 
+type BlogViewEnrichedDto struct {
+	BlogViewDto
+	Owner *User `json:"owner"`
+}
+
 type BlogDto struct {
 	Id             int64     `json:"id"`
 	OwnerId        *int64    `json:"ownerId"`
@@ -19,10 +24,20 @@ type BlogDto struct {
 	CreateDateTime time.Time `json:"createDateTime"`
 }
 
+type BlogEnrichedDto struct {
+	BlogDto
+	Owner *User `json:"owner"`
+}
+
 type CommentViewDto struct {
 	Id             int64      `json:"id"`
 	OwnerId        int64      `json:"ownerId"`
 	Content        string     `json:"content"`
 	CreateDateTime time.Time  `json:"createDateTime"`
 	UpdateDateTime *time.Time `json:"editDateTime"` // for sake compatibility
+}
+
+type CommentViewEnrichedDto struct {
+	CommentViewDto
+	Owner *User `json:"owner"`
 }

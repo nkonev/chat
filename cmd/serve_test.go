@@ -787,10 +787,26 @@ func TestBlog(t *testing.T) {
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
+		const user1Login = "admin1"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
 		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1}, nil)
 
 		ctx := context.Background()
 

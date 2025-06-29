@@ -22,6 +22,7 @@ type restClient struct {
 	tracer           trace.Tracer
 	cfg              *config.AppConfig
 	lgr              *logger.LoggerWrapper
+	clientName       string
 }
 
 // You should call defer httpResp.Body.Close()
@@ -66,10 +67,10 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUse
 			return nil, err
 		}
 		if rc.cfg.RestClientConfig.PrettyLog {
-			fmt.Printf("[test http client] >>>\n")
+			fmt.Printf("%s >>>\n", rc.clientName)
 			fmt.Printf("%s\n", string(dumpReq))
 		} else {
-			rc.lgr.Info("[test http client] >>>")
+			rc.lgr.Info(fmt.Sprintf("%s >>>", rc.clientName))
 			rc.lgr.Info(string(dumpReq))
 		}
 	}
@@ -91,10 +92,10 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUse
 			return nil, err
 		}
 		if rc.cfg.RestClientConfig.PrettyLog {
-			fmt.Printf("[test http client] <<<\n")
+			fmt.Printf("%s <<<\n", rc.clientName)
 			fmt.Printf("%s\n", string(dumpResp))
 		} else {
-			rc.lgr.Info("[test http client] <<<")
+			rc.lgr.Info(fmt.Sprintf("%s <<<", rc.clientName))
 			rc.lgr.Info(string(dumpResp))
 		}
 	}

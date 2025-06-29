@@ -28,7 +28,7 @@ func NewTestRestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestRe
 	client := &http.Client{Transport: trR}
 	trcr := otel.Tracer("test/rest/client")
 
-	return &TestRestClient{restClient{client, "http://localhost" + cfg.HttpServerConfig.Address, trcr, cfg, lgr}}
+	return &TestRestClient{restClient{client, "http://localhost" + cfg.HttpServerConfig.Address, trcr, cfg, lgr, "[test http client]"}}
 }
 
 func (rc *TestRestClient) CreateChat(ctx context.Context, behalfUserId int64, chatName string) (int64, error) {

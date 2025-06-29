@@ -32,10 +32,14 @@ func NewAAARestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) AaaRestC
 	client := &http.Client{Transport: trR}
 	trcr := otel.Tracer("rest/client")
 
-	return &aaaRestClient{restClient{client, cfg.AaaConfig.AaaUrlConfig.Base, trcr, cfg, lgr}}
+	return &aaaRestClient{restClient{client, cfg.AaaConfig.AaaUrlConfig.Base, trcr, cfg, lgr, "[aaa client]"}}
 }
 
 func (rc *aaaRestClient) GetUsers(ctx context.Context, userIds []int64) ([]dto.User, error) {
+	if len(userIds) == 0 {
+		return []dto.User{}, nil
+	}
+
 	queryParams := url.Values{}
 	for _, u := range userIds {
 		queryParams.Add("userId", utils.ToString(u))
