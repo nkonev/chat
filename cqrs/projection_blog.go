@@ -142,16 +142,16 @@ func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*dto.Blog
 		order by b.create_date_time desc 
 	`, blogId)
 	if row.Err() != nil {
-		if errors.Is(row.Err(), sql.ErrNoRows) {
-			// there were no rows, but otherwise no error occurred
-			return nil, nil
-		}
 		return nil, row.Err()
 	}
 
 	var cd dto.BlogDto
 	err := row.Scan(&cd.Id, &cd.OwnerId, &cd.Title, &cd.Post, &cd.CreateDateTime)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// there were no rows, but otherwise no error occurred
+			return nil, nil
+		}
 		return nil, err
 	}
 
