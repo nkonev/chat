@@ -124,9 +124,9 @@ func query[ReqDto any, ResDto any](ctx context.Context, rc *restClient, behalfUs
 	return resp, nil
 }
 
-func queryNoResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUserId int64, method, url, opName string, req *ReqDto) error {
+func queryNoResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUserId int64, method, url, opName string, req *ReqDto, queryParams *url.Values) error {
 	var err error
-	httpResp, err := queryRawResponse(ctx, rc, behalfUserId, method, url, opName, req, nil)
+	httpResp, err := queryRawResponse(ctx, rc, behalfUserId, method, url, opName, req, queryParams)
 	if err != nil {
 		return err
 	}

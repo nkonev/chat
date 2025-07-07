@@ -12,6 +12,11 @@ type User struct {
 	AdditionalData   *AdditionalData `json:"additionalData"`
 }
 
+type UserWithAdmin struct {
+	User
+	ChatAdmin bool `json:"admin"`
+}
+
 type AdditionalData struct {
 	Enabled   bool     `json:"enabled"`
 	Expired   bool     `json:"expired"`

@@ -14,21 +14,6 @@ import (
 	"time"
 )
 
-// query
-const PageParam = "page"
-const SizeParam = "size"
-const ReverseParam = "reverse"
-const PinnedParam = "pinned"
-const LastUpdateDateTimeParam = "lastUpdateDateTime"
-const IncludeStartingFromParam = "includeStartingFrom"
-const StartingFromItemId = "startingFromItemId"
-const PinParam = "pin"
-
-// path
-const ChatIdParam = "id"
-const MessageIdParam = "messageId"
-const BlogIdParam = "id"
-
 func bindHttpHandlers(
 	ginRouter *gin.Engine,
 	chatHandler *ChatHandler,
@@ -45,6 +30,7 @@ func bindHttpHandlers(
 	ginRouter.PUT("/chat/:id/participant", participantHandler.AddParticipant)
 	ginRouter.DELETE("/chat/:id/participant", participantHandler.DeleteParticipant)
 	ginRouter.GET("/chat/:id/participants", participantHandler.GetParticipants)
+	ginRouter.PUT("/chat/:id/participant/:participantId", participantHandler.ChangeParticipant)
 
 	ginRouter.POST("/chat/:id/message", messageHandler.CreateMessage)
 	ginRouter.PUT("/chat/:id/message", messageHandler.EditMessage)

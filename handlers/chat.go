@@ -65,7 +65,7 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		cc.ParticipantIds = append(cc.ParticipantIds, userId)
 	}
 
-	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
+	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection)
 	if err != nil {
 		ch.lgr.WithTrace(g.Request.Context()).Error("Error sending ChatCreate command", "err", err)
 		g.Status(http.StatusInternalServerError)
@@ -107,7 +107,7 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 
 func (ch *ChatHandler) DeleteChat(g *gin.Context) {
 
-	cid := g.Param(ChatIdParam)
+	cid := g.Param(dto.ChatIdParam)
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
@@ -132,7 +132,7 @@ func (ch *ChatHandler) DeleteChat(g *gin.Context) {
 }
 
 func (ch *ChatHandler) PinChat(g *gin.Context) {
-	cid := g.Param(ChatIdParam)
+	cid := g.Param(dto.ChatIdParam)
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
@@ -141,7 +141,7 @@ func (ch *ChatHandler) PinChat(g *gin.Context) {
 		return
 	}
 
-	p := g.Query(PinParam)
+	p := g.Query(dto.PinParam)
 
 	pin := utils.GetBoolean(p)
 
@@ -177,15 +177,15 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 		return
 	}
 
-	size := utils.FixSizeString(g.Query(SizeParam))
-	reverse := utils.GetBoolean(g.Query(ReverseParam))
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
+	reverse := utils.GetBoolean(g.Query(dto.ReverseParam))
 
-	pinned := utils.GetBooleanNullable(g.Query(PinnedParam))
-	lastUpdateDateTime := utils.GetTimeNullable(g.Query(LastUpdateDateTimeParam))
-	id := utils.ParseInt64Nullable(g.Query(ChatIdParam))
+	pinned := utils.GetBooleanNullable(g.Query(dto.PinnedParam))
+	lastUpdateDateTime := utils.GetTimeNullable(g.Query(dto.LastUpdateDateTimeParam))
+	id := utils.ParseInt64Nullable(g.Query(dto.ChatIdParam))
 	startingFromItemId := ch.convertChatId(pinned, lastUpdateDateTime, id)
 
-	includeStartingFrom := utils.GetBoolean(g.Query(IncludeStartingFromParam))
+	includeStartingFrom := utils.GetBoolean(g.Query(dto.IncludeStartingFromParam))
 
 	chats, err := ch.commonProjection.GetChats(g.Request.Context(), userId, size, startingFromItemId, includeStartingFrom, reverse)
 	if err != nil {
@@ -249,6 +249,22 @@ func makeParticipants(participantIds []int64, users []dto.User) []dto.User {
 		u := findUserById(users, p)
 		if u != nil {
 			res = append(res, *u)
+		}
+	}
+
+	return res
+}
+
+func makeParticipantsWithAdmin(participants []cqrs.ParticipantWithAdmin, users []dto.User) []dto.UserWithAdmin {
+	res := make([]dto.UserWithAdmin, 0, len(participants))
+
+	for _, p := range participants {
+		u := findUserById(users, p.ParticipantId)
+		if u != nil {
+			res = append(res, dto.UserWithAdmin{
+				User:      *u,
+				ChatAdmin: p.ChatAdmin,
+			})
 		}
 	}
 

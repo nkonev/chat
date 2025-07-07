@@ -373,7 +373,28 @@ func (m *CommonProjection) GetChatByUserIdAndChatId(ctx context.Context, userId,
 	return t, nil
 }
 
-func getParticipantIdsCommon(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]int64, error) {
+type ParticipantWithAdmin struct {
+	ParticipantId int64
+	ChatAdmin     bool
+}
+
+func GetParticipantIds(participants []ParticipantWithAdmin) []int64 {
+	res := make([]int64, 0, len(participants))
+	for _, pa := range participants {
+		res = append(res, pa.ParticipantId)
+	}
+	return res
+}
+
+func getParticipantChatAdmins(participants []ParticipantWithAdmin) []bool {
+	res := make([]bool, 0, len(participants))
+	for _, pa := range participants {
+		res = append(res, pa.ChatAdmin)
+	}
+	return res
+}
+
+func getParticipantIdsCommon(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]ParticipantWithAdmin, error) {
 	var rows *sql.Rows
 	var err error
 
@@ -383,23 +404,22 @@ func getParticipantIdsCommon(ctx context.Context, co db.CommonOperations, chatId
 	}
 
 	if len(excluding) > 0 {
-		rows, err = co.QueryContext(ctx, fmt.Sprintf("SELECT user_id FROM chat_participant WHERE chat_id = $1 AND user_id not in (select * from unnest(cast ($4 as bigint[]))) order by create_date_time %s LIMIT $2 OFFSET $3", order), chatId, participantsSize, participantsOffset, excluding)
+		rows, err = co.QueryContext(ctx, fmt.Sprintf("SELECT user_id, chat_admin FROM chat_participant WHERE chat_id = $1 AND user_id not in (select * from unnest(cast ($4 as bigint[]))) order by create_date_time %s LIMIT $2 OFFSET $3", order), chatId, participantsSize, participantsOffset, excluding)
 	} else {
-		rows, err = co.QueryContext(ctx, fmt.Sprintf("SELECT user_id FROM chat_participant WHERE chat_id = $1 order by create_date_time %s LIMIT $2 OFFSET $3", order), chatId, participantsSize, participantsOffset)
+		rows, err = co.QueryContext(ctx, fmt.Sprintf("SELECT user_id, chat_admin FROM chat_participant WHERE chat_id = $1 order by create_date_time %s LIMIT $2 OFFSET $3", order), chatId, participantsSize, participantsOffset)
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("error during interacting with db: %w", err)
 	}
 	defer rows.Close()
-	list := make([]int64, 0)
+	list := make([]ParticipantWithAdmin, 0)
 	for rows.Next() {
-		var participantId int64
-		if err = rows.Scan(&participantId); err != nil {
+		var pwa ParticipantWithAdmin
+		if err = rows.Scan(&pwa.ParticipantId, &pwa.ChatAdmin); err != nil {
 			return nil, fmt.Errorf("error during interacting with db: %w", err)
-		} else {
-			list = append(list, participantId)
 		}
+		list = append(list, pwa)
 	}
 	return list, nil
 }

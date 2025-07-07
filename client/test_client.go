@@ -50,7 +50,7 @@ func (rc *TestRestClient) EditChat(ctx context.Context, chatId int64, chatName s
 		},
 		Blog: blog,
 	}
-	err := queryNoResponse[dto.ChatEditDto](ctx, &rc.restClient, 0, "PUT", "/chat", "chat.Edit", &req)
+	err := queryNoResponse[dto.ChatEditDto](ctx, &rc.restClient, 0, "PUT", "/chat", "chat.Edit", &req, nil)
 	if err != nil {
 		return err
 	}
@@ -58,11 +58,11 @@ func (rc *TestRestClient) EditChat(ctx context.Context, chatId int64, chatName s
 }
 
 func (rc *TestRestClient) PinChat(ctx context.Context, behalfUserId int64, chatId int64, pin bool) error {
-	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/pin?pin="+utils.ToString(pin), "chat.Pin", nil)
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/pin?pin="+utils.ToString(pin), "chat.Pin", nil, nil)
 }
 
 func (rc *TestRestClient) DeleteChat(ctx context.Context, chatId int64) error {
-	return queryNoResponse[any](ctx, &rc.restClient, 0, "DELETE", "/chat/"+utils.ToString(chatId), "chat.Delete", nil)
+	return queryNoResponse[any](ctx, &rc.restClient, 0, "DELETE", "/chat/"+utils.ToString(chatId), "chat.Delete", nil, nil)
 }
 
 func (rc *TestRestClient) GetChatsByUserId(ctx context.Context, behalfUserId int64, queryParams *url.Values) ([]dto.ChatViewDto, error) {
@@ -91,11 +91,11 @@ func (rc *TestRestClient) EditMessage(ctx context.Context, behalfUserId int64, c
 			Content: text,
 		},
 	}
-	return queryNoResponse[dto.MessageEditDto](ctx, &rc.restClient, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/message", "message.Edit", &req)
+	return queryNoResponse[dto.MessageEditDto](ctx, &rc.restClient, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/message", "message.Edit", &req, nil)
 }
 
 func (rc *TestRestClient) DeleteMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
-	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "DELETE", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Delete", nil)
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "DELETE", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Delete", nil, nil)
 }
 
 func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, chatId int64, queryParams *url.Values) ([]dto.MessageViewDto, error) {
@@ -103,7 +103,7 @@ func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, c
 }
 
 func (rc *TestRestClient) MakeMessageBlogPost(ctx context.Context, chatId, messageId int64) error {
-	return queryNoResponse[any](ctx, &rc.restClient, 0, "PUT", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/blog-post", "message.MakeBlogPost", nil)
+	return queryNoResponse[any](ctx, &rc.restClient, 0, "PUT", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/blog-post", "message.MakeBlogPost", nil, nil)
 }
 
 func (rc *TestRestClient) SearchBlogComments(ctx context.Context, blogId int64) ([]dto.CommentViewDto, error) {
@@ -114,24 +114,31 @@ func (rc *TestRestClient) AddChatParticipants(ctx context.Context, chatId int64,
 	req := dto.ParticipantAddDto{
 		ParticipantIds: participantIds,
 	}
-	return queryNoResponse[dto.ParticipantAddDto](ctx, &rc.restClient, 0, "PUT", "/chat/"+utils.ToString(chatId)+"/participant", "participants.Add", &req)
+	return queryNoResponse[dto.ParticipantAddDto](ctx, &rc.restClient, 0, "PUT", "/chat/"+utils.ToString(chatId)+"/participant", "participants.Add", &req, nil)
 }
 
 func (rc *TestRestClient) DeleteChatParticipants(ctx context.Context, chatId int64, participantIds []int64) error {
 	req := dto.ParticipantDeleteDto{
 		ParticipantIds: participantIds,
 	}
-	return queryNoResponse[dto.ParticipantDeleteDto](ctx, &rc.restClient, 0, "DELETE", "/chat/"+utils.ToString(chatId)+"/participant", "participants.Delete", &req)
+	return queryNoResponse[dto.ParticipantDeleteDto](ctx, &rc.restClient, 0, "DELETE", "/chat/"+utils.ToString(chatId)+"/participant", "participants.Delete", &req, nil)
 }
 
-func (rc *TestRestClient) GetChatParticipants(ctx context.Context, chatId int64) ([]dto.User, error) {
-	return query[any, []dto.User](ctx, &rc.restClient, 0, "GET", "/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, nil)
+func (rc *TestRestClient) ChangeChatParticipant(ctx context.Context, behalfUserId int64, chatId int64, participantId int64, newAdmin bool) error {
+	query1 := url.Values{
+		dto.AdminParam: []string{utils.ToString(newAdmin)},
+	}
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/participant/"+utils.ToString(participantId), "participants.Change", nil, &query1)
+}
+
+func (rc *TestRestClient) GetChatParticipants(ctx context.Context, chatId int64) ([]dto.UserWithAdmin, error) {
+	return query[any, []dto.UserWithAdmin](ctx, &rc.restClient, 0, "GET", "/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, nil)
 }
 
 func (rc *TestRestClient) ReadMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
-	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/read", "message.Read", nil)
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/read", "message.Read", nil, nil)
 }
 
 func (rc *TestRestClient) HealthCheck(ctx context.Context) error {
-	return queryNoResponse[any](ctx, &rc.restClient, 0, "GET", "/internal/health", "internal.HealthCheck", nil)
+	return queryNoResponse[any](ctx, &rc.restClient, 0, "GET", "/internal/health", "internal.HealthCheck", nil, nil)
 }

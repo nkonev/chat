@@ -36,10 +36,10 @@ func NewBlogHandler(
 }
 
 func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
-	page := utils.FixPageString(g.Query(PageParam))
-	size := utils.FixSizeString(g.Query(SizeParam))
+	page := utils.FixPageString(g.Query(dto.PageParam))
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
 	offset := utils.GetOffset(page, size)
-	reverse := utils.GetBooleanOr(g.Query(ReverseParam), true)
+	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), true)
 
 	blogs, err := ch.commonProjection.GetBlogs(g.Request.Context(), size, offset, reverse)
 	if err != nil {
@@ -92,7 +92,7 @@ func enrichBlogs(blogs []dto.BlogViewDto, users []dto.User) []dto.BlogViewEnrich
 }
 
 func (ch *BlogHandler) GetBlog(g *gin.Context) {
-	cid := g.Param(BlogIdParam)
+	cid := g.Param(dto.BlogIdParam)
 
 	blogId, err := utils.ParseInt64(cid)
 	if err != nil {
@@ -153,7 +153,7 @@ func enrichBlog(blog *dto.BlogDto, users []dto.User) *dto.BlogEnrichedDto {
 }
 
 func (ch *BlogHandler) SearchComments(g *gin.Context) {
-	cid := g.Param(BlogIdParam)
+	cid := g.Param(dto.BlogIdParam)
 	blogId, err := utils.ParseInt64(cid)
 	if err != nil {
 		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding blogId", "err", err)
@@ -161,10 +161,10 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 		return
 	}
 
-	page := utils.FixPageString(g.Query(PageParam))
-	size := utils.FixSizeString(g.Query(SizeParam))
+	page := utils.FixPageString(g.Query(dto.PageParam))
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
 	offset := utils.GetOffset(page, size)
-	reverse := utils.GetBooleanOr(g.Query(ReverseParam), false)
+	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), false)
 
 	comments, err := ch.commonProjection.GetComments(g.Request.Context(), blogId, size, offset, reverse)
 	if err != nil {

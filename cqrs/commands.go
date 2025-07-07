@@ -6,6 +6,18 @@ import (
 	"go-cqrs-chat-example/db"
 )
 
+type UnauthorizedError struct {
+	info string
+}
+
+func NewUnauthorizedError(info string) *UnauthorizedError {
+	return &UnauthorizedError{info: info}
+}
+
+func (u *UnauthorizedError) Error() string {
+	return u.info
+}
+
 type ChatCreate struct {
 	AdditionalData *AdditionalData
 	Title          string
@@ -35,6 +47,14 @@ type ParticipantDelete struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	ParticipantIds []int64
+}
+
+type ParticipantChange struct {
+	AdditionalData *AdditionalData
+	ChatId         int64
+	ParticipantId  int64
+	NewAdmin       bool
+	BehalfUserId   int64
 }
 
 type MessageCreate struct {
@@ -78,7 +98,7 @@ type MakeMessageBlogPost struct {
 	BlogPost       bool
 }
 
-func (s *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) (int64, error) {
+func (s *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) (int64, error) {
 	chatId, err := db.TransactWithResult(ctx, dba, func(tx *db.Tx) (int64, error) {
 		return commonProjection.GetNextChatId(ctx, tx)
 	})
@@ -95,9 +115,16 @@ func (s *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba
 
 	pa := &ParticipantsAdded{
 		AdditionalData: s.AdditionalData,
-		ParticipantIds: s.ParticipantIds,
 		ChatId:         chatId,
+		Participants:   make([]ParticipantWithAdmin, 0),
 	}
+	for _, participantId := range s.ParticipantIds {
+		pa.Participants = append(pa.Participants, ParticipantWithAdmin{
+			ParticipantId: participantId,
+			ChatAdmin:     participantId == behalfUserId,
+		})
+	}
+
 	err = eventBus.Publish(ctx, pa)
 	if err != nil {
 		return 0, err
@@ -121,9 +148,15 @@ func (s *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *
 	if len(s.ParticipantIdsToAdd) > 0 {
 		pa := &ParticipantsAdded{
 			AdditionalData: s.AdditionalData,
-			ParticipantIds: s.ParticipantIdsToAdd,
 			ChatId:         s.ChatId,
 		}
+		for _, participantId := range s.ParticipantIdsToAdd {
+			pa.Participants = append(pa.Participants, ParticipantWithAdmin{
+				ParticipantId: participantId,
+				ChatAdmin:     false,
+			})
+		}
+
 		err = eventBus.Publish(ctx, pa)
 		if err != nil {
 			return err
@@ -182,8 +215,13 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
 	pa := &ParticipantsAdded{
 		AdditionalData: s.AdditionalData,
-		ParticipantIds: s.ParticipantIds,
 		ChatId:         s.ChatId,
+	}
+	for _, participantId := range s.ParticipantIds {
+		pa.Participants = append(pa.Participants, ParticipantWithAdmin{
+			ParticipantId: participantId,
+			ChatAdmin:     false,
+		})
 	}
 	err := eventBus.Publish(ctx, pa)
 	if err != nil {
@@ -240,6 +278,30 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 	})
 
 	return errOuter
+}
+
+func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
+	if err != nil {
+		return err
+	}
+	if !admin {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.ParticipantId, s.ChatId))
+	}
+
+	pa := &ParticipantChanged{
+		AdditionalData: s.AdditionalData,
+		ParticipantId:  s.ParticipantId,
+		ChatId:         s.ChatId,
+		BehalfUserId:   s.BehalfUserId,
+		NewAdmin:       s.NewAdmin,
+	}
+	err = eventBus.Publish(ctx, pa)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error {

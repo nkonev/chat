@@ -19,12 +19,12 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 
 		_, err = tx.ExecContext(ctx, `
 		with input_data as (
-			select unnest(cast ($1 as bigint[])) as user_id, cast ($2 as bigint) as chat_id
+			select * from unnest(cast ($1 as bigint[]), cast ($2 as boolean[])) as t(user_id, chat_admin)
 		)
-		insert into chat_participant(user_id, chat_id, create_date_time)
-		select user_id, chat_id, $3 from input_data
+		insert into chat_participant(user_id, chat_admin, chat_id, create_date_time)
+		select idt.user_id, idt.chat_admin, $3, $4 from input_data idt
 		on conflict(user_id, chat_id) do nothing
-	`, event.ParticipantIds, event.ChatId, event.AdditionalData.CreatedAt)
+	`, GetParticipantIds(event.Participants), getParticipantChatAdmins(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
 		if err != nil {
 			return err
 		}
@@ -69,18 +69,18 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			update_date_time = excluded.update_date_time, 
 			participants_count = excluded.participants_count, 
 			participant_ids = excluded.participant_ids
-		`, event.ParticipantIds, event.ChatId, event.AdditionalData.CreatedAt, m.chatUserViewConfig.MaxViewableParticipants)
+		`, GetParticipantIds(event.Participants), event.ChatId, event.AdditionalData.CreatedAt, m.chatUserViewConfig.MaxViewableParticipants)
 		if err != nil {
 			return err
 		}
 
 		// recalc in case an user was added after
-		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, event.ParticipantIds, event.ChatId)
+		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, GetParticipantIds(event.Participants), event.ChatId)
 		if err != nil {
 			return err
 		}
 
-		err = m.setLastMessage(ctx, tx, event.ParticipantIds, event.ChatId)
+		err = m.setLastMessage(ctx, tx, GetParticipantIds(event.Participants), event.ChatId)
 		if err != nil {
 			return err
 		}
@@ -92,7 +92,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 
 	m.lgr.WithTrace(ctx).Info(
 		"Participant added into common chat",
-		"user_id", event.ParticipantIds,
+		"user_ids", GetParticipantIds(event.Participants),
 		"chat_id", event.ChatId,
 	)
 
@@ -123,14 +123,34 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *Part
 
 	m.lgr.WithTrace(ctx).Info(
 		"Participant removed from common chat",
-		"user_id", event.ParticipantIds,
+		"user_ids", event.ParticipantIds,
 		"chat_id", event.ChatId,
 	)
 
 	return nil
 }
 
-func (m *CommonProjection) GetParticipantIdsForExternal(ctx context.Context, chatId int64, size int32, offset int64, reverse bool) ([]int64, error) {
+func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *ParticipantChanged) error {
+	return db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !admin {
+			m.lgr.WithTrace(ctx).Info(
+				"Participant isn't admin so he cannot change admin flag of the other participant",
+				"user_id", event.BehalfUserId,
+				"chat_id", event.ChatId,
+			)
+			return nil
+		}
+
+		_, err = tx.ExecContext(ctx, "update chat_participant set chat_admin = $1 where user_id = $2 and chat_id = $3", event.NewAdmin, event.ParticipantId, event.ChatId)
+		return err
+	})
+}
+
+func (m *CommonProjection) GetParticipantIdsForExternal(ctx context.Context, chatId int64, size int32, offset int64, reverse bool) ([]ParticipantWithAdmin, error) {
 	return getParticipantIdsCommon(ctx, m.db, chatId, nil, size, offset, reverse)
 }
 
@@ -139,18 +159,21 @@ func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co
 	var lastError error
 	for page := int64(0); shouldContinue; page++ {
 		offset := utils.GetOffset(page, utils.DefaultSize)
-		participantIds, err := getParticipantIdsCommon(ctx, co, chatId, excluding, utils.DefaultSize, offset, false)
+		participants, err := getParticipantIdsCommon(ctx, co, chatId, excluding, utils.DefaultSize, offset, false)
 		if err != nil {
 			m.lgr.WithTrace(ctx).Error("Got error during getting portion", "err", err)
 			lastError = err
 			break
 		}
-		if len(participantIds) == 0 {
+		if len(participants) == 0 {
 			return nil
 		}
-		if len(participantIds) < utils.DefaultSize {
+		if len(participants) < utils.DefaultSize {
 			shouldContinue = false
 		}
+
+		participantIds := GetParticipantIds(participants)
+
 		err = consumer(participantIds)
 		if err != nil {
 			m.lgr.WithTrace(ctx).Error("Got error during invoking consumer portion", "err", err)
@@ -159,4 +182,17 @@ func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co
 		}
 	}
 	return lastError
+}
+
+func (m *CommonProjection) IsChatAdmin(ctx context.Context, co db.CommonOperations, userId, chatId int64) (bool, error) {
+	rm := co.QueryRowContext(ctx, "SELECT exists(SELECT * FROM chat_participant WHERE user_id = $1 AND chat_id = $2 AND chat_admin = true LIMIT 1)", userId, chatId)
+	if rm.Err() != nil {
+		return false, rm.Err()
+	}
+	var admin bool
+	err := rm.Scan(&admin)
+	if err != nil {
+		return false, err
+	}
+	return admin, nil
 }

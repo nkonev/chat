@@ -28,15 +28,24 @@ type ChatDeleted struct {
 }
 
 type ParticipantsAdded struct {
-	AdditionalData *AdditionalData `json:"additionalData"`
-	ParticipantIds []int64         `json:"participantIds"`
-	ChatId         int64           `json:"chatId"`
+	AdditionalData *AdditionalData        `json:"additionalData"`
+	Participants   []ParticipantWithAdmin `json:"participants"`
+	Admins         bool                   `json:"admins"`
+	ChatId         int64                  `json:"chatId"`
 }
 
 type ParticipantDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ParticipantIds []int64         `json:"participantIds"`
 	ChatId         int64           `json:"chatId"`
+}
+
+type ParticipantChanged struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ParticipantId  int64           `json:"participantId"`
+	ChatId         int64           `json:"chatId"`
+	BehalfUserId   int64           `json:"behalfUserId"`
+	NewAdmin       bool            `json:"newAdmin"`
 }
 
 type ChatPinned struct {
@@ -147,6 +156,10 @@ func (s *ParticipantDeleted) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
+func (s *ParticipantChanged) GetPartitionKey() string {
+	return utils.ToString(s.ChatId)
+}
+
 func (s *ChatPinned) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
@@ -193,6 +206,10 @@ func (s *ParticipantsAdded) Name() string {
 
 func (s *ParticipantDeleted) Name() string {
 	return "participantDeleted"
+}
+
+func (s *ParticipantChanged) Name() string {
+	return "participantChanged"
 }
 
 func (s *ChatPinned) Name() string {

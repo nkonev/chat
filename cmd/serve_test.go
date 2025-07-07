@@ -8,7 +8,6 @@ import (
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
-	"go-cqrs-chat-example/handlers"
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
@@ -678,6 +677,87 @@ func TestDeleteParticipant(t *testing.T) {
 	})
 }
 
+func TestChangeParticipant(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "tobeAdmin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		err = testRestClient.AddChatParticipants(ctx, chat1Id, []int64{user2})
+		require.NoError(t, err, "error in adding participants")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
+		require.NoError(t, err, "error in chat participants")
+		require.Equal(t, 2, len(chat1Participants))
+		assert.Equal(t, user2, chat1Participants[0].Id)
+		assert.Equal(t, false, chat1Participants[0].ChatAdmin)
+		assert.Equal(t, user1, chat1Participants[1].Id)
+		assert.Equal(t, true, chat1Participants[1].ChatAdmin)
+
+		user2ChatsNew, err := testRestClient.GetChatsByUserId(ctx, user2, nil)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user2ChatsNew))
+		chat1OfUser2 := user2ChatsNew[0]
+		assert.Equal(t, chat1Name, chat1OfUser2.Title)
+		assert.Equal(t, int64(2), chat1OfUser2.ParticipantsCount)
+		assert.Equal(t, []int64{2, 1}, chat1OfUser2.ParticipantIds)
+
+		err = testRestClient.ChangeChatParticipant(ctx, user1, chat1Id, user2, true)
+		require.NoError(t, err, "error in changing chat participants")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		chat1Participants2, err := testRestClient.GetChatParticipants(ctx, chat1Id)
+		require.NoError(t, err, "error in chat participants")
+		require.Equal(t, 2, len(chat1Participants2))
+		assert.Equal(t, user2, chat1Participants2[0].Id)
+		assert.Equal(t, true, chat1Participants2[0].ChatAdmin)
+		assert.Equal(t, user1, chat1Participants2[1].Id)
+		assert.Equal(t, true, chat1Participants2[1].ChatAdmin)
+	})
+}
+
 func TestEditMessage(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
@@ -875,7 +955,7 @@ func TestChatPaginate(t *testing.T) {
 
 		// get initial page
 		query1 := url.Values{
-			handlers.SizeParam: []string{utils.ToString(40)},
+			dto.SizeParam: []string{utils.ToString(40)},
 		}
 		resp1, err := testRestClient.GetChatsByUserId(ctx, user1, &query1)
 		require.NoError(t, err)
@@ -891,11 +971,11 @@ func TestChatPaginate(t *testing.T) {
 
 		// get second page
 		query2 := url.Values{
-			handlers.SizeParam: []string{utils.ToString(40)},
+			dto.SizeParam: []string{utils.ToString(40)},
 
-			handlers.PinnedParam:             []string{utils.ToString(lastPinned)},
-			handlers.LastUpdateDateTimeParam: []string{lastLastUpdateDateTime.Format(time.RFC3339Nano)},
-			handlers.ChatIdParam:             []string{utils.ToString(lastId)},
+			dto.PinnedParam:             []string{utils.ToString(lastPinned)},
+			dto.LastUpdateDateTimeParam: []string{lastLastUpdateDateTime.Format(time.RFC3339Nano)},
+			dto.ChatIdParam:             []string{utils.ToString(lastId)},
 		}
 		resp2, err := testRestClient.GetChatsByUserId(ctx, user1, &query2)
 		require.NoError(t, err)
@@ -943,8 +1023,8 @@ func TestMessagePaginate(t *testing.T) {
 
 		// get first page
 		query1 := url.Values{
-			handlers.SizeParam:          []string{utils.ToString(3)},
-			handlers.StartingFromItemId: []string{utils.ToString(6)},
+			dto.SizeParam:          []string{utils.ToString(3)},
+			dto.StartingFromItemId: []string{utils.ToString(6)},
 		}
 		resp1, err := testRestClient.GetMessages(ctx, user1, chat1Id, &query1)
 		require.NoError(t, err)
@@ -961,8 +1041,8 @@ func TestMessagePaginate(t *testing.T) {
 
 		// get second page
 		query2 := url.Values{
-			handlers.SizeParam:          []string{utils.ToString(3)},
-			handlers.StartingFromItemId: []string{utils.ToString(lastId)},
+			dto.SizeParam:          []string{utils.ToString(3)},
+			dto.StartingFromItemId: []string{utils.ToString(lastId)},
 		}
 		resp2, err := testRestClient.GetMessages(ctx, user1, chat1Id, &query2)
 		require.NoError(t, err)
