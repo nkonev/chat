@@ -63,6 +63,19 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 			return nil
 		}
 
+		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !admin {
+			m.lgr.WithTrace(ctx).Info(
+				"Participant isn't admin so he cannot change chat",
+				"user_id", event.BehalfUserId,
+				"chat_id", event.ChatId,
+			)
+			return nil
+		}
+
 		blog, errInner := m.isChatBlog(ctx, tx, event.ChatId)
 		if errInner != nil {
 			return errInner
@@ -118,6 +131,19 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 
 func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+
+		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !admin {
+			m.lgr.WithTrace(ctx).Info(
+				"Participant isn't admin so he cannot delete chat",
+				"user_id", event.BehalfUserId,
+				"chat_id", event.ChatId,
+			)
+			return nil
+		}
 
 		blog, errInner := m.isChatBlog(ctx, tx, event.ChatId)
 		if errInner != nil {

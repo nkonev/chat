@@ -134,13 +134,21 @@ func (s *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus Ev
 }
 
 func (s *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
+	if err != nil {
+		return err
+	}
+	if !admin {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
+	}
+
 	cc := &ChatEdited{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
 		Title:          s.Title,
 		Blog:           s.Blog,
 	}
-	err := eventBus.Publish(ctx, cc)
+	err = eventBus.Publish(ctx, cc)
 	if err != nil {
 		return err
 	}
@@ -187,6 +195,14 @@ func (s *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *
 }
 
 func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
+	if err != nil {
+		return err
+	}
+	if !admin {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
+	}
+
 	errOuter := commonProjection.IterateOverChatParticipantIds(ctx, dba, s.ChatId, nil, func(participantIdsPortion []int64) error {
 		pa := &ParticipantDeleted{
 			AdditionalData: s.AdditionalData,
@@ -205,7 +221,7 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
 	}
-	err := eventBus.Publish(ctx, cc)
+	err = eventBus.Publish(ctx, cc)
 	if err != nil {
 		return err
 	}
@@ -213,6 +229,14 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 }
 
 func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
+	if err != nil {
+		return err
+	}
+	if !admin {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
+	}
+
 	pa := &ParticipantsAdded{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
@@ -223,7 +247,7 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 			ChatAdmin:     false,
 		})
 	}
-	err := eventBus.Publish(ctx, pa)
+	err = eventBus.Publish(ctx, pa)
 	if err != nil {
 		return err
 	}
@@ -249,12 +273,20 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 }
 
 func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
+	if err != nil {
+		return err
+	}
+	if !admin {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
+	}
+
 	pa := &ParticipantDeleted{
 		AdditionalData: s.AdditionalData,
 		ParticipantIds: s.ParticipantIds,
 		ChatId:         s.ChatId,
 	}
-	err := eventBus.Publish(ctx, pa)
+	err = eventBus.Publish(ctx, pa)
 	if err != nil {
 		return err
 	}
@@ -286,7 +318,7 @@ func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterfa
 		return err
 	}
 	if !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.ParticipantId, s.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
 	}
 
 	pa := &ParticipantChanged{

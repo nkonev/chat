@@ -17,6 +17,19 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			return nil
 		}
 
+		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !admin {
+			m.lgr.WithTrace(ctx).Info(
+				"Participant isn't admin so he cannot change admin flag of the other participant",
+				"user_id", event.BehalfUserId,
+				"chat_id", event.ChatId,
+			)
+			return nil
+		}
+
 		_, err = tx.ExecContext(ctx, `
 		with input_data as (
 			select * from unnest(cast ($1 as bigint[]), cast ($2 as boolean[])) as t(user_id, chat_admin)
@@ -101,7 +114,20 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 
 func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *ParticipantDeleted) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		_, err := tx.ExecContext(ctx, `
+		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !admin {
+			m.lgr.WithTrace(ctx).Info(
+				"Participant isn't admin so he cannot change admin flag of the other participant",
+				"user_id", event.BehalfUserId,
+				"chat_id", event.ChatId,
+			)
+			return nil
+		}
+
+		_, err = tx.ExecContext(ctx, `
 		delete from chat_participant where chat_id = $2 and user_id = any($1)
 	`, event.ParticipantIds, event.ChatId)
 		if err != nil {
