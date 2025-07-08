@@ -145,7 +145,7 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 	var unauthError *cqrs.UnauthorizedError
 	if errors.As(err, &unauthError) {
 		ch.lgr.WithTrace(g.Request.Context()).Info("unauthorized", "err", unauthError)
-		g.Status(http.StatusUnauthorized)
+		g.JSON(http.StatusUnauthorized, dto.ErrorMessageDto{unauthError.Error()})
 		return
 	} else if err != nil {
 		ch.lgr.WithTrace(g.Request.Context()).Error("Error sending ParticipantChange command", "err", err)

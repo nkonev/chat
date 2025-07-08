@@ -728,6 +728,10 @@ func TestChangeParticipant(t *testing.T) {
 		require.NoError(t, err, "error in adding participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
+		err = testRestClient.ChangeChatParticipant(ctx, user2, chat1Id, user1, false)
+		require.NotNil(t, err)
+		assert.True(t, strings.Contains(err.Error(), "code: 401"))
+
 		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in chat participants")
 		require.Equal(t, 2, len(chat1Participants))
