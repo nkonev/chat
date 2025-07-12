@@ -20,24 +20,29 @@ type ChatEdited struct {
 	ChatId         int64           `json:"chatId"`
 	Title          string          `json:"title"`
 	Blog           bool            `json:"blog"`
+	BehalfUserId   int64           `json:"behalfUserId"`
 }
 
 type ChatDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`
+	BehalfUserId   int64           `json:"behalfUserId"`
 }
 
 type ParticipantsAdded struct {
-	AdditionalData *AdditionalData        `json:"additionalData"`
-	Participants   []ParticipantWithAdmin `json:"participants"`
-	Admins         bool                   `json:"admins"`
-	ChatId         int64                  `json:"chatId"`
+	AdditionalData     *AdditionalData        `json:"additionalData"`
+	Participants       []ParticipantWithAdmin `json:"participants"`
+	Admins             bool                   `json:"admins"`
+	ChatId             int64                  `json:"chatId"`
+	BehalfUserId       int64                  `json:"behalfUserId"`
+	SkipChatAdminCheck bool                   `json:"skipChatAdminCheck"`
 }
 
 type ParticipantDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ParticipantIds []int64         `json:"participantIds"`
 	ChatId         int64           `json:"chatId"`
+	BehalfUserId   int64           `json:"behalfUserId"`
 }
 
 type ParticipantChanged struct {
@@ -122,6 +127,7 @@ type MessageBlogPostMade struct {
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
 	BlogPost       bool            `json:"blogPost"`
+	BehalfUserId   int64           `json:"behalfUserId"`
 }
 
 type MessageDeleted struct {

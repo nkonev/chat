@@ -38,6 +38,13 @@ func NewParticipantHandler(
 }
 
 func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	cid := g.Param(dto.ChatIdParam)
 
 	chatId, err := utils.ParseInt64(cid)
@@ -60,6 +67,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 		AdditionalData: cqrs.GenerateMessageAdditionalData(),
 		ParticipantIds: ccd.ParticipantIds,
 		ChatId:         chatId,
+		BehalfUserId:   userId,
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
@@ -73,6 +81,13 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 }
 
 func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	cid := g.Param(dto.ChatIdParam)
 
 	chatId, err := utils.ParseInt64(cid)
@@ -95,6 +110,7 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 		AdditionalData: cqrs.GenerateMessageAdditionalData(),
 		ParticipantIds: ccd.ParticipantIds,
 		ChatId:         chatId,
+		BehalfUserId:   userId,
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)

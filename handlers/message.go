@@ -212,6 +212,13 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 }
 
 func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	cid := g.Param(dto.ChatIdParam)
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
@@ -234,6 +241,7 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 		ChatId:         chatId,
 		MessageId:      messageId,
 		BlogPost:       true,
+		BehalfUserId:   userId,
 	}
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus)

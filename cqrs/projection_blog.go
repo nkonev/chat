@@ -33,6 +33,19 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 
 func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *MessageBlogPostMade) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !admin {
+			m.lgr.WithTrace(ctx).Info(
+				"Participant isn't admin so he make message blog post",
+				"user_id", event.BehalfUserId,
+				"chat_id", event.ChatId,
+			)
+			return nil
+		}
+
 		chatExists, errInner := m.checkChatExists(ctx, tx, event.ChatId)
 		if errInner != nil {
 			return errInner

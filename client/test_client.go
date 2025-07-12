@@ -110,11 +110,11 @@ func (rc *TestRestClient) SearchBlogComments(ctx context.Context, blogId int64) 
 	return query[any, []dto.CommentViewDto](ctx, &rc.restClient, 0, "GET", "/blog/"+utils.ToString(blogId)+"/comment/search", "blog.SearchComments", nil, nil)
 }
 
-func (rc *TestRestClient) AddChatParticipants(ctx context.Context, chatId int64, participantIds []int64) error {
+func (rc *TestRestClient) AddChatParticipants(ctx context.Context, behalfUserId int64, chatId int64, participantIds []int64) error {
 	req := dto.ParticipantAddDto{
 		ParticipantIds: participantIds,
 	}
-	return queryNoResponse[dto.ParticipantAddDto](ctx, &rc.restClient, 0, "PUT", "/chat/"+utils.ToString(chatId)+"/participant", "participants.Add", &req, nil)
+	return queryNoResponse[dto.ParticipantAddDto](ctx, &rc.restClient, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/participant", "participants.Add", &req, nil)
 }
 
 func (rc *TestRestClient) DeleteChatParticipants(ctx context.Context, chatId int64, participantIds []int64) error {

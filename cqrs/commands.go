@@ -30,23 +30,27 @@ type ChatEdit struct {
 	Title               string
 	ParticipantIdsToAdd []int64
 	Blog                bool // desired state
+	BehalfUserId        int64
 }
 
 type ChatDelete struct {
 	ChatId         int64
 	AdditionalData *AdditionalData
+	BehalfUserId   int64
 }
 
 type ParticipantAdd struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	ParticipantIds []int64
+	BehalfUserId   int64
 }
 
 type ParticipantDelete struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	ParticipantIds []int64
+	BehalfUserId   int64
 }
 
 type ParticipantChange struct {
@@ -96,6 +100,7 @@ type MakeMessageBlogPost struct {
 	ChatId         int64
 	MessageId      int64
 	BlogPost       bool
+	BehalfUserId   int64
 }
 
 func (s *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) (int64, error) {
@@ -114,9 +119,11 @@ func (s *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus Ev
 	}
 
 	pa := &ParticipantsAdded{
-		AdditionalData: s.AdditionalData,
-		ChatId:         chatId,
-		Participants:   make([]ParticipantWithAdmin, 0),
+		AdditionalData:     s.AdditionalData,
+		ChatId:             chatId,
+		Participants:       make([]ParticipantWithAdmin, 0),
+		BehalfUserId:       behalfUserId,
+		SkipChatAdminCheck: true,
 	}
 	for _, participantId := range s.ParticipantIds {
 		pa.Participants = append(pa.Participants, ParticipantWithAdmin{
@@ -147,6 +154,7 @@ func (s *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *
 		ChatId:         s.ChatId,
 		Title:          s.Title,
 		Blog:           s.Blog,
+		BehalfUserId:   s.BehalfUserId,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {
@@ -157,6 +165,7 @@ func (s *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *
 		pa := &ParticipantsAdded{
 			AdditionalData: s.AdditionalData,
 			ChatId:         s.ChatId,
+			BehalfUserId:   s.BehalfUserId,
 		}
 		for _, participantId := range s.ParticipantIdsToAdd {
 			pa.Participants = append(pa.Participants, ParticipantWithAdmin{
@@ -208,6 +217,7 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 			AdditionalData: s.AdditionalData,
 			ParticipantIds: participantIdsPortion,
 			ChatId:         s.ChatId,
+			BehalfUserId:   s.BehalfUserId,
 		}
 		errInner := eventBus.Publish(ctx, pa)
 		return errInner
@@ -220,6 +230,7 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 	cc := &ChatDeleted{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
+		BehalfUserId:   s.BehalfUserId,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {
@@ -240,6 +251,7 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 	pa := &ParticipantsAdded{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
+		BehalfUserId:   s.BehalfUserId,
 	}
 	for _, participantId := range s.ParticipantIds {
 		pa.Participants = append(pa.Participants, ParticipantWithAdmin{
@@ -285,6 +297,7 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 		AdditionalData: s.AdditionalData,
 		ParticipantIds: s.ParticipantIds,
 		ChatId:         s.ChatId,
+		BehalfUserId:   s.BehalfUserId,
 	}
 	err = eventBus.Publish(ctx, pa)
 	if err != nil {
@@ -428,13 +441,13 @@ func (s *MakeMessageBlogPost) Handle(ctx context.Context, eventBus EventBusInter
 		ChatId:         s.ChatId,
 		MessageId:      s.MessageId,
 		BlogPost:       s.BlogPost,
+		BehalfUserId:   s.BehalfUserId,
 	}
 
 	return eventBus.Publish(ctx, &ev)
 }
 
 func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, userId int64) error {
-
 	ownerId, err := commonProjection.GetMessageOwner(ctx, s.ChatId, s.MessageId)
 	if err != nil {
 		return err

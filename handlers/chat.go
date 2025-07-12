@@ -78,9 +78,17 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 }
 
 func (ch *ChatHandler) EditChat(g *gin.Context) {
+
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	ccd := new(dto.ChatEditDto)
 
-	err := g.Bind(ccd)
+	err = g.Bind(ccd)
 	if err != nil {
 		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding ChatEditDto", "err", err)
 		g.Status(http.StatusInternalServerError)
@@ -93,6 +101,7 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		Title:               ccd.Title,
 		ParticipantIdsToAdd: ccd.ParticipantIds,
 		Blog:                ccd.Blog,
+		BehalfUserId:        userId,
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
@@ -106,6 +115,12 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 }
 
 func (ch *ChatHandler) DeleteChat(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
 
 	cid := g.Param(dto.ChatIdParam)
 
@@ -119,6 +134,7 @@ func (ch *ChatHandler) DeleteChat(g *gin.Context) {
 	cc := cqrs.ChatDelete{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(),
 		ChatId:         chatId,
+		BehalfUserId:   userId,
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)

@@ -21,9 +21,9 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		if err != nil {
 			return err
 		}
-		if !admin {
+		if !admin && !event.SkipChatAdminCheck {
 			m.lgr.WithTrace(ctx).Info(
-				"Participant isn't admin so he cannot change admin flag of the other participant",
+				"Participant isn't admin so he cannot add a participant",
 				"user_id", event.BehalfUserId,
 				"chat_id", event.ChatId,
 			)
@@ -120,7 +120,7 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *Part
 		}
 		if !admin {
 			m.lgr.WithTrace(ctx).Info(
-				"Participant isn't admin so he cannot change admin flag of the other participant",
+				"Participant isn't admin so he cannot remove a participant",
 				"user_id", event.BehalfUserId,
 				"chat_id", event.ChatId,
 			)
