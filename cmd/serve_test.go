@@ -415,7 +415,7 @@ func TestDeleteChat(t *testing.T) {
 		assert.Equal(t, chat1Name, chat1OfUser2.Title)
 		assert.Equal(t, int64(1), chat1OfUser2.UnreadMessages)
 
-		err = testRestClient.DeleteChat(ctx, chat1Id)
+		err = testRestClient.DeleteChat(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in removing chats")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
@@ -529,7 +529,7 @@ func TestAddParticipant(t *testing.T) {
 		assert.Equal(t, []int64{2, 1}, chat1OfUser2.ParticipantIds)
 
 		const chat1NewName = "new chat 1 renamed"
-		err = testRestClient.EditChat(ctx, user1, chat1NewName, false)
+		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1NewName, false)
 		require.NoError(t, err, "error in changing chat")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
@@ -655,7 +655,7 @@ func TestDeleteParticipant(t *testing.T) {
 		assert.Equal(t, int64(2), chat1OfUser2.ParticipantsCount)
 		assert.Equal(t, []int64{2, 1}, chat1OfUser2.ParticipantIds)
 
-		err = testRestClient.DeleteChatParticipants(ctx, chat1Id, []int64{user2})
+		err = testRestClient.DeleteChatParticipants(ctx, user1, chat1Id, []int64{user2})
 		require.NoError(t, err, "error in removing chat participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
@@ -728,6 +728,7 @@ func TestChangeParticipant(t *testing.T) {
 		require.NoError(t, err, "error in adding participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
+		// negative test
 		err = testRestClient.ChangeChatParticipant(ctx, user2, chat1Id, user1, false)
 		require.NotNil(t, err)
 		assert.True(t, strings.Contains(err.Error(), "code: 401"))
@@ -898,7 +899,10 @@ func TestBlog(t *testing.T) {
 		require.NoError(t, err, "error in creating chat")
 		assert.True(t, chat1Id > 0)
 
-		err = testRestClient.EditChat(ctx, user1, chat1Name, false)
+		// await before chat editing
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1Name, false)
 		require.NoError(t, err)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
@@ -910,7 +914,7 @@ func TestBlog(t *testing.T) {
 		message2Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text)
 		require.NoError(t, err, "error in creating message")
 
-		err = testRestClient.MakeMessageBlogPost(ctx, chat1Id, message1Id)
+		err = testRestClient.MakeMessageBlogPost(ctx, user1, chat1Id, message1Id)
 		require.NoError(t, err, "error in making message blog post")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 

@@ -39,7 +39,7 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 		}
 		if !admin {
 			m.lgr.WithTrace(ctx).Info(
-				"Participant isn't admin so he make message blog post",
+				"Participant isn't admin so he cannon make message blog post",
 				"user_id", event.BehalfUserId,
 				"chat_id", event.ChatId,
 			)
