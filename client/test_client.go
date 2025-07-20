@@ -110,6 +110,7 @@ func (rc *TestRestClient) SearchBlogComments(ctx context.Context, blogId int64) 
 	return query[any, []dto.CommentViewDto](ctx, &rc.restClient, 0, "GET", "/blog/"+utils.ToString(blogId)+"/comment/search", "blog.SearchComments", nil, nil)
 }
 
+// You must await after this command, because it takes a time to apply "ParticipantAdd" event
 func (rc *TestRestClient) AddChatParticipants(ctx context.Context, behalfUserId int64, chatId int64, participantIds []int64) error {
 	req := dto.ParticipantAddDto{
 		ParticipantIds: participantIds,
