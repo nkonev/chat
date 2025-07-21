@@ -400,8 +400,8 @@ func (m *CommonProjection) GetChatByUserIdAndChatId(ctx context.Context, userId,
 }
 
 type ParticipantWithAdmin struct {
-	ParticipantId int64
-	ChatAdmin     bool
+	ParticipantId int64 `json:"participantId"`
+	ChatAdmin     bool  `json:"chatAdmin"`
 }
 
 func GetParticipantIds(participants []ParticipantWithAdmin) []int64 {
