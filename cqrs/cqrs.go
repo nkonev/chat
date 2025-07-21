@@ -101,7 +101,7 @@ func ConfigureCqrsRouter(
 	cqrsRouter.AddMiddleware(func(h message.HandlerFunc) message.HandlerFunc {
 		return func(msg *message.Message) ([]*message.Message, error) {
 			if cfg.CqrsConfig.SleepBeforeEvent > 0 {
-				lgr.WithTrace(msg.Context()).Info("Sleeping")
+				lgr.InfoContext(msg.Context(), "Sleeping")
 				time.Sleep(cfg.CqrsConfig.SleepBeforeEvent)
 			}
 

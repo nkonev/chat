@@ -18,6 +18,19 @@ func GetTraceId(ctx context.Context) string {
 	return sc.TraceID().String()
 }
 
+type TracingContextHandler struct {
+	slog.Handler
+}
+
+func (h *TracingContextHandler) Handle(ctx context.Context, r slog.Record) error {
+	traceId := GetTraceId(ctx)
+	if traceId != "" {
+		r.AddAttrs(slog.String(LogFieldTraceId, traceId))
+	}
+
+	return h.Handler.Handle(ctx, r)
+}
+
 type LoggerWrapper struct {
 	*slog.Logger
 }
@@ -53,21 +66,21 @@ func NewBaseLogger(w io.Writer, cfg *config.AppConfig) *slog.Logger {
 		}
 	}
 
+	bh := &slog.HandlerOptions{
+		Level:       cfg.LoggerConfig.GetLevel(),
+		ReplaceAttr: replaceFunc,
+		AddSource:   true,
+	}
+	commonAttrs := []slog.Attr{slog.String("service", app.TRACE_RESOURCE)}
 	if cfg.LoggerConfig.Json {
-		baseLogger = slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{
-			Level:       cfg.LoggerConfig.GetLevel(),
-			ReplaceAttr: replaceFunc,
-			AddSource:   true,
-		}))
+		h := &TracingContextHandler{slog.NewJSONHandler(w, bh).WithAttrs(commonAttrs)}
+		baseLogger = slog.New(h)
 	} else {
-		baseLogger = slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
-			Level:       cfg.LoggerConfig.GetLevel(),
-			ReplaceAttr: replaceFunc,
-			AddSource:   true,
-		}))
+		h := &TracingContextHandler{slog.NewTextHandler(w, bh).WithAttrs(commonAttrs)}
+		baseLogger = slog.New(h)
 	}
 
-	return baseLogger.With(slog.String("service", app.TRACE_RESOURCE))
+	return baseLogger
 }
 
 func NewLogger(base *slog.Logger) *LoggerWrapper {
@@ -76,6 +89,6 @@ func NewLogger(base *slog.Logger) *LoggerWrapper {
 	}
 }
 
-func (lw *LoggerWrapper) WithTrace(ctx context.Context) *slog.Logger {
+func (lw *LoggerWrapper) WithTrace0(ctx context.Context) *slog.Logger {
 	return lw.Logger.With(LogFieldTraceId, GetTraceId(ctx))
 }

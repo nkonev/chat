@@ -35,7 +35,7 @@ func GenerateKafkaPartitionKey(lgr *logger.LoggerWrapper) kafka.GeneratePartitio
 		if !ok {
 			return "", errors.New("unable to get partition key from context")
 		}
-		lgr.WithTrace(msg.Context()).Debug("retrieving partition key", "topic", topic, "msg_metadata", msg.Metadata, partitionKey, pk)
+		lgr.DebugContext(msg.Context(), "retrieving partition key", "topic", topic, "msg_metadata", msg.Metadata, partitionKey, pk)
 		return pk, nil
 	}
 }

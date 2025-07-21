@@ -43,7 +43,7 @@ func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
 
 	blogs, err := ch.commonProjection.GetBlogs(g.Request.Context(), size, offset, reverse)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error getting blogs", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blogs", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -51,7 +51,7 @@ func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
 	userIds := getUserIdsFromBlogs(blogs)
 	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), userIds)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Warn("unable to get users")
+		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
 	blogsEnriched := enrichBlogs(blogs, users)
 
@@ -96,14 +96,14 @@ func (ch *BlogHandler) GetBlog(g *gin.Context) {
 
 	blogId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding blogId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding blogId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	blog, err := ch.commonProjection.GetBlog(g.Request.Context(), blogId)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error getting blog", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blog", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -116,7 +116,7 @@ func (ch *BlogHandler) GetBlog(g *gin.Context) {
 	userIds := getUserIdsFromBlog(blog)
 	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), userIds)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Warn("unable to get users")
+		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
 	blogEnriched := enrichBlog(blog, users)
 
@@ -156,7 +156,7 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 	cid := g.Param(dto.BlogIdParam)
 	blogId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding blogId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding blogId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -168,7 +168,7 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 
 	comments, err := ch.commonProjection.GetComments(g.Request.Context(), blogId, size, offset, reverse)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error getting blog comments", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blog comments", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -176,7 +176,7 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 	userIds := getUserIdsFromComments(comments)
 	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), userIds)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Warn("unable to get users")
+		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
 	commentsEnriched := enrichComments(comments, users)
 

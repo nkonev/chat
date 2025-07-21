@@ -40,7 +40,7 @@ func NewParticipantHandler(
 func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -49,7 +49,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -58,7 +58,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 
 	err = g.Bind(ccd)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding ParticipantAddDto", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding ParticipantAddDto", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -72,7 +72,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error sending ParticipantAdd command", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantAdd command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -83,7 +83,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -92,7 +92,7 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -101,7 +101,7 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 
 	err = g.Bind(ccd)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding ParticipantDeleteDto", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding ParticipantDeleteDto", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -115,7 +115,7 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error sending ParticipantDelete command", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantDelete command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -126,7 +126,7 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -135,14 +135,14 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	interestingUserId, err := utils.ParseInt64(g.Param(dto.ParticipantIdParam))
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding participantId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding participantId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -160,11 +160,11 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
 	var unauthError *cqrs.UnauthorizedError
 	if errors.As(err, &unauthError) {
-		ch.lgr.WithTrace(g.Request.Context()).Info("unauthorized", "err", unauthError)
+		ch.lgr.InfoContext(g.Request.Context(), "unauthorized", "err", unauthError)
 		g.JSON(http.StatusUnauthorized, dto.ErrorMessageDto{unauthError.Error()})
 		return
 	} else if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error sending ParticipantChange command", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantChange command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -177,7 +177,7 @@ func (ch *ParticipantHandler) GetParticipants(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -189,7 +189,7 @@ func (ch *ParticipantHandler) GetParticipants(g *gin.Context) {
 
 	participants, err := ch.commonProjection.GetParticipantIdsForExternal(g.Request.Context(), chatId, participantsSize, participantsOffset, reverse)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Error("Error getting participants", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participants", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -198,7 +198,7 @@ func (ch *ParticipantHandler) GetParticipants(g *gin.Context) {
 
 	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), participantIds)
 	if err != nil {
-		ch.lgr.WithTrace(g.Request.Context()).Warn("unable to get users")
+		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
 
 	orderedEnrichedParticipants := makeParticipantsWithAdmin(participants, users)

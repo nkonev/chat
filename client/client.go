@@ -49,7 +49,7 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUse
 	if req != nil {
 		bytesData, err := json.Marshal(req)
 		if err != nil {
-			rc.lgr.WithTrace(ctx).Error(fmt.Sprintf("Failed during marshalling request body for %v:", opName), "err", err)
+			rc.lgr.ErrorContext(ctx, fmt.Sprintf("Failed during marshalling request body for %v:", opName), "err", err)
 			return nil, err
 		}
 		reader := bytes.NewReader(bytesData)
@@ -77,12 +77,12 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUse
 
 	httpResp, err := rc.Do(httpReq)
 	if err != nil {
-		rc.lgr.WithTrace(ctx).Warn(fmt.Sprintf("Failed to request %v response:", opName), "err", err)
+		rc.lgr.WarnContext(ctx, fmt.Sprintf("Failed to request %v response:", opName), "err", err)
 		return nil, err
 	}
 	code := httpResp.StatusCode
 	if !(code >= 200 && code < 300) {
-		rc.lgr.WithTrace(ctx).Warn(fmt.Sprintf("%v response responded non-2xx code: ", opName), "code", code)
+		rc.lgr.WarnContext(ctx, fmt.Sprintf("%v response responded non-2xx code: ", opName), "code", code)
 		return nil, fmt.Errorf("%v response responded non-2xx code: %v", opName, code)
 	}
 
@@ -113,12 +113,12 @@ func query[ReqDto any, ResDto any](ctx context.Context, rc *restClient, behalfUs
 
 	bodyBytes, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		rc.lgr.WithTrace(ctx).Warn(fmt.Sprintf("Failed to decode %v response:", opName), "err", err)
+		rc.lgr.WarnContext(ctx, fmt.Sprintf("Failed to decode %v response:", opName), "err", err)
 		return resp, err
 	}
 
 	if err = json.Unmarshal(bodyBytes, &resp); err != nil {
-		rc.lgr.WithTrace(ctx).Error(fmt.Sprintf("Failed to parse %v response:", opName), "err", err)
+		rc.lgr.ErrorContext(ctx, fmt.Sprintf("Failed to parse %v response:", opName), "err", err)
 		return resp, err
 	}
 	return resp, nil

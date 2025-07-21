@@ -14,7 +14,7 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 			return err
 		}
 		if !chatExists {
-			m.lgr.WithTrace(ctx).Info("Skipping MessageCreated because there is no chat", "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageCreated because there is no chat", "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -26,7 +26,7 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 		if err != nil {
 			return err
 		}
-		m.lgr.WithTrace(ctx).Info(
+		m.lgr.InfoContext(ctx,
 			"Handling message added",
 			"id", event.Id,
 			"user_id", event.OwnerId,
@@ -45,7 +45,7 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			return errInner
 		}
 		if !messageExists {
-			m.lgr.WithTrace(ctx).Info("Skipping MessageEdited because there is no message", "chat_id", event.ChatId, "message_id", event.Id)
+			m.lgr.InfoContext(ctx, "Skipping MessageEdited because there is no message", "chat_id", event.ChatId, "message_id", event.Id)
 			return nil
 		}
 
@@ -70,7 +70,7 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			}
 		}
 
-		m.lgr.WithTrace(ctx).Info(
+		m.lgr.InfoContext(ctx,
 			"Handling message edited",
 			"id", event.Id,
 			"chat_id", event.ChatId,
@@ -113,7 +113,7 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 		return errOuter
 	}
 
-	m.lgr.WithTrace(ctx).Info(
+	m.lgr.InfoContext(ctx,
 		"Message removed from common chat",
 		"message_id", event.MessageId,
 		"chat_id", event.ChatId,

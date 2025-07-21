@@ -41,14 +41,14 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding chatId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	userId, err := getUserId(g)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -57,7 +57,7 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 
 	err = g.Bind(mcd)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding MessageCreateDto", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding MessageCreateDto", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -71,7 +71,7 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 
 	mid, wasAdded, err := cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error sending MessageCreate command", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageCreate command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -90,14 +90,14 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding chatId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	userId, err := getUserId(g)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -106,7 +106,7 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 
 	err = g.Bind(ccd)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding MessageEditDto", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding MessageEditDto", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -120,7 +120,7 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, userId)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error sending MessageEdit command", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageEdit command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -132,7 +132,7 @@ func (mc *MessageHandler) DeleteMessage(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding chatId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -140,14 +140,14 @@ func (mc *MessageHandler) DeleteMessage(g *gin.Context) {
 	mid := g.Param(dto.MessageIdParam)
 	messageId, err := utils.ParseInt64(mid)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding messageId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	userId, err := getUserId(g)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -160,7 +160,7 @@ func (mc *MessageHandler) DeleteMessage(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, userId)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error sending MessageDelete command", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageDelete command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -173,7 +173,7 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding chatId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -182,14 +182,14 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 
 	messageId, err := utils.ParseInt64(mid)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding messageId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	userId, err := getUserId(g)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -203,7 +203,7 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error sending MessageRead command", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageRead command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -214,7 +214,7 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error parsing UserId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -222,7 +222,7 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding chatId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -231,7 +231,7 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 
 	messageId, err := utils.ParseInt64(mid)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding messageId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -246,7 +246,7 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error sending MakeMessageBlogPost command", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MakeMessageBlogPost command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -259,7 +259,7 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error binding chatId", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -271,7 +271,7 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 	if startingFromItemIdString != "" {
 		startingFromItemId2, err := utils.ParseInt64(startingFromItemIdString) // exclusive
 		if err != nil {
-			mc.lgr.WithTrace(g.Request.Context()).Error("Error parsing startingFromItemId", "err", err)
+			mc.lgr.ErrorContext(g.Request.Context(), "Error parsing startingFromItemId", "err", err)
 			g.Status(http.StatusInternalServerError)
 			return
 		}
@@ -281,7 +281,7 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 
 	messages, err := mc.commonProjection.GetMessages(g.Request.Context(), chatId, size, startingFromItemId, includeStartingFrom, reverse)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Error("Error getting messages", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error getting messages", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -289,7 +289,7 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 	userIds := getUserIdsFromMessages(messages)
 	users, err := mc.aaaRestClient.GetUsers(g.Request.Context(), userIds)
 	if err != nil {
-		mc.lgr.WithTrace(g.Request.Context()).Warn("unable to get users")
+		mc.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
 	messagesEnriched := enrichMessages(messages, users)
 

@@ -38,7 +38,7 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 			return err
 		}
 		if !admin {
-			m.lgr.WithTrace(ctx).Info(
+			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannon make message blog post",
 				"user_id", event.BehalfUserId,
 				"chat_id", event.ChatId,
@@ -51,7 +51,7 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 			return errInner
 		}
 		if !chatExists {
-			m.lgr.WithTrace(ctx).Info("Skipping MessageBlogPostMade because there is no chat", "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageBlogPostMade because there is no chat", "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -60,7 +60,7 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 			return errInner
 		}
 		if !messageExists {
-			m.lgr.WithTrace(ctx).Info("Skipping MessageBlogPostMade because there is no message", "chat_id", event.ChatId, "message_id", event.MessageId)
+			m.lgr.InfoContext(ctx, "Skipping MessageBlogPostMade because there is no message", "chat_id", event.ChatId, "message_id", event.MessageId)
 			return nil
 		}
 

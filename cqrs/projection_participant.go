@@ -13,7 +13,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			return err
 		}
 		if !chatExists {
-			m.lgr.WithTrace(ctx).Info("Skipping ParticipantsAdded because there is no chat", "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no chat", "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -22,7 +22,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			return err
 		}
 		if !admin && !event.SkipChatAdminCheck {
-			m.lgr.WithTrace(ctx).Info(
+			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot add a participant",
 				"user_id", event.BehalfUserId,
 				"chat_id", event.ChatId,
@@ -103,7 +103,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		return errOuter
 	}
 
-	m.lgr.WithTrace(ctx).Info(
+	m.lgr.InfoContext(ctx,
 		"Participant added into common chat",
 		"user_ids", GetParticipantIds(event.Participants),
 		"chat_id", event.ChatId,
@@ -119,7 +119,7 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *Part
 			return err
 		}
 		if !admin {
-			m.lgr.WithTrace(ctx).Info(
+			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot remove a participant",
 				"user_id", event.BehalfUserId,
 				"chat_id", event.ChatId,
@@ -147,7 +147,7 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *Part
 		return errOuter
 	}
 
-	m.lgr.WithTrace(ctx).Info(
+	m.lgr.InfoContext(ctx,
 		"Participant removed from common chat",
 		"user_ids", event.ParticipantIds,
 		"chat_id", event.ChatId,
@@ -163,7 +163,7 @@ func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *Part
 			return err
 		}
 		if !admin {
-			m.lgr.WithTrace(ctx).Info(
+			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot change admin flag of the other participant",
 				"user_id", event.BehalfUserId,
 				"chat_id", event.ChatId,
@@ -187,7 +187,7 @@ func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co
 		offset := utils.GetOffset(page, utils.DefaultSize)
 		participants, err := getParticipantIdsCommon(ctx, co, chatId, excluding, utils.DefaultSize, offset, false)
 		if err != nil {
-			m.lgr.WithTrace(ctx).Error("Got error during getting portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
 			lastError = err
 			break
 		}
@@ -202,7 +202,7 @@ func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co
 
 		err = consumer(participantIds)
 		if err != nil {
-			m.lgr.WithTrace(ctx).Error("Got error during invoking consumer portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
 			lastError = err
 			break
 		}

@@ -43,7 +43,7 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 	if err != nil {
 		return err
 	}
-	m.lgr.WithTrace(ctx).Info(
+	m.lgr.InfoContext(ctx,
 		"Common chat created",
 		"chat_id", event.ChatId,
 		"title", event.Title,
@@ -59,7 +59,7 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 			return err
 		}
 		if !chatExists {
-			m.lgr.WithTrace(ctx).Info("Skipping ChatEdited because there is no chat", "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping ChatEdited because there is no chat", "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -68,7 +68,7 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 			return err
 		}
 		if !admin {
-			m.lgr.WithTrace(ctx).Info(
+			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot change chat",
 				"user_id", event.BehalfUserId,
 				"chat_id", event.ChatId,
@@ -90,7 +90,7 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 		if errInner != nil {
 			return errInner
 		}
-		m.lgr.WithTrace(ctx).Info(
+		m.lgr.InfoContext(ctx,
 			"Common chat edited",
 			"chat_id", event.ChatId,
 			"title", event.Title,
@@ -137,7 +137,7 @@ func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted
 			return err
 		}
 		if !admin {
-			m.lgr.WithTrace(ctx).Info(
+			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot delete chat",
 				"user_id", event.BehalfUserId,
 				"chat_id", event.ChatId,
@@ -168,7 +168,7 @@ func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted
 			}
 		}
 
-		m.lgr.WithTrace(ctx).Info(
+		m.lgr.InfoContext(ctx,
 			"Common chat removed",
 			"chat_id", event.ChatId,
 		)
@@ -191,7 +191,7 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) 
 		return err
 	}
 
-	m.lgr.WithTrace(ctx).Info(
+	m.lgr.InfoContext(ctx,
 		"Chat pinned",
 		"user_id", event.ParticipantId,
 		"chat_id", event.ChatId,
