@@ -9,7 +9,8 @@ create table chat_common(
     title varchar(512) not null,
     last_generated_message_id bigint not null default 0,
     create_date_time timestamp not null,
-    blog boolean not null default false
+    blog boolean not null default false,
+    can_resend boolean not null default false
 );
 
 create table chat_participant(
@@ -27,6 +28,10 @@ create table message(
     owner_id bigint not null,
     content text not null,
     blog_post boolean not null default false,
+    embed_message_id bigint,
+    embed_chat_id bigint,
+    embed_owner_id bigint,
+    embed_message_type varchar(16),
     create_date_time timestamp not null,
     update_date_time timestamp,
     primary key (chat_id, id)
