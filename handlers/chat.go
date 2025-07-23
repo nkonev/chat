@@ -48,6 +48,14 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		return
 	}
 
+	if ccd.IsValidatabale() {
+		if err = ccd.Validate(); err != nil {
+			ch.lgr.DebugContext(g.Request.Context(), "Error during validation: %v", err)
+			g.Status(http.StatusBadRequest)
+			return
+		}
+	}
+
 	userId, err := getUserId(g)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
@@ -95,6 +103,14 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error binding ChatEditDto", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
+	}
+
+	if ccd.IsValidatabale() {
+		if err = ccd.Validate(); err != nil {
+			ch.lgr.DebugContext(g.Request.Context(), "Error during validation: %v", err)
+			g.Status(http.StatusBadRequest)
+			return
+		}
 	}
 
 	cc := cqrs.ChatEdit{

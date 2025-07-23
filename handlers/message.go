@@ -62,6 +62,14 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		return
 	}
 
+	if mcd.IsValidatabale() {
+		if err = mcd.Validate(); err != nil {
+			mc.lgr.DebugContext(g.Request.Context(), "Error during validation: %v", err)
+			g.Status(http.StatusBadRequest)
+			return
+		}
+	}
+
 	cc := cqrs.MessageCreate{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(),
 		ChatId:         chatId,
@@ -109,6 +117,14 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error binding MessageEditDto", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
+	}
+
+	if ccd.IsValidatabale() {
+		if err = ccd.Validate(); err != nil {
+			mc.lgr.DebugContext(g.Request.Context(), "Error during validation: %v", err)
+			g.Status(http.StatusBadRequest)
+			return
+		}
 	}
 
 	cc := cqrs.MessageEdit{
