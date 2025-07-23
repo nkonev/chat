@@ -6,6 +6,7 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 	"net/http"
 	"slices"
@@ -20,6 +21,7 @@ type ChatHandler struct {
 	dbWrapper        *db.DB
 	commonProjection *cqrs.CommonProjection
 	aaaRestClient    client.AaaRestClient
+	stripTagsPolicy  *services.StripTagsPolicy
 }
 
 func NewChatHandler(
@@ -28,6 +30,7 @@ func NewChatHandler(
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	restClient client.AaaRestClient,
+	stripTagsPolicy *services.StripTagsPolicy,
 ) *ChatHandler {
 	return &ChatHandler{
 		lgr:              lgr,
@@ -35,6 +38,7 @@ func NewChatHandler(
 		dbWrapper:        dbWrapper,
 		commonProjection: commonProjection,
 		aaaRestClient:    restClient,
+		stripTagsPolicy:  stripTagsPolicy,
 	}
 }
 
@@ -47,6 +51,8 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		g.Status(http.StatusInternalServerError)
 		return
 	}
+
+	ccd.Title = TrimAmdSanitizeChatTitle(ch.stripTagsPolicy, ccd.Title)
 
 	if ccd.IsValidatabale() {
 		if err = ccd.Validate(); err != nil {
@@ -104,6 +110,8 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		g.Status(http.StatusInternalServerError)
 		return
 	}
+
+	ccd.Title = TrimAmdSanitizeChatTitle(ch.stripTagsPolicy, ccd.Title)
 
 	if ccd.IsValidatabale() {
 		if err = ccd.Validate(); err != nil {

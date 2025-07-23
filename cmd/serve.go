@@ -12,6 +12,7 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
+	"go-cqrs-chat-example/services"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -80,6 +81,8 @@ func RunServe() {
 			handlers.ConfigureHttpServer,
 			kafka.ConfigureSaramaClient,
 			client.NewAAARestClient,
+			services.CreateSanitizer,
+			services.CreateStripTags,
 		),
 		fx.Invoke(
 			db.RunMigrations,

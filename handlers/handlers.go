@@ -7,10 +7,12 @@ import (
 	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/fx"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -151,4 +153,13 @@ func RunHttpServer(
 			lgr.Error("Got http server error", "err", err)
 		}
 	}()
+}
+
+func TrimAmdSanitizeChatTitle(policy *services.StripTagsPolicy, title string) string {
+	t := Trim(policy.Sanitize(title))
+	return t
+}
+
+func Trim(str string) string {
+	return strings.TrimSpace(str)
 }

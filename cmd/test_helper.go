@@ -11,6 +11,7 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
+	"go-cqrs-chat-example/services"
 	"os"
 	"testing"
 	"time"
@@ -100,6 +101,8 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 			kafka.ConfigureSaramaClient,
 			client.NewTestRestClient,
 			aaaClientFactory(t),
+			services.CreateSanitizer,
+			services.CreateStripTags,
 		),
 		fx.Invoke(
 			cqrs.RunCqrsRouter,
