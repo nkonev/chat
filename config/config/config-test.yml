@@ -64,3 +64,14 @@ aaa:
   url:
     base: "http://localhost:8060"
     getUsers: "/internal/user/list"
+
+frontendUrl: "http://localhost:8081"
+
+message:
+  # The list of allowed url prefixes which can be used in insertable image, video, ..., separated by , (comma)
+  # Let's consider an example: "http://api.site.local:8080"
+  # the element allows regular urls from this site, such as "http://api.site.local:8080/api/storage/download?file=chat%2F34%2Fbd92b094-35aa-43ee-9dae-a8aeb5912843%2Fpicture.jpg"
+  allowedMediaUrls: ""
+  allowedIframeUrls: ""
+  # should be aligned with viewList.maxSize in storage
+  maxMedias: 100 # image, video, audio, iframe

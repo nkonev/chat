@@ -120,6 +120,12 @@ func (lc *LoggerConfig) GetLevel() slog.Leveler {
 	return lvl
 }
 
+type MessageConfig struct {
+	AllowedMediaUrls  string `mapstructure:"allowedMediaUrls"`  // comma-separated
+	AllowedIframeUrls string `mapstructure:"allowedIframeUrls"` // comma-separated
+	MaxMedias         int    `mapstructure:"maxMedias"`
+}
+
 type AppConfig struct {
 	KafkaConfig       KafkaConfig       `mapstructure:"kafka"`
 	OtlpConfig        OtlpConfig        `mapstructure:"otlp"`
@@ -130,6 +136,8 @@ type AppConfig struct {
 	ProjectionsConfig ProjectionsConfig `mapstructure:"projections"`
 	LoggerConfig      LoggerConfig      `mapstructure:"logger"`
 	AaaConfig         AaaConfig         `mapstructure:"aaa"`
+	MessageConfig     MessageConfig     `mapstructure:"message"`
+	FrontendUrl       string            `mapstructure:"frontendUrl"`
 }
 
 //go:embed config

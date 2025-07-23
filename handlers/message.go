@@ -1,16 +1,21 @@
 package handlers
 
 import (
+	"errors"
 	"go-cqrs-chat-example/client"
+	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
+
+const badMediaUrl = "BAD_MEDIA_URL"
 
 type MessageHandler struct {
 	lgr              *logger.LoggerWrapper
@@ -18,6 +23,8 @@ type MessageHandler struct {
 	dbWrapper        *db.DB
 	commonProjection *cqrs.CommonProjection
 	aaaRestClient    client.AaaRestClient
+	policy           *services.SanitizerPolicy
+	cfg              *config.AppConfig
 }
 
 func NewMessageHandler(
@@ -26,6 +33,8 @@ func NewMessageHandler(
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	restClient client.AaaRestClient,
+	policy *services.SanitizerPolicy,
+	cfg *config.AppConfig,
 ) *MessageHandler {
 	return &MessageHandler{
 		lgr:              lgr,
@@ -33,6 +42,8 @@ func NewMessageHandler(
 		dbWrapper:        dbWrapper,
 		commonProjection: commonProjection,
 		aaaRestClient:    restClient,
+		policy:           policy,
+		cfg:              cfg,
 	}
 }
 
@@ -61,6 +72,18 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		g.Status(http.StatusInternalServerError)
 		return
 	}
+
+	trimmedAndSanitized, err := TrimAmdSanitizeMessage(g.Request.Context(), mc.cfg, mc.lgr, mc.policy, mcd.Content)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		} else {
+			mc.lgr.ErrorContext(g.Request.Context(), "Error while changing message text", "err", err)
+			g.Status(http.StatusInternalServerError)
+			return
+		}
+	}
+	mcd.Content = trimmedAndSanitized
 
 	if mcd.IsValidatabale() {
 		if err = mcd.Validate(); err != nil {
@@ -94,6 +117,23 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 	g.JSON(http.StatusOK, m)
 }
 
+// returns should exit
+func translateMessageError(g *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	var mediaError *MediaUrlErr
+	var mediaOverflowError *MediaOverflowErr
+	if errors.As(err, &mediaError) {
+		g.JSON(http.StatusBadRequest, &utils.H{"message": mediaError.Error(), "businessErrorCode": badMediaUrl})
+		return true
+	} else if errors.As(err, &mediaOverflowError) {
+		g.JSON(http.StatusBadRequest, &utils.H{"message": mediaOverflowError.Error()})
+		return true
+	}
+	return false
+}
+
 func (mc *MessageHandler) EditMessage(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 	chatId, err := utils.ParseInt64(cid)
@@ -118,6 +158,18 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 		g.Status(http.StatusInternalServerError)
 		return
 	}
+
+	trimmedAndSanitized, err := TrimAmdSanitizeMessage(g.Request.Context(), mc.cfg, mc.lgr, mc.policy, ccd.Content)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		} else {
+			mc.lgr.ErrorContext(g.Request.Context(), "Error while changing message text", "err", err)
+			g.Status(http.StatusInternalServerError)
+			return
+		}
+	}
+	ccd.Content = trimmedAndSanitized
 
 	if ccd.IsValidatabale() {
 		if err = ccd.Validate(); err != nil {

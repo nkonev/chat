@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"context"
 	"fmt"
+	"go-cqrs-chat-example/logger"
 	"net/url"
 	"strconv"
 	"time"
@@ -126,3 +128,33 @@ func FixSizeString(size string) int32 {
 func GetOffset(page int64, size int32) int64 {
 	return page * int64(size)
 }
+
+func ContainsUrl(ctx context.Context, lgr *logger.LoggerWrapper, elems []string, elem string) bool {
+	parsedUrlToTest, err := url.Parse(elem)
+	if err != nil {
+		lgr.InfoContext(ctx, "Unable to parse urlToTest", "url", elem)
+		return false
+	}
+	for i := 0; i < len(elems); i++ {
+		parsedAllowedUrl, err := url.Parse(elems[i])
+		if err != nil {
+			lgr.InfoContext(ctx, "Unable to parse allowedUrl", "url", elems[i])
+			return false
+		}
+
+		if ContainUrl(parsedUrlToTest, parsedAllowedUrl) {
+			return true
+		}
+	}
+	return false
+}
+
+func ContainUrl(parsedUrlToTest, parsedAllowedUrl *url.URL) bool {
+	if parsedUrlToTest.Host == parsedAllowedUrl.Host && parsedUrlToTest.Scheme == parsedAllowedUrl.Scheme {
+		return true
+	} else {
+		return false
+	}
+}
+
+type H map[string]interface{}
