@@ -15,3 +15,9 @@ type MessageViewEnrichedDto struct {
 	MessageViewDto
 	Owner *User `json:"owner"`
 }
+
+type MessageBasic struct {
+	Id      int64
+	OwnerId int64
+	Content string
+}

@@ -28,3 +28,9 @@ type ChatViewEnrichedDto struct {
 	ChatViewDto
 	Participants []User `json:"participants"`
 }
+
+type ChatBasic struct {
+	Id        int64
+	Title     string
+	CanResend bool
+}

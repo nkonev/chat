@@ -72,6 +72,10 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
 	if err != nil {
+		if translateParticipantError(g, err) {
+			return
+		}
+
 		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantAdd command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -115,6 +119,10 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
 	if err != nil {
+		if translateParticipantError(g, err) {
+			return
+		}
+
 		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantDelete command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -158,12 +166,11 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
-	var unauthError *cqrs.UnauthorizedError
-	if errors.As(err, &unauthError) {
-		ch.lgr.InfoContext(g.Request.Context(), "unauthorized", "err", unauthError)
-		g.JSON(http.StatusUnauthorized, dto.ErrorMessageDto{unauthError.Error()})
-		return
-	} else if err != nil {
+	if err != nil {
+		if translateParticipantError(g, err) {
+			return
+		}
+
 		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantChange command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -204,4 +211,17 @@ func (ch *ParticipantHandler) GetParticipants(g *gin.Context) {
 	orderedEnrichedParticipants := makeParticipantsWithAdmin(participants, users)
 
 	g.JSON(http.StatusOK, orderedEnrichedParticipants)
+}
+
+// returns should exit
+func translateParticipantError(g *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	var unauthError *cqrs.UnauthorizedError
+	if errors.As(err, &unauthError) {
+		g.JSON(http.StatusUnauthorized, dto.ErrorMessageDto{unauthError.Error()})
+		return true
+	}
+	return false
 }

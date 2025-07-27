@@ -3,6 +3,7 @@ package cqrs
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -448,4 +449,23 @@ func getParticipantIdsCommon(ctx context.Context, co db.CommonOperations, chatId
 		list = append(list, pwa)
 	}
 	return list, nil
+}
+
+func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperations, chatId int64) (*dto.ChatBasic, error) {
+	r := co.QueryRowContext(ctx, `
+	select ch.id, ch.title, ch.can_resend
+	from chat_common ch where ch.id = $1
+	`, chatId)
+	if r.Err() != nil {
+		return nil, r.Err()
+	}
+	var cht dto.ChatBasic
+	err := r.Scan(&cht.Id, &cht.Title, &cht.CanResend)
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return &cht, nil
 }

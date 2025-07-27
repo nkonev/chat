@@ -2,6 +2,8 @@ package cqrs
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -345,4 +347,23 @@ func (m *CommonProjection) GetMessages(ctx context.Context, chatId int64, size i
 		ma = append(ma, cd)
 	}
 	return ma, nil
+}
+
+func (m *CommonProjection) GetMessageBasic(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.MessageBasic, error) {
+	r := co.QueryRowContext(ctx, `
+	select m.id, m.owner_id, m.content
+	from message m where m.chat_id = $1 and m.id = $2
+	`, chatId, messageId)
+	if r.Err() != nil {
+		return nil, r.Err()
+	}
+	var msg dto.MessageBasic
+	err := r.Scan(&msg.Id, &msg.OwnerId, &msg.Content)
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return &msg, nil
 }

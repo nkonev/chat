@@ -60,19 +60,32 @@ type ChatPinned struct {
 	Pinned         bool            `json:"pinned"`
 }
 
+type MessageCommoned struct {
+	Id      int64  `json:"id"` // message id
+	ChatId  int64  `json:"chatId"`
+	Content string `json:"content"`
+
+	RequestEmbeddedMessageId      *int64  `json:"requestEmbeddedMessageId"`
+	RequestEmbeddedMessageType    *string `json:"requestEmbeddedMessageType"`
+	RequestEmbeddedMessageChatId  *int64  `json:"requestEmbeddedMessageChatId"`
+	RequestEmbeddedMessageOwnerId *int64  `json:"requestEmbeddedMessageOwnerId"`
+}
+
 type MessageCreated struct {
+	MessageCommoned
 	AdditionalData *AdditionalData `json:"additionalData"`
-	Id             int64           `json:"id"` // message id
 	OwnerId        int64           `json:"ownerId"`
-	ChatId         int64           `json:"chatId"`
-	Content        string          `json:"content"`
 }
 
 type MessageEdited struct {
+	MessageCommoned
 	AdditionalData *AdditionalData `json:"additionalData"`
-	Id             int64           `json:"id"` // message id
-	ChatId         int64           `json:"chatId"`
-	Content        string          `json:"content"`
+}
+
+type MessageEmbedded struct {
+	Id        int64  `json:"id"`
+	ChatId    int64  `json:"chatId"`
+	EmbedType string `json:"embedType"`
 }
 
 type UnreadMessagesAction int16

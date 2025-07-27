@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
@@ -9,7 +10,6 @@ import (
 	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 	"net/http"
-	"slices"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -52,16 +52,6 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		return
 	}
 
-	ccd.Title = TrimAmdSanitizeChatTitle(ch.stripTagsPolicy, ccd.Title)
-
-	if ccd.IsValidatabale() {
-		if err = ccd.Validate(); err != nil {
-			ch.lgr.DebugContext(g.Request.Context(), "Error during validation: %v", err)
-			g.Status(http.StatusBadRequest)
-			return
-		}
-	}
-
 	userId, err := getUserId(g)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
@@ -75,12 +65,12 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		ParticipantIds: ccd.ParticipantIds,
 	}
 
-	if !slices.Contains(cc.ParticipantIds, userId) {
-		cc.ParticipantIds = append(cc.ParticipantIds, userId)
-	}
-
-	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection)
+	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy)
 	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
 		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ChatCreate command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -111,16 +101,6 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		return
 	}
 
-	ccd.Title = TrimAmdSanitizeChatTitle(ch.stripTagsPolicy, ccd.Title)
-
-	if ccd.IsValidatabale() {
-		if err = ccd.Validate(); err != nil {
-			ch.lgr.DebugContext(g.Request.Context(), "Error during validation: %v", err)
-			g.Status(http.StatusBadRequest)
-			return
-		}
-	}
-
 	cc := cqrs.ChatEdit{
 		AdditionalData:      cqrs.GenerateMessageAdditionalData(),
 		ChatId:              ccd.Id,
@@ -130,8 +110,12 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		BehalfUserId:        userId,
 	}
 
-	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
+	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy)
 	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
 		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ChatEdit command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -165,6 +149,10 @@ func (ch *ChatHandler) DeleteChat(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
 	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
 		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ChatDelete command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -322,4 +310,21 @@ func (ch *ChatHandler) convertChatId(pinned *bool, lastUpdateDateTime *time.Time
 		LastUpdateDateTime: *lastUpdateDateTime,
 		Id:                 *id,
 	}
+}
+
+// returns should exit
+func translateChatError(g *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	var validationError *cqrs.ValidationError
+	var unauthError *cqrs.UnauthorizedError
+	if errors.As(err, &validationError) {
+		g.JSON(http.StatusBadRequest, &utils.H{"message": validationError.Error()})
+		return true
+	} else if errors.As(err, &unauthError) {
+		g.JSON(http.StatusUnauthorized, dto.ErrorMessageDto{unauthError.Error()})
+		return true
+	}
+	return false
 }

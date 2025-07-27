@@ -73,26 +73,6 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		return
 	}
 
-	trimmedAndSanitized, err := TrimAmdSanitizeMessage(g.Request.Context(), mc.cfg, mc.lgr, mc.policy, mcd.Content)
-	if err != nil {
-		if translateMessageError(g, err) {
-			return
-		} else {
-			mc.lgr.ErrorContext(g.Request.Context(), "Error while changing message text", "err", err)
-			g.Status(http.StatusInternalServerError)
-			return
-		}
-	}
-	mcd.Content = trimmedAndSanitized
-
-	if mcd.IsValidatabale() {
-		if err = mcd.Validate(); err != nil {
-			mc.lgr.DebugContext(g.Request.Context(), "Error during validation: %v", err)
-			g.Status(http.StatusBadRequest)
-			return
-		}
-	}
-
 	cc := cqrs.MessageCreate{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(),
 		ChatId:         chatId,
@@ -100,8 +80,12 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		OwnerId:        userId,
 	}
 
-	mid, wasAdded, err := cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
+	mid, wasAdded, err := cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, mc.cfg, mc.lgr, mc.policy)
 	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageCreate command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -115,23 +99,6 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 	m := dto.IdResponse{Id: mid}
 
 	g.JSON(http.StatusOK, m)
-}
-
-// returns should exit
-func translateMessageError(g *gin.Context, err error) bool {
-	if err == nil {
-		return false
-	}
-	var mediaError *MediaUrlErr
-	var mediaOverflowError *MediaOverflowErr
-	if errors.As(err, &mediaError) {
-		g.JSON(http.StatusBadRequest, &utils.H{"message": mediaError.Error(), "businessErrorCode": badMediaUrl})
-		return true
-	} else if errors.As(err, &mediaOverflowError) {
-		g.JSON(http.StatusBadRequest, &utils.H{"message": mediaOverflowError.Error()})
-		return true
-	}
-	return false
 }
 
 func (mc *MessageHandler) EditMessage(g *gin.Context) {
@@ -159,26 +126,6 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 		return
 	}
 
-	trimmedAndSanitized, err := TrimAmdSanitizeMessage(g.Request.Context(), mc.cfg, mc.lgr, mc.policy, ccd.Content)
-	if err != nil {
-		if translateMessageError(g, err) {
-			return
-		} else {
-			mc.lgr.ErrorContext(g.Request.Context(), "Error while changing message text", "err", err)
-			g.Status(http.StatusInternalServerError)
-			return
-		}
-	}
-	ccd.Content = trimmedAndSanitized
-
-	if ccd.IsValidatabale() {
-		if err = ccd.Validate(); err != nil {
-			mc.lgr.DebugContext(g.Request.Context(), "Error during validation: %v", err)
-			g.Status(http.StatusBadRequest)
-			return
-		}
-	}
-
 	cc := cqrs.MessageEdit{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(),
 		MessageId:      ccd.Id,
@@ -186,8 +133,12 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 		Content:        ccd.Content,
 	}
 
-	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, userId)
+	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, userId, mc.cfg, mc.lgr, mc.policy)
 	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageEdit command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -389,4 +340,25 @@ func enrichMessages(messages []dto.MessageViewDto, users []dto.User) []dto.Messa
 		res = append(res, me)
 	}
 	return res
+}
+
+// returns should exit
+func translateMessageError(g *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	var mediaError *cqrs.MediaUrlErr
+	var mediaOverflowError *cqrs.MediaOverflowErr
+	var validationError *cqrs.ValidationError
+	if errors.As(err, &mediaError) {
+		g.JSON(http.StatusBadRequest, &utils.H{"message": mediaError.Error(), "businessErrorCode": badMediaUrl})
+		return true
+	} else if errors.As(err, &mediaOverflowError) {
+		g.JSON(http.StatusBadRequest, &utils.H{"message": mediaOverflowError.Error()})
+		return true
+	} else if errors.As(err, &validationError) {
+		g.JSON(http.StatusBadRequest, &utils.H{"message": validationError.Error()})
+		return true
+	}
+	return false
 }
