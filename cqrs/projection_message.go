@@ -327,7 +327,20 @@ func (m *CommonProjection) GetMessages(ctx context.Context, chatId int64, size i
 	}
 
 	rows, err := m.db.QueryContext(ctx, fmt.Sprintf(`
-			select m.id, m.owner_id, m.content, m.blog_post, m.create_date_time, m.update_date_time
+			select 
+			    m.id,
+			    m.owner_id,
+			    m.content,
+			    m.blog_post,
+				m.embed_message_type as embed_message_type,
+				me.id as embed_message_reply_id,
+				me.text as embed_message_reply_text,
+				me.owner_id as embed_message_reply_owner_id,
+				m.embed_message_id as embed_message_resend_id,
+				m.embed_chat_id as embed_message_resend_chat_id,
+				m.embed_owner_id as embed_message_resend_owner_id,
+			    m.create_date_time,
+			    m.update_date_time
 			from message m
 			where chat_id = $1 %s
 			order by m.id %s 
@@ -340,7 +353,21 @@ func (m *CommonProjection) GetMessages(ctx context.Context, chatId int64, size i
 	defer rows.Close()
 	for rows.Next() {
 		var cd dto.MessageViewDto
-		err = rows.Scan(&cd.Id, &cd.OwnerId, &cd.Content, &cd.BlogPost, &cd.CreateDateTime, &cd.UpdateDateTime)
+		err = rows.Scan(
+			&cd.Id,
+			&cd.OwnerId,
+			&cd.Content,
+			&cd.BlogPost,
+			&cd.ResponseEmbeddedMessageType,
+			&cd.ResponseEmbeddedMessageReplyId,
+			&cd.ResponseEmbeddedMessageReplyText,
+			&cd.ResponseEmbeddedMessageReplyOwnerId,
+			&cd.ResponseEmbeddedMessageResendId,
+			&cd.ResponseEmbeddedMessageResendChatId,
+			&cd.ResponseEmbeddedMessageResendOwnerId,
+			&cd.CreateDateTime,
+			&cd.UpdateDateTime,
+		)
 		if err != nil {
 			return ma, err
 		}

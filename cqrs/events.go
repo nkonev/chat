@@ -65,10 +65,10 @@ type MessageCommoned struct {
 	ChatId  int64  `json:"chatId"`
 	Content string `json:"content"`
 
-	RequestEmbeddedMessageId      *int64  `json:"requestEmbeddedMessageId"`
-	RequestEmbeddedMessageType    *string `json:"requestEmbeddedMessageType"`
-	RequestEmbeddedMessageChatId  *int64  `json:"requestEmbeddedMessageChatId"`
-	RequestEmbeddedMessageOwnerId *int64  `json:"requestEmbeddedMessageOwnerId"`
+	EmbedMessageId      *int64  `json:"embedMessageId"`
+	EmbedMessageType    *string `json:"embedMessageType"`
+	EmbedMessageChatId  *int64  `json:"embedMessageChatId"`
+	EmbedMessageOwnerId *int64  `json:"embedMessageOwnerId"`
 }
 
 type MessageCreated struct {

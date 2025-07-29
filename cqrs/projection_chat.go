@@ -469,3 +469,41 @@ func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperati
 	}
 	return &cht, nil
 }
+
+func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.CommonOperations, chatIds []int64, behalfParticipantId int64) (map[int64]*dto.BasicChatDtoExtended, error) {
+	result := map[int64]*dto.BasicChatDtoExtended{}
+	if len(chatIds) == 0 {
+		return result, nil
+	}
+
+	// TODO setting can_resend, tet_a_tet
+	rows, err := co.QueryContext(ctx, `
+		SELECT 
+			c.id, 
+			c.title,
+			(cp.user_id is not null),
+			c.tet_a_tet,
+			c.can_resend
+		FROM chat_common c 
+		    LEFT JOIN chat_participant cp 
+		        ON (c.id = cp.chat_id AND cp.user_id = $1) 
+		WHERE c.id = any($2)`,
+		behalfParticipantId, chatIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	list := make([]*dto.BasicChatDtoExtended, 0)
+	for rows.Next() {
+		chatDto := new(dto.BasicChatDtoExtended)
+		if err = rows.Scan(&chatDto.Id, &chatDto.Title, &chatDto.BehalfUserIsParticipant, &chatDto.TetATet, &chatDto.CanResend); err != nil {
+			return nil, err
+		} else {
+			list = append(list, chatDto)
+		}
+	}
+	for _, bc := range list {
+		result[bc.Id] = bc
+	}
+	return result, nil
+}

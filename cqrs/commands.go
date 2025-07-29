@@ -718,8 +718,8 @@ func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, comm
 		}
 
 		if embedMessageRequest.EmbedType == dto.EmbedMessageTypeReply {
-			receiver.RequestEmbeddedMessageId = &embedMessageRequest.Id
-			receiver.RequestEmbeddedMessageType = &embedMessageRequest.EmbedType
+			receiver.EmbedMessageId = &embedMessageRequest.Id
+			receiver.EmbedMessageType = &embedMessageRequest.EmbedType
 			return nil
 		} else if embedMessageRequest.EmbedType == dto.EmbedMessageTypeResend {
 			// check if this input.EmbedChatId resendable
@@ -738,8 +738,8 @@ func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, comm
 				return errors.New("Missing the message")
 			}
 			receiver.Content = m.Content
-			receiver.RequestEmbeddedMessageOwnerId = &m.OwnerId
-			receiver.RequestEmbeddedMessageChatId = &embedMessageRequest.ChatId
+			receiver.EmbedMessageOwnerId = &m.OwnerId
+			receiver.EmbedMessageChatId = &embedMessageRequest.ChatId
 			return nil
 		}
 		return errors.New("Unexpected branch, logical mistake")

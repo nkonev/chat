@@ -33,4 +33,10 @@ type ChatBasic struct {
 	Id        int64
 	Title     string
 	CanResend bool
+	TetATet   bool
+}
+
+type BasicChatDtoExtended struct {
+	ChatBasic
+	BehalfUserIsParticipant bool
 }

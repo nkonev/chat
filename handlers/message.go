@@ -274,6 +274,13 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 }
 
 func (mc *MessageHandler) SearchMessages(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	cid := g.Param(dto.ChatIdParam)
 
 	chatId, err := utils.ParseInt64(cid)
@@ -305,41 +312,78 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 		return
 	}
 
-	userIds := getUserIdsFromMessages(messages)
-	users, err := mc.aaaRestClient.GetUsers(g.Request.Context(), userIds)
+	var usersSet = map[int64]bool{}
+	var chatsPreSet = map[int64]bool{}
+	for _, message := range messages {
+		populateSets(message, usersSet, chatsPreSet, true)
+	}
+	chats, err := mc.commonProjection.GetChatsBasicExtended(g.Request.Context(), mc.dbWrapper, chatsPreSet, userId)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error getting chat basic", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	users, err := mc.aaaRestClient.GetUsers(g.Request.Context(), usersSet)
 	if err != nil {
 		mc.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
-	messagesEnriched := enrichMessages(messages, users)
+
+	messagesEnriched := enrichMessages(messages, users, chats)
 
 	g.JSON(http.StatusOK, messagesEnriched)
 }
 
-func getUserIdsFromMessages(messages []dto.MessageViewDto) []int64 {
-	m := map[int64]struct{}{}
-
-	for _, msg := range messages {
-		m[msg.OwnerId] = struct{}{}
-	}
-
-	r := []int64{}
-
-	for k, _ := range m {
-		r = append(r, k)
-	}
-	return r
-}
-
-func enrichMessages(messages []dto.MessageViewDto, users []dto.User) []dto.MessageViewEnrichedDto {
+// todo move enrichment to projections
+func enrichMessages(messages []dto.MessageViewDto, users []dto.User, chats map[int64]*dto.BasicChatDtoExtended) []dto.MessageViewEnrichedDto {
 	res := make([]dto.MessageViewEnrichedDto, 0, len(messages))
 	for _, m := range messages {
 		me := dto.MessageViewEnrichedDto{
-			MessageViewDto: m,
+			Id:             m.Id,
+			OwnerId:        m.OwnerId,
+			Content:        m.Content,
+			BlogPost:       m.BlogPost,
+			UpdateDateTime: m.UpdateDateTime,
+			CreateDateTime: m.CreateDateTime,
 			Owner:          findUserById(users, m.OwnerId),
 		}
 		res = append(res, me)
 	}
 	return res
+}
+
+func setEmbed(dbMessage dto.MessageViewDto, ret dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) {
+	if dbMessage.ResponseEmbeddedMessageReplyOwnerId != nil {
+		embeddedUser := users[*dbMessage.ResponseEmbeddedMessageReplyOwnerId]
+		ret.EmbedMessage = &dto.EmbedMessageResponse{
+			Id:        *dbMessage.ResponseEmbeddedMessageReplyId,
+			Text:      *dbMessage.ResponseEmbeddedMessageReplyText,
+			EmbedType: *dbMessage.ResponseEmbeddedMessageType,
+			Owner:     embeddedUser,
+		}
+	} else if dbMessage.ResponseEmbeddedMessageResendOwnerId != nil {
+		embeddedUser := users[*dbMessage.ResponseEmbeddedMessageResendOwnerId]
+		basicEmbeddedChat := chats[*dbMessage.ResponseEmbeddedMessageResendChatId]
+		var embedChatName *string = nil
+		var isParticipant bool
+		if basicEmbeddedChat != nil { // basicEmbeddedChat can be deleted
+			if !basicEmbeddedChat.TetATet {
+				embedChatName = &basicEmbeddedChat.Title
+			}
+			isParticipant = basicEmbeddedChat.BehalfUserIsParticipant
+		}
+
+		ret.EmbedMessage = &dto.EmbedMessageResponse{
+			Id:            *dbMessage.ResponseEmbeddedMessageResendId,
+			ChatId:        dbMessage.ResponseEmbeddedMessageResendChatId,
+			ChatName:      embedChatName,
+			Text:          dbMessage.Content,
+			EmbedType:     *dbMessage.ResponseEmbeddedMessageType,
+			Owner:         embeddedUser,
+			IsParticipant: isParticipant,
+		}
+		ret.Content = ""
+	}
 }
 
 // returns should exit
