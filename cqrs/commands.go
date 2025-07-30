@@ -46,8 +46,20 @@ func (u *ValidationError) Error() string {
 	return u.info
 }
 
-func NewValidationError(info string) *UnauthorizedError {
-	return &UnauthorizedError{info: info}
+func NewValidationError(info string) *ValidationError {
+	return &ValidationError{info: info}
+}
+
+type ChatStillNotExistsError struct {
+	info string
+}
+
+func (u *ChatStillNotExistsError) Error() string {
+	return u.info
+}
+
+func NewChatStillNotExistsError(info string) *ChatStillNotExistsError {
+	return &ChatStillNotExistsError{info: info}
 }
 
 type ChatCreate struct {
@@ -476,22 +488,22 @@ func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error 
 	return eventBus.Publish(ctx, cp)
 }
 
-func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *services.SanitizerPolicy) (int64, bool, error) {
+func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *services.SanitizerPolicy) (int64, error) {
 	var copyCommand *MessageCreate
 	err := reprint.FromTo(sp, copyCommand)
 	if err != nil {
-		return 0, false, err
+		return 0, err
 	}
 
 	trimmedAndSanitized, err := TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
 	if err != nil {
-		return 0, false, err
+		return 0, err
 	}
 	copyCommand.Content = trimmedAndSanitized
 
 	if copyCommand.IsValidatabale() {
 		if err = copyCommand.Validate(); err != nil {
-			return 0, false, NewValidationError(fmt.Sprintf("Error during validation: %v", err))
+			return 0, NewValidationError(fmt.Sprintf("Error during validation: %v", err))
 		}
 	}
 
@@ -506,25 +518,25 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 
 	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.EmbedMessage, &mc.MessageCommoned)
 	if err != nil {
-		return 0, false, err
+		return 0, err
 	}
 
 	messageId, err := db.TransactWithResult(ctx, dba, func(tx *db.Tx) (int64, error) {
 		return commonProjection.GetNextMessageId(ctx, tx, copyCommand.ChatId)
 	})
 	if err != nil {
-		return 0, false, err
+		return 0, err
 	}
 
 	if messageId == ChatStillNotExists {
-		return 0, false, nil
+		return 0, NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", copyCommand.ChatId))
 	}
 
 	mc.MessageCommoned.Id = messageId
 
 	err = eventBus.Publish(ctx, mc)
 	if err != nil {
-		return 0, false, err
+		return 0, err
 	}
 
 	errOuter := commonProjection.IterateOverChatParticipantIds(ctx, dba, copyCommand.ChatId, nil, func(participantIdsPortion []int64) error {
@@ -546,10 +558,10 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 	})
 
 	if errOuter != nil {
-		return 0, false, errOuter
+		return 0, errOuter
 	}
 
-	return messageId, true, nil
+	return messageId, nil
 }
 
 func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, commonProjection *CommonProjection) error {

@@ -80,7 +80,7 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		OwnerId:        userId,
 	}
 
-	mid, wasAdded, err := cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, mc.cfg, mc.lgr, mc.policy)
+	mid, err := cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, mc.cfg, mc.lgr, mc.policy)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
@@ -88,11 +88,6 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageCreate command", "err", err)
 		g.Status(http.StatusInternalServerError)
-		return
-	}
-
-	if !wasAdded {
-		g.Status(http.StatusTeapot)
 		return
 	}
 
@@ -323,6 +318,7 @@ func translateMessageError(g *gin.Context, err error) bool {
 	var mediaError *cqrs.MediaUrlErr
 	var mediaOverflowError *cqrs.MediaOverflowErr
 	var validationError *cqrs.ValidationError
+	var chatStillNotExistsError *cqrs.ChatStillNotExistsError
 	if errors.As(err, &mediaError) {
 		g.JSON(http.StatusBadRequest, &utils.H{"message": mediaError.Error(), "businessErrorCode": badMediaUrl})
 		return true
@@ -331,6 +327,9 @@ func translateMessageError(g *gin.Context, err error) bool {
 		return true
 	} else if errors.As(err, &validationError) {
 		g.JSON(http.StatusBadRequest, &utils.H{"message": validationError.Error()})
+		return true
+	} else if errors.As(err, &chatStillNotExistsError) {
+		g.Status(http.StatusTeapot)
 		return true
 	}
 	return false
