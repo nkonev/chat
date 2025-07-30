@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/utils"
 	"time"
 )
 
@@ -108,6 +109,55 @@ func (m *CommonProjection) isMessageBlogPost(ctx context.Context, co db.CommonOp
 	return blog, nil
 }
 
+func (m *CommonProjection) GetBlogsEnriched(ctx context.Context, size int32, offset int64, reverseOrder bool) ([]dto.BlogViewEnrichedDto, error) {
+	blogs, err := m.GetBlogs(ctx, size, offset, reverseOrder)
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error getting blogs", "err", err)
+		return nil, err
+	}
+
+	userIds := getUserIdsFromBlogs(blogs)
+	users, err := m.aaaRestClient.GetUsers(ctx, userIds)
+	if err != nil {
+		m.lgr.WarnContext(ctx, "unable to get users")
+	}
+	blogsEnriched := enrichBlogs(blogs, utils.ToMap(users))
+	return blogsEnriched, nil
+}
+
+func getUserIdsFromBlogs(chats []dto.BlogViewDto) []int64 {
+	m := map[int64]struct{}{}
+
+	for _, ch := range chats {
+		if ch.OwnerId != nil {
+			m[*ch.OwnerId] = struct{}{}
+		}
+	}
+
+	r := []int64{}
+
+	for k, _ := range m {
+		r = append(r, k)
+	}
+	return r
+}
+
+func enrichBlogs(blogs []dto.BlogViewDto, users map[int64]*dto.User) []dto.BlogViewEnrichedDto {
+	res := make([]dto.BlogViewEnrichedDto, 0, len(blogs))
+	for _, ch := range blogs {
+		var u *dto.User
+		if ch.OwnerId != nil {
+			u = users[*ch.OwnerId]
+		}
+		che := dto.BlogViewEnrichedDto{
+			BlogViewDto: ch,
+			Owner:       u,
+		}
+		res = append(res, che)
+	}
+	return res
+}
+
 func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int64, reverseOrder bool) ([]dto.BlogViewDto, error) {
 	ma := []dto.BlogViewDto{}
 
@@ -140,6 +190,55 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 		ma = append(ma, cd)
 	}
 	return ma, nil
+}
+
+func (m *CommonProjection) GetBlogEnriched(ctx context.Context, blogId int64) (*dto.BlogEnrichedDto, error) {
+	blog, err := m.GetBlog(ctx, blogId)
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error getting blog", "err", err)
+		return nil, err
+	}
+
+	if blog == nil {
+		return nil, nil
+	}
+
+	userIds := getUserIdsFromBlog(blog)
+	users, err := m.aaaRestClient.GetUsers(ctx, userIds)
+	if err != nil {
+		m.lgr.WarnContext(ctx, "unable to get users")
+	}
+	blogEnriched := enrichBlog(blog, utils.ToMap(users))
+	return blogEnriched, nil
+}
+
+func getUserIdsFromBlog(blog *dto.BlogDto) []int64 {
+	ret := []int64{}
+	if blog == nil {
+		return ret
+	}
+	ownerIdP := blog.OwnerId
+	if ownerIdP != nil {
+		ret = append(ret, *ownerIdP)
+	}
+	return ret
+}
+
+func enrichBlog(blog *dto.BlogDto, users map[int64]*dto.User) *dto.BlogEnrichedDto {
+	if blog == nil {
+		return nil
+	}
+
+	var u *dto.User
+	ownerIdP := blog.OwnerId
+	if ownerIdP != nil {
+		u = users[*ownerIdP]
+	}
+
+	return &dto.BlogEnrichedDto{
+		BlogDto: *blog,
+		Owner:   u,
+	}
 }
 
 func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*dto.BlogDto, error) {
@@ -212,6 +311,49 @@ func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperatio
 		ma = append(ma, cd)
 	}
 	return ma, nil
+}
+
+func (m *CommonProjection) GetCommentsEnriched(ctx context.Context, blogId int64, size int32, offset int64, reverseOrder bool) ([]dto.CommentViewEnrichedDto, error) {
+	comments, err := m.GetComments(ctx, blogId, size, offset, reverseOrder)
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error getting blog comments", "err", err)
+		return nil, err
+	}
+
+	userIds := getUserIdsFromComments(comments)
+	users, err := m.aaaRestClient.GetUsers(ctx, userIds)
+	if err != nil {
+		m.lgr.WarnContext(ctx, "unable to get users")
+	}
+	commentsEnriched := enrichComments(comments, utils.ToMap(users))
+	return commentsEnriched, nil
+}
+
+func getUserIdsFromComments(comments []dto.CommentViewDto) []int64 {
+	m := map[int64]struct{}{}
+
+	for _, msg := range comments {
+		m[msg.OwnerId] = struct{}{}
+	}
+
+	r := []int64{}
+
+	for k, _ := range m {
+		r = append(r, k)
+	}
+	return r
+}
+
+func enrichComments(comments []dto.CommentViewDto, users map[int64]*dto.User) []dto.CommentViewEnrichedDto {
+	res := make([]dto.CommentViewEnrichedDto, 0, len(comments))
+	for _, m := range comments {
+		me := dto.CommentViewEnrichedDto{
+			CommentViewDto: m,
+			Owner:          users[m.OwnerId],
+		}
+		res = append(res, me)
+	}
+	return res
 }
 
 func (m *CommonProjection) GetComments(ctx context.Context, blogId int64, size int32, offset int64, reverseOrder bool) ([]dto.CommentViewDto, error) {

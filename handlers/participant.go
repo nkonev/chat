@@ -194,23 +194,14 @@ func (ch *ParticipantHandler) GetParticipants(g *gin.Context) {
 	participantsOffset := utils.GetOffset(participantsPage, participantsSize)
 	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), true)
 
-	participants, err := ch.commonProjection.GetParticipantIdsForExternal(g.Request.Context(), chatId, participantsSize, participantsOffset, reverse)
+	participants, err := ch.commonProjection.GetParticipantsEnriched(g.Request.Context(), chatId, participantsSize, participantsOffset, reverse)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participants", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
-	participantIds := cqrs.GetParticipantIds(participants)
-
-	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), participantIds)
-	if err != nil {
-		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
-	}
-
-	orderedEnrichedParticipants := makeParticipantsWithAdmin(participants, utils.ToMap(users))
-
-	g.JSON(http.StatusOK, orderedEnrichedParticipants)
+	g.JSON(http.StatusOK, participants)
 }
 
 // returns should exit

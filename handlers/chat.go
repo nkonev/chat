@@ -217,79 +217,14 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 
 	includeStartingFrom := utils.GetBoolean(g.Query(dto.IncludeStartingFromParam))
 
-	chats, err := ch.commonProjection.GetChats(g.Request.Context(), userId, size, startingFromItemId, includeStartingFrom, reverse)
+	chats, err := ch.commonProjection.GetChatsEnriched(g.Request.Context(), userId, size, startingFromItemId, includeStartingFrom, reverse)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting chats", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
-	userIds := getUserIdsFromChats(chats)
-	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), userIds)
-	if err != nil {
-		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
-	}
-	chatsEnriched := enrichChats(chats, utils.ToMap(users))
-
-	g.JSON(http.StatusOK, chatsEnriched)
-}
-
-func getUserIdsFromChats(chats []dto.ChatViewDto) []int64 {
-	m := map[int64]struct{}{}
-
-	for _, ch := range chats {
-		for _, p := range ch.ParticipantIds {
-			m[p] = struct{}{}
-		}
-	}
-
-	r := []int64{}
-
-	for k, _ := range m {
-		r = append(r, k)
-	}
-	return r
-}
-
-func enrichChats(chats []dto.ChatViewDto, users map[int64]*dto.User) []dto.ChatViewEnrichedDto {
-	res := make([]dto.ChatViewEnrichedDto, 0, len(chats))
-	for _, ch := range chats {
-		che := dto.ChatViewEnrichedDto{
-			ChatViewDto:  ch,
-			Participants: makeParticipants(ch.ParticipantIds, users),
-		}
-		res = append(res, che)
-	}
-	return res
-}
-
-func makeParticipants(participantIds []int64, users map[int64]*dto.User) []dto.User {
-	res := make([]dto.User, 0, len(participantIds))
-
-	for _, p := range participantIds {
-		u := users[p]
-		if u != nil {
-			res = append(res, *u)
-		}
-	}
-
-	return res
-}
-
-func makeParticipantsWithAdmin(participants []cqrs.ParticipantWithAdmin, users map[int64]*dto.User) []dto.UserWithAdmin {
-	res := make([]dto.UserWithAdmin, 0, len(participants))
-
-	for _, p := range participants {
-		u := users[p.ParticipantId]
-		if u != nil {
-			res = append(res, dto.UserWithAdmin{
-				User:      *u,
-				ChatAdmin: p.ChatAdmin,
-			})
-		}
-	}
-
-	return res
+	g.JSON(http.StatusOK, chats)
 }
 
 func (ch *ChatHandler) convertChatId(pinned *bool, lastUpdateDateTime *time.Time, id *int64) *dto.ChatId {

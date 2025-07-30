@@ -41,54 +41,14 @@ func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
 	offset := utils.GetOffset(page, size)
 	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), true)
 
-	blogs, err := ch.commonProjection.GetBlogs(g.Request.Context(), size, offset, reverse)
+	blogs, err := ch.commonProjection.GetBlogsEnriched(g.Request.Context(), size, offset, reverse)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blogs", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
-	userIds := getUserIdsFromBlogs(blogs)
-	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), userIds)
-	if err != nil {
-		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
-	}
-	blogsEnriched := enrichBlogs(blogs, utils.ToMap(users))
-
-	g.JSON(http.StatusOK, blogsEnriched)
-}
-
-func getUserIdsFromBlogs(chats []dto.BlogViewDto) []int64 {
-	m := map[int64]struct{}{}
-
-	for _, ch := range chats {
-		if ch.OwnerId != nil {
-			m[*ch.OwnerId] = struct{}{}
-		}
-	}
-
-	r := []int64{}
-
-	for k, _ := range m {
-		r = append(r, k)
-	}
-	return r
-}
-
-func enrichBlogs(blogs []dto.BlogViewDto, users map[int64]*dto.User) []dto.BlogViewEnrichedDto {
-	res := make([]dto.BlogViewEnrichedDto, 0, len(blogs))
-	for _, ch := range blogs {
-		var u *dto.User
-		if ch.OwnerId != nil {
-			u = users[*ch.OwnerId]
-		}
-		che := dto.BlogViewEnrichedDto{
-			BlogViewDto: ch,
-			Owner:       u,
-		}
-		res = append(res, che)
-	}
-	return res
+	g.JSON(http.StatusOK, blogs)
 }
 
 func (ch *BlogHandler) GetBlog(g *gin.Context) {
@@ -101,7 +61,7 @@ func (ch *BlogHandler) GetBlog(g *gin.Context) {
 		return
 	}
 
-	blog, err := ch.commonProjection.GetBlog(g.Request.Context(), blogId)
+	blog, err := ch.commonProjection.GetBlogEnriched(g.Request.Context(), blogId)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blog", "err", err)
 		g.Status(http.StatusInternalServerError)
@@ -113,43 +73,7 @@ func (ch *BlogHandler) GetBlog(g *gin.Context) {
 		return
 	}
 
-	userIds := getUserIdsFromBlog(blog)
-	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), userIds)
-	if err != nil {
-		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
-	}
-	blogEnriched := enrichBlog(blog, utils.ToMap(users))
-
-	g.JSON(http.StatusOK, blogEnriched)
-}
-
-func getUserIdsFromBlog(blog *dto.BlogDto) []int64 {
-	ret := []int64{}
-	if blog == nil {
-		return ret
-	}
-	ownerIdP := blog.OwnerId
-	if ownerIdP != nil {
-		ret = append(ret, *ownerIdP)
-	}
-	return ret
-}
-
-func enrichBlog(blog *dto.BlogDto, users map[int64]*dto.User) *dto.BlogEnrichedDto {
-	if blog == nil {
-		return nil
-	}
-
-	var u *dto.User
-	ownerIdP := blog.OwnerId
-	if ownerIdP != nil {
-		u = users[*ownerIdP]
-	}
-
-	return &dto.BlogEnrichedDto{
-		BlogDto: *blog,
-		Owner:   u,
-	}
+	g.JSON(http.StatusOK, blog)
 }
 
 func (ch *BlogHandler) SearchComments(g *gin.Context) {
@@ -166,46 +90,12 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 	offset := utils.GetOffset(page, size)
 	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), false)
 
-	comments, err := ch.commonProjection.GetComments(g.Request.Context(), blogId, size, offset, reverse)
+	comments, err := ch.commonProjection.GetCommentsEnriched(g.Request.Context(), blogId, size, offset, reverse)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blog comments", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
-	userIds := getUserIdsFromComments(comments)
-	users, err := ch.aaaRestClient.GetUsers(g.Request.Context(), userIds)
-	if err != nil {
-		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
-	}
-	commentsEnriched := enrichComments(comments, utils.ToMap(users))
-
-	g.JSON(http.StatusOK, commentsEnriched)
-}
-
-func getUserIdsFromComments(comments []dto.CommentViewDto) []int64 {
-	m := map[int64]struct{}{}
-
-	for _, msg := range comments {
-		m[msg.OwnerId] = struct{}{}
-	}
-
-	r := []int64{}
-
-	for k, _ := range m {
-		r = append(r, k)
-	}
-	return r
-}
-
-func enrichComments(comments []dto.CommentViewDto, users map[int64]*dto.User) []dto.CommentViewEnrichedDto {
-	res := make([]dto.CommentViewEnrichedDto, 0, len(comments))
-	for _, m := range comments {
-		me := dto.CommentViewEnrichedDto{
-			CommentViewDto: m,
-			Owner:          users[m.OwnerId],
-		}
-		res = append(res, me)
-	}
-	return res
+	g.JSON(http.StatusOK, comments)
 }

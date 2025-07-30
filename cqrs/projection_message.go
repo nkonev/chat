@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/utils"
 )
 
 func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageCreated) error {
@@ -297,7 +298,104 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 	return maxMessageId, nil
 }
 
-func (m *CommonProjection) GetMessages(ctx context.Context, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool) ([]dto.MessageViewDto, error) {
+func (m *CommonProjection) GetMessagesEnriched(ctx context.Context, behalfUserId, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool) ([]dto.MessageViewEnrichedDto, error) {
+	return db.TransactWithResult(ctx, m.db, func(tx *db.Tx) ([]dto.MessageViewEnrichedDto, error) {
+		messages, err := m.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error getting messages", "err", err)
+			return nil, err
+		}
+
+		var usersSet = map[int64]bool{}
+		var chatsPreSet = map[int64]bool{}
+		for _, message := range messages {
+			populateSets(&message, usersSet, chatsPreSet, chatId)
+		}
+		chats, err := m.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserId)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", err)
+			return nil, err
+		}
+
+		users, err := m.aaaRestClient.GetUsers(ctx, utils.MapSetToSlice(usersSet))
+		if err != nil {
+			m.lgr.WarnContext(ctx, "unable to get users")
+		}
+
+		messagesEnriched := enrichMessages(messages, utils.ToMap(users), chats)
+		return messagesEnriched, nil
+	})
+
+}
+
+func populateSets(message *dto.MessageViewDto, ownersSet map[int64]bool, chatsPreSet map[int64]bool, chatId int64) {
+	ownersSet[message.OwnerId] = true
+	chatsPreSet[chatId] = true
+	if message.ResponseEmbeddedMessageReplyOwnerId != nil {
+		var embeddedMessageReplyOwnerId = *message.ResponseEmbeddedMessageReplyOwnerId
+		ownersSet[embeddedMessageReplyOwnerId] = true
+	} else if message.ResponseEmbeddedMessageResendOwnerId != nil {
+		var embeddedMessageResendOwnerId = *message.ResponseEmbeddedMessageResendOwnerId
+		ownersSet[embeddedMessageResendOwnerId] = true
+		var embeddedMessageResendChatId = *message.ResponseEmbeddedMessageResendChatId
+		chatsPreSet[embeddedMessageResendChatId] = true
+	}
+}
+
+func enrichMessages(messages []dto.MessageViewDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) []dto.MessageViewEnrichedDto {
+	res := make([]dto.MessageViewEnrichedDto, 0, len(messages))
+	for _, m := range messages {
+		me := dto.MessageViewEnrichedDto{
+			Id:             m.Id,
+			OwnerId:        m.OwnerId,
+			Content:        m.Content,
+			BlogPost:       m.BlogPost,
+			UpdateDateTime: m.UpdateDateTime,
+			CreateDateTime: m.CreateDateTime,
+			Owner:          users[m.OwnerId],
+		}
+		setEmbed(m, me, users, chats)
+
+		res = append(res, me)
+	}
+	return res
+}
+
+func setEmbed(srcDbMessage dto.MessageViewDto, dstRet dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) {
+	if srcDbMessage.ResponseEmbeddedMessageReplyOwnerId != nil {
+		embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageReplyOwnerId]
+		dstRet.EmbedMessage = &dto.EmbedMessageResponse{
+			Id:        *srcDbMessage.ResponseEmbeddedMessageReplyId,
+			Text:      *srcDbMessage.ResponseEmbeddedMessageReplyText,
+			EmbedType: *srcDbMessage.ResponseEmbeddedMessageType,
+			Owner:     embeddedUser,
+		}
+	} else if srcDbMessage.ResponseEmbeddedMessageResendOwnerId != nil {
+		embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageResendOwnerId]
+		basicEmbeddedChat := chats[*srcDbMessage.ResponseEmbeddedMessageResendChatId]
+		var embedChatName *string = nil
+		var isParticipant bool
+		if basicEmbeddedChat != nil { // basicEmbeddedChat can be deleted
+			if !basicEmbeddedChat.TetATet {
+				embedChatName = &basicEmbeddedChat.Title
+			}
+			isParticipant = basicEmbeddedChat.BehalfUserIsParticipant
+		}
+
+		dstRet.EmbedMessage = &dto.EmbedMessageResponse{
+			Id:            *srcDbMessage.ResponseEmbeddedMessageResendId,
+			ChatId:        srcDbMessage.ResponseEmbeddedMessageResendChatId,
+			ChatName:      embedChatName,
+			Text:          srcDbMessage.Content,
+			EmbedType:     *srcDbMessage.ResponseEmbeddedMessageType,
+			Owner:         embeddedUser,
+			IsParticipant: isParticipant,
+		}
+		dstRet.Content = ""
+	}
+}
+
+func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool) ([]dto.MessageViewDto, error) {
 	ma := []dto.MessageViewDto{}
 
 	queryArgs := []any{chatId, size}
@@ -326,7 +424,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, chatId int64, size i
 		queryArgs = append(queryArgs, *startingFromItemId)
 	}
 
-	rows, err := m.db.QueryContext(ctx, fmt.Sprintf(`
+	rows, err := co.QueryContext(ctx, fmt.Sprintf(`
 			select 
 			    m.id,
 			    m.owner_id,

@@ -3,6 +3,7 @@ package cqrs
 import (
 	"context"
 	"go-cqrs-chat-example/db"
+	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
 )
 
@@ -176,8 +177,23 @@ func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *Part
 	})
 }
 
-func (m *CommonProjection) GetParticipantIdsForExternal(ctx context.Context, chatId int64, size int32, offset int64, reverse bool) ([]ParticipantWithAdmin, error) {
-	return getParticipantIdsCommon(ctx, m.db, chatId, nil, size, offset, reverse)
+func (m *CommonProjection) GetParticipantsEnriched(ctx context.Context, chatId int64, size int32, offset int64, reverse bool) ([]dto.UserWithAdmin, error) {
+	participants, err := getParticipantIdsCommon(ctx, m.db, chatId, nil, size, offset, reverse)
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
+
+		return nil, err
+	}
+	participantIds := GetParticipantIds(participants)
+
+	users, err := m.aaaRestClient.GetUsers(ctx, participantIds)
+	if err != nil {
+		m.lgr.WarnContext(ctx, "unable to get users")
+	}
+
+	orderedEnrichedParticipants := makeParticipantsWithAdmin(participants, utils.ToMap(users))
+
+	return orderedEnrichedParticipants, nil
 }
 
 func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, consumer func(participantIdsPortion []int64) error) error {

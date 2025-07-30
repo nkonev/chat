@@ -5,12 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
 	"slices"
-
-	"github.com/jackc/pgtype"
 )
 
 func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32, offset int64) ([]int64, error) {
@@ -314,6 +313,80 @@ func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOper
 		return false, err
 	}
 	return chatExists, nil
+}
+
+func (m *CommonProjection) GetChatsEnriched(ctx context.Context, behalfUserId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool) ([]dto.ChatViewEnrichedDto, error) {
+	chats, err := m.GetChats(ctx, behalfUserId, size, startingFromItemId, includeStartingFrom, reverse)
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error getting chats", "err", err)
+		return nil, err
+	}
+
+	userIds := getUserIdsFromChats(chats)
+	users, err := m.aaaRestClient.GetUsers(ctx, userIds)
+	if err != nil {
+		m.lgr.WarnContext(ctx, "unable to get users")
+	}
+	chatsEnriched := enrichChats(chats, utils.ToMap(users))
+	return chatsEnriched, nil
+}
+
+func getUserIdsFromChats(chats []dto.ChatViewDto) []int64 {
+	m := map[int64]struct{}{}
+
+	for _, ch := range chats {
+		for _, p := range ch.ParticipantIds {
+			m[p] = struct{}{}
+		}
+	}
+
+	r := []int64{}
+
+	for k, _ := range m {
+		r = append(r, k)
+	}
+	return r
+}
+
+func enrichChats(chats []dto.ChatViewDto, users map[int64]*dto.User) []dto.ChatViewEnrichedDto {
+	res := make([]dto.ChatViewEnrichedDto, 0, len(chats))
+	for _, ch := range chats {
+		che := dto.ChatViewEnrichedDto{
+			ChatViewDto:  ch,
+			Participants: makeParticipants(ch.ParticipantIds, users),
+		}
+		res = append(res, che)
+	}
+	return res
+}
+
+func makeParticipants(participantIds []int64, users map[int64]*dto.User) []dto.User {
+	res := make([]dto.User, 0, len(participantIds))
+
+	for _, p := range participantIds {
+		u := users[p]
+		if u != nil {
+			res = append(res, *u)
+		}
+	}
+
+	return res
+}
+
+func makeParticipantsWithAdmin(participants []ParticipantWithAdmin, users map[int64]*dto.User) []dto.UserWithAdmin {
+	res := make([]dto.UserWithAdmin, 0, len(participants))
+
+	for _, p := range participants {
+		u := users[p.ParticipantId]
+		if u != nil {
+			res = append(res, dto.UserWithAdmin{
+				User:      *u,
+				ChatAdmin: p.ChatAdmin,
+			})
+		}
+	}
+
+	return res
 }
 
 func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool) ([]dto.ChatViewDto, error) {

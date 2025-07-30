@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/logger"
@@ -14,13 +15,15 @@ type CommonProjection struct {
 	db                 *db.DB
 	lgr                *logger.LoggerWrapper
 	chatUserViewConfig *config.ChatUserViewConfig
+	aaaRestClient      client.AaaRestClient
 }
 
-func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppConfig) *CommonProjection {
+func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppConfig, aaaRestClient client.AaaRestClient) *CommonProjection {
 	return &CommonProjection{
 		db:                 db,
 		lgr:                lgr,
 		chatUserViewConfig: &cfg.ProjectionsConfig.ChatUserViewConfig,
+		aaaRestClient:      aaaRestClient,
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v3/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
@@ -261,8 +262,9 @@ func ConfigureCommonProjection(
 	dba *db.DB,
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
+	aaaRestClient client.AaaRestClient,
 ) *CommonProjection {
-	return NewCommonProjection(dba, lgr, cfg)
+	return NewCommonProjection(dba, lgr, cfg, aaaRestClient)
 }
 
 func SetIsNeedToFastForwardSequences(commonProjection *CommonProjection) error {
