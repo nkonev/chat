@@ -229,7 +229,7 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 	if err != nil {
 		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
-	chatsEnriched := enrichChats(chats, users)
+	chatsEnriched := enrichChats(chats, utils.ToMap(users))
 
 	g.JSON(http.StatusOK, chatsEnriched)
 }
@@ -251,16 +251,7 @@ func getUserIdsFromChats(chats []dto.ChatViewDto) []int64 {
 	return r
 }
 
-func findUserById(users []dto.User, userId int64) *dto.User {
-	for _, u := range users {
-		if u.Id == userId {
-			return &u
-		}
-	}
-	return nil
-}
-
-func enrichChats(chats []dto.ChatViewDto, users []dto.User) []dto.ChatViewEnrichedDto {
+func enrichChats(chats []dto.ChatViewDto, users map[int64]*dto.User) []dto.ChatViewEnrichedDto {
 	res := make([]dto.ChatViewEnrichedDto, 0, len(chats))
 	for _, ch := range chats {
 		che := dto.ChatViewEnrichedDto{
@@ -272,11 +263,11 @@ func enrichChats(chats []dto.ChatViewDto, users []dto.User) []dto.ChatViewEnrich
 	return res
 }
 
-func makeParticipants(participantIds []int64, users []dto.User) []dto.User {
+func makeParticipants(participantIds []int64, users map[int64]*dto.User) []dto.User {
 	res := make([]dto.User, 0, len(participantIds))
 
 	for _, p := range participantIds {
-		u := findUserById(users, p)
+		u := users[p]
 		if u != nil {
 			res = append(res, *u)
 		}
@@ -285,11 +276,11 @@ func makeParticipants(participantIds []int64, users []dto.User) []dto.User {
 	return res
 }
 
-func makeParticipantsWithAdmin(participants []cqrs.ParticipantWithAdmin, users []dto.User) []dto.UserWithAdmin {
+func makeParticipantsWithAdmin(participants []cqrs.ParticipantWithAdmin, users map[int64]*dto.User) []dto.UserWithAdmin {
 	res := make([]dto.UserWithAdmin, 0, len(participants))
 
 	for _, p := range participants {
-		u := findUserById(users, p.ParticipantId)
+		u := users[p.ParticipantId]
 		if u != nil {
 			res = append(res, dto.UserWithAdmin{
 				User:      *u,

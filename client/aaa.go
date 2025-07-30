@@ -18,7 +18,7 @@ type aaaRestClient struct {
 }
 
 type AaaRestClient interface {
-	GetUsers(ctx context.Context, userIds []int64) ([]dto.User, error)
+	GetUsers(ctx context.Context, userIds []int64) ([]*dto.User, error)
 }
 
 func NewAAARestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) AaaRestClient {
@@ -35,18 +35,18 @@ func NewAAARestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) AaaRestC
 	return &aaaRestClient{restClient{client, cfg.AaaConfig.AaaUrlConfig.Base, trcr, cfg, lgr, "[aaa client]"}}
 }
 
-func (rc *aaaRestClient) GetUsers(ctx context.Context, userIds []int64) ([]dto.User, error) {
+func (rc *aaaRestClient) GetUsers(ctx context.Context, userIds []int64) ([]*dto.User, error) {
 	if len(userIds) == 0 {
-		return []dto.User{}, nil
+		return []*dto.User{}, nil
 	}
 
 	queryParams := url.Values{}
 	for _, u := range userIds {
 		queryParams.Add("userId", utils.ToString(u))
 	}
-	resp, err := query[any, []dto.User](ctx, &rc.restClient, 0, "GET", rc.cfg.AaaConfig.AaaUrlConfig.GetUsers, "user.Get", nil, &queryParams)
+	resp, err := query[any, []*dto.User](ctx, &rc.restClient, 0, "GET", rc.cfg.AaaConfig.AaaUrlConfig.GetUsers, "user.Get", nil, &queryParams)
 	if err != nil {
-		return []dto.User{}, err
+		return []*dto.User{}, err
 	}
 	return resp, nil
 }

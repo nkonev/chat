@@ -2,6 +2,8 @@ package dto
 
 import "time"
 
+const NoId = -1
+
 type User struct {
 	Id               int64           `json:"id"`
 	Login            string          `json:"login"`
@@ -10,6 +12,14 @@ type User struct {
 	LoginColor       *string         `json:"loginColor"`
 	LastSeenDateTime *time.Time      `json:"lastSeenDateTime"`
 	AdditionalData   *AdditionalData `json:"additionalData"`
+}
+
+func (u *User) GetId() int64 {
+	if u != nil {
+		return u.Id
+	} else {
+		return NoId
+	}
 }
 
 type UserWithAdmin struct {

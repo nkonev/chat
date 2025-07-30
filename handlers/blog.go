@@ -53,7 +53,7 @@ func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
 	if err != nil {
 		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
-	blogsEnriched := enrichBlogs(blogs, users)
+	blogsEnriched := enrichBlogs(blogs, utils.ToMap(users))
 
 	g.JSON(http.StatusOK, blogsEnriched)
 }
@@ -75,12 +75,12 @@ func getUserIdsFromBlogs(chats []dto.BlogViewDto) []int64 {
 	return r
 }
 
-func enrichBlogs(blogs []dto.BlogViewDto, users []dto.User) []dto.BlogViewEnrichedDto {
+func enrichBlogs(blogs []dto.BlogViewDto, users map[int64]*dto.User) []dto.BlogViewEnrichedDto {
 	res := make([]dto.BlogViewEnrichedDto, 0, len(blogs))
 	for _, ch := range blogs {
 		var u *dto.User
 		if ch.OwnerId != nil {
-			u = findUserById(users, *ch.OwnerId)
+			u = users[*ch.OwnerId]
 		}
 		che := dto.BlogViewEnrichedDto{
 			BlogViewDto: ch,
@@ -118,7 +118,7 @@ func (ch *BlogHandler) GetBlog(g *gin.Context) {
 	if err != nil {
 		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
-	blogEnriched := enrichBlog(blog, users)
+	blogEnriched := enrichBlog(blog, utils.ToMap(users))
 
 	g.JSON(http.StatusOK, blogEnriched)
 }
@@ -135,7 +135,7 @@ func getUserIdsFromBlog(blog *dto.BlogDto) []int64 {
 	return ret
 }
 
-func enrichBlog(blog *dto.BlogDto, users []dto.User) *dto.BlogEnrichedDto {
+func enrichBlog(blog *dto.BlogDto, users map[int64]*dto.User) *dto.BlogEnrichedDto {
 	if blog == nil {
 		return nil
 	}
@@ -143,7 +143,7 @@ func enrichBlog(blog *dto.BlogDto, users []dto.User) *dto.BlogEnrichedDto {
 	var u *dto.User
 	ownerIdP := blog.OwnerId
 	if ownerIdP != nil {
-		u = findUserById(users, *ownerIdP)
+		u = users[*ownerIdP]
 	}
 
 	return &dto.BlogEnrichedDto{
@@ -178,7 +178,7 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 	if err != nil {
 		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
-	commentsEnriched := enrichComments(comments, users)
+	commentsEnriched := enrichComments(comments, utils.ToMap(users))
 
 	g.JSON(http.StatusOK, commentsEnriched)
 }
@@ -198,12 +198,12 @@ func getUserIdsFromComments(comments []dto.CommentViewDto) []int64 {
 	return r
 }
 
-func enrichComments(comments []dto.CommentViewDto, users []dto.User) []dto.CommentViewEnrichedDto {
+func enrichComments(comments []dto.CommentViewDto, users map[int64]*dto.User) []dto.CommentViewEnrichedDto {
 	res := make([]dto.CommentViewEnrichedDto, 0, len(comments))
 	for _, m := range comments {
 		me := dto.CommentViewEnrichedDto{
 			CommentViewDto: m,
-			Owner:          findUserById(users, m.OwnerId),
+			Owner:          users[m.OwnerId],
 		}
 		res = append(res, me)
 	}

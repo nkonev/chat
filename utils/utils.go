@@ -158,3 +158,25 @@ func ContainUrl(parsedUrlToTest, parsedAllowedUrl *url.URL) bool {
 }
 
 type H map[string]interface{}
+
+func MapSetToSlice(m map[int64]bool) []int64 {
+	ret := make([]int64, 0, len(m))
+	for k, v := range m {
+		if v {
+			ret = append(ret, k)
+		}
+	}
+	return ret
+}
+
+type WithId interface {
+	GetId() int64
+}
+
+func ToMap[T WithId](sliceInput []T) map[int64]T {
+	m := make(map[int64]T)
+	for _, v := range sliceInput {
+		m[v.GetId()] = v
+	}
+	return m
+}

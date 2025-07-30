@@ -39,23 +39,23 @@ func (_m *MockAaaRestClient) EXPECT() *MockAaaRestClient_Expecter {
 }
 
 // GetUsers provides a mock function for the type MockAaaRestClient
-func (_mock *MockAaaRestClient) GetUsers(ctx context.Context, userIds []int64) ([]dto.User, error) {
+func (_mock *MockAaaRestClient) GetUsers(ctx context.Context, userIds []int64) ([]*dto.User, error) {
 	ret := _mock.Called(ctx, userIds)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetUsers")
 	}
 
-	var r0 []dto.User
+	var r0 []*dto.User
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, []int64) ([]dto.User, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []int64) ([]*dto.User, error)); ok {
 		return returnFunc(ctx, userIds)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, []int64) []dto.User); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []int64) []*dto.User); ok {
 		r0 = returnFunc(ctx, userIds)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]dto.User)
+			r0 = ret.Get(0).([]*dto.User)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, []int64) error); ok {
@@ -96,12 +96,12 @@ func (_c *MockAaaRestClient_GetUsers_Call) Run(run func(ctx context.Context, use
 	return _c
 }
 
-func (_c *MockAaaRestClient_GetUsers_Call) Return(users []dto.User, err error) *MockAaaRestClient_GetUsers_Call {
+func (_c *MockAaaRestClient_GetUsers_Call) Return(users []*dto.User, err error) *MockAaaRestClient_GetUsers_Call {
 	_c.Call.Return(users, err)
 	return _c
 }
 
-func (_c *MockAaaRestClient_GetUsers_Call) RunAndReturn(run func(ctx context.Context, userIds []int64) ([]dto.User, error)) *MockAaaRestClient_GetUsers_Call {
+func (_c *MockAaaRestClient_GetUsers_Call) RunAndReturn(run func(ctx context.Context, userIds []int64) ([]*dto.User, error)) *MockAaaRestClient_GetUsers_Call {
 	_c.Call.Return(run)
 	return _c
 }

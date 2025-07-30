@@ -208,7 +208,7 @@ func (ch *ParticipantHandler) GetParticipants(g *gin.Context) {
 		ch.lgr.WarnContext(g.Request.Context(), "unable to get users")
 	}
 
-	orderedEnrichedParticipants := makeParticipantsWithAdmin(participants, users)
+	orderedEnrichedParticipants := makeParticipantsWithAdmin(participants, utils.ToMap(users))
 
 	g.JSON(http.StatusOK, orderedEnrichedParticipants)
 }
