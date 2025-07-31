@@ -340,6 +340,8 @@ func populateSets(message *dto.MessageViewDto, ownersSet map[int64]bool, chatsPr
 		var embeddedMessageResendChatId = *message.ResponseEmbeddedMessageResendChatId
 		chatsPreSet[embeddedMessageResendChatId] = true
 	}
+
+	// TODO take into account reactions
 }
 
 func enrichMessages(messages []dto.MessageViewDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) []dto.MessageViewEnrichedDto {
