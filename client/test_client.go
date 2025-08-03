@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type TestRestClient struct {
@@ -88,7 +89,82 @@ func (rc *TestRestClient) DeleteChat(ctx context.Context, behalfUserId int64, ch
 	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "DELETE", "/chat/"+utils.ToString(chatId), "chat.Delete", nil, nil)
 }
 
-func (rc *TestRestClient) GetChatsByUserId(ctx context.Context, behalfUserId int64, queryParams *url.Values) ([]dto.ChatViewEnrichedDto, error) {
+type ChatGetOption interface {
+	Apply(queryParams *url.Values) *url.Values
+}
+
+type ChatGetOptionWithSize struct {
+	v int32
+}
+
+func NewChatGetOptionWithSize(v int32) *ChatGetOptionWithSize {
+	return &ChatGetOptionWithSize{v: v}
+}
+
+func (r *ChatGetOptionWithSize) Apply(queryParams *url.Values) *url.Values {
+	if queryParams == nil {
+		queryParams = &url.Values{}
+	}
+	queryParams.Add(dto.SizeParam, utils.ToString(r.v))
+	return queryParams
+}
+
+type ChatGetOptionWithStartsFromChatId struct {
+	v int64
+}
+
+func NewChatGetOptionWithStartsFromChatId(v int64) *ChatGetOptionWithStartsFromChatId {
+	return &ChatGetOptionWithStartsFromChatId{v: v}
+}
+
+func (r *ChatGetOptionWithStartsFromChatId) Apply(queryParams *url.Values) *url.Values {
+	if queryParams == nil {
+		queryParams = &url.Values{}
+	}
+	queryParams.Add(dto.ChatIdParam, utils.ToString(r.v))
+	return queryParams
+}
+
+type ChatGetOptionWithStartsFromChatPinned struct {
+	v bool
+}
+
+func NewChatGetOptionWithStartsFromChatPinned(v bool) *ChatGetOptionWithStartsFromChatPinned {
+	return &ChatGetOptionWithStartsFromChatPinned{v: v}
+}
+
+func (r *ChatGetOptionWithStartsFromChatPinned) Apply(queryParams *url.Values) *url.Values {
+	if queryParams == nil {
+		queryParams = &url.Values{}
+	}
+	queryParams.Add(dto.PinnedParam, utils.ToString(r.v))
+	return queryParams
+}
+
+type ChatGetOptionWithStartsFromChatLastUpdateDateTime struct {
+	lastLastUpdateDateTime *time.Time
+}
+
+func NewChatGetOptionWithStartsFromChatLastUpdateDateTime(v *time.Time) *ChatGetOptionWithStartsFromChatLastUpdateDateTime {
+	return &ChatGetOptionWithStartsFromChatLastUpdateDateTime{lastLastUpdateDateTime: v}
+}
+
+func (r *ChatGetOptionWithStartsFromChatLastUpdateDateTime) Apply(queryParams *url.Values) *url.Values {
+	if queryParams == nil {
+		queryParams = &url.Values{}
+	}
+	queryParams.Add(dto.LastUpdateDateTimeParam, r.lastLastUpdateDateTime.Format(time.RFC3339Nano))
+	return queryParams
+}
+
+func (rc *TestRestClient) GetChats(ctx context.Context, behalfUserId int64, chatGetOptions ...ChatGetOption) ([]dto.ChatViewEnrichedDto, error) {
+	var queryParams *url.Values
+	for _, opt := range chatGetOptions {
+		if opt != nil {
+			queryParams = opt.Apply(queryParams)
+		}
+	}
+
 	return query[any, []dto.ChatViewEnrichedDto](ctx, &rc.restClient, behalfUserId, "GET", "/chat/search", "chat.Search", nil, queryParams)
 }
 
@@ -175,7 +251,50 @@ func (rc *TestRestClient) DeleteMessage(ctx context.Context, behalfUserId int64,
 	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "DELETE", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Delete", nil, nil)
 }
 
-func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, chatId int64, queryParams *url.Values) ([]dto.MessageViewEnrichedDto, error) {
+type MessageGetOption interface {
+	Apply(queryParams *url.Values) *url.Values
+}
+
+type MessageGetOptionWithSize struct {
+	v int32
+}
+
+func NewMessageGetOptionWithSize(v int32) *MessageGetOptionWithSize {
+	return &MessageGetOptionWithSize{v: v}
+}
+
+func (r *MessageGetOptionWithSize) Apply(queryParams *url.Values) *url.Values {
+	if queryParams == nil {
+		queryParams = &url.Values{}
+	}
+	queryParams.Add(dto.SizeParam, utils.ToString(r.v))
+	return queryParams
+}
+
+type MessageGetOptionWithStartsFromItemId struct {
+	v int64
+}
+
+func NewMessageGetOptionWithStartsFromItemId(v int64) *MessageGetOptionWithStartsFromItemId {
+	return &MessageGetOptionWithStartsFromItemId{v: v}
+}
+
+func (r *MessageGetOptionWithStartsFromItemId) Apply(queryParams *url.Values) *url.Values {
+	if queryParams == nil {
+		queryParams = &url.Values{}
+	}
+	queryParams.Add(dto.StartingFromItemId, utils.ToString(r.v))
+	return queryParams
+}
+
+func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, chatId int64, messageGetOptions ...MessageGetOption) ([]dto.MessageViewEnrichedDto, error) {
+	var queryParams *url.Values
+	for _, opt := range messageGetOptions {
+		if opt != nil {
+			queryParams = opt.Apply(queryParams)
+		}
+	}
+
 	return query[any, []dto.MessageViewEnrichedDto](ctx, &rc.restClient, behalfUserId, "GET", "/chat/"+utils.ToString(chatId)+"/message/search", "message.Search", nil, queryParams)
 }
 
