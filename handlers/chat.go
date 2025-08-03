@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -16,12 +15,12 @@ import (
 )
 
 type ChatHandler struct {
-	lgr              *logger.LoggerWrapper
-	eventBus         *cqrs.PartitionAwareEventBus
-	dbWrapper        *db.DB
-	commonProjection *cqrs.CommonProjection
-	aaaRestClient    client.AaaRestClient
-	stripTagsPolicy  *services.StripTagsPolicy
+	lgr                 *logger.LoggerWrapper
+	eventBus            *cqrs.PartitionAwareEventBus
+	dbWrapper           *db.DB
+	commonProjection    *cqrs.CommonProjection
+	stripTagsPolicy     *services.StripTagsPolicy
+	enrichingProjection *cqrs.EnrichingProjection
 }
 
 func NewChatHandler(
@@ -29,16 +28,16 @@ func NewChatHandler(
 	eventBus *cqrs.PartitionAwareEventBus,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
-	restClient client.AaaRestClient,
 	stripTagsPolicy *services.StripTagsPolicy,
+	enrichingProjection *cqrs.EnrichingProjection,
 ) *ChatHandler {
 	return &ChatHandler{
-		lgr:              lgr,
-		eventBus:         eventBus,
-		dbWrapper:        dbWrapper,
-		commonProjection: commonProjection,
-		aaaRestClient:    restClient,
-		stripTagsPolicy:  stripTagsPolicy,
+		lgr:                 lgr,
+		eventBus:            eventBus,
+		dbWrapper:           dbWrapper,
+		commonProjection:    commonProjection,
+		stripTagsPolicy:     stripTagsPolicy,
+		enrichingProjection: enrichingProjection,
 	}
 }
 
@@ -217,7 +216,7 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 
 	includeStartingFrom := utils.GetBoolean(g.Query(dto.IncludeStartingFromParam))
 
-	chats, err := ch.commonProjection.GetChatsEnriched(g.Request.Context(), userId, size, startingFromItemId, includeStartingFrom, reverse)
+	chats, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), userId, size, startingFromItemId, includeStartingFrom, reverse)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting chats", "err", err)
 		g.Status(http.StatusInternalServerError)

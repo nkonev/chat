@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -14,11 +13,11 @@ import (
 )
 
 type ParticipantHandler struct {
-	lgr              *logger.LoggerWrapper
-	eventBus         *cqrs.PartitionAwareEventBus
-	dbWrapper        *db.DB
-	commonProjection *cqrs.CommonProjection
-	aaaRestClient    client.AaaRestClient
+	lgr                 *logger.LoggerWrapper
+	eventBus            *cqrs.PartitionAwareEventBus
+	dbWrapper           *db.DB
+	commonProjection    *cqrs.CommonProjection
+	enrichingProjection *cqrs.EnrichingProjection
 }
 
 func NewParticipantHandler(
@@ -26,14 +25,14 @@ func NewParticipantHandler(
 	eventBus *cqrs.PartitionAwareEventBus,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
-	restClient client.AaaRestClient,
+	enrichingProjection *cqrs.EnrichingProjection,
 ) *ParticipantHandler {
 	return &ParticipantHandler{
-		lgr:              lgr,
-		eventBus:         eventBus,
-		dbWrapper:        dbWrapper,
-		commonProjection: commonProjection,
-		aaaRestClient:    restClient,
+		lgr:                 lgr,
+		eventBus:            eventBus,
+		dbWrapper:           dbWrapper,
+		commonProjection:    commonProjection,
+		enrichingProjection: enrichingProjection,
 	}
 }
 
@@ -194,7 +193,7 @@ func (ch *ParticipantHandler) GetParticipants(g *gin.Context) {
 	participantsOffset := utils.GetOffset(participantsPage, participantsSize)
 	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), true)
 
-	participants, err := ch.commonProjection.GetParticipantsEnriched(g.Request.Context(), chatId, participantsSize, participantsOffset, reverse)
+	participants, err := ch.enrichingProjection.GetParticipantsEnriched(g.Request.Context(), chatId, participantsSize, participantsOffset, reverse)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participants", "err", err)
 		g.Status(http.StatusInternalServerError)

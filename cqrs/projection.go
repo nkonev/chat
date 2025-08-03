@@ -15,15 +15,27 @@ type CommonProjection struct {
 	db                 *db.DB
 	lgr                *logger.LoggerWrapper
 	chatUserViewConfig *config.ChatUserViewConfig
-	aaaRestClient      client.AaaRestClient
 }
 
-func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppConfig, aaaRestClient client.AaaRestClient) *CommonProjection {
+type EnrichingProjection struct {
+	cp            *CommonProjection
+	lgr           *logger.LoggerWrapper
+	aaaRestClient client.AaaRestClient
+}
+
+func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppConfig) *CommonProjection {
 	return &CommonProjection{
 		db:                 db,
 		lgr:                lgr,
 		chatUserViewConfig: &cfg.ProjectionsConfig.ChatUserViewConfig,
-		aaaRestClient:      aaaRestClient,
+	}
+}
+
+func NewEnrichingProjection(cp *CommonProjection, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient) *EnrichingProjection {
+	return &EnrichingProjection{
+		cp:            cp,
+		lgr:           lgr,
+		aaaRestClient: aaaRestClient,
 	}
 }
 

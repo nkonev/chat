@@ -315,8 +315,8 @@ func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOper
 	return chatExists, nil
 }
 
-func (m *CommonProjection) GetChatsEnriched(ctx context.Context, behalfUserId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool) ([]dto.ChatViewEnrichedDto, error) {
-	chats, err := m.GetChats(ctx, behalfUserId, size, startingFromItemId, includeStartingFrom, reverse)
+func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfUserId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool) ([]dto.ChatViewEnrichedDto, error) {
+	chats, err := m.cp.GetChats(ctx, behalfUserId, size, startingFromItemId, includeStartingFrom, reverse)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting chats", "err", err)
 		return nil, err

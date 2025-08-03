@@ -298,9 +298,9 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 	return maxMessageId, nil
 }
 
-func (m *CommonProjection) GetMessagesEnriched(ctx context.Context, behalfUserId, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool) ([]dto.MessageViewEnrichedDto, error) {
-	return db.TransactWithResult(ctx, m.db, func(tx *db.Tx) ([]dto.MessageViewEnrichedDto, error) {
-		messages, err := m.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse)
+func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserId, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool) ([]dto.MessageViewEnrichedDto, error) {
+	return db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) ([]dto.MessageViewEnrichedDto, error) {
+		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting messages", "err", err)
 			return nil, err
@@ -311,7 +311,7 @@ func (m *CommonProjection) GetMessagesEnriched(ctx context.Context, behalfUserId
 		for _, message := range messages {
 			populateSets(&message, usersSet, chatsPreSet, chatId)
 		}
-		chats, err := m.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserId)
+		chats, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserId)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", err)
 			return nil, err

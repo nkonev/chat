@@ -177,8 +177,8 @@ func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *Part
 	})
 }
 
-func (m *CommonProjection) GetParticipantsEnriched(ctx context.Context, chatId int64, size int32, offset int64, reverse bool) ([]dto.UserWithAdmin, error) {
-	participants, err := getParticipantIdsCommon(ctx, m.db, chatId, nil, size, offset, reverse)
+func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, chatId int64, size int32, offset int64, reverse bool) ([]dto.UserWithAdmin, error) {
+	participants, err := getParticipantIdsCommon(ctx, m.cp.db, chatId, nil, size, offset, reverse)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
 

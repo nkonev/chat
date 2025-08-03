@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
@@ -18,13 +17,13 @@ import (
 const badMediaUrl = "BAD_MEDIA_URL"
 
 type MessageHandler struct {
-	lgr              *logger.LoggerWrapper
-	eventBus         *cqrs.PartitionAwareEventBus
-	dbWrapper        *db.DB
-	commonProjection *cqrs.CommonProjection
-	aaaRestClient    client.AaaRestClient
-	policy           *services.SanitizerPolicy
-	cfg              *config.AppConfig
+	lgr                 *logger.LoggerWrapper
+	eventBus            *cqrs.PartitionAwareEventBus
+	dbWrapper           *db.DB
+	commonProjection    *cqrs.CommonProjection
+	policy              *services.SanitizerPolicy
+	cfg                 *config.AppConfig
+	enrichingProjection *cqrs.EnrichingProjection
 }
 
 func NewMessageHandler(
@@ -32,18 +31,18 @@ func NewMessageHandler(
 	eventBus *cqrs.PartitionAwareEventBus,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
-	restClient client.AaaRestClient,
 	policy *services.SanitizerPolicy,
 	cfg *config.AppConfig,
+	enrichingProjection *cqrs.EnrichingProjection,
 ) *MessageHandler {
 	return &MessageHandler{
-		lgr:              lgr,
-		eventBus:         eventBus,
-		dbWrapper:        dbWrapper,
-		commonProjection: commonProjection,
-		aaaRestClient:    restClient,
-		policy:           policy,
-		cfg:              cfg,
+		lgr:                 lgr,
+		eventBus:            eventBus,
+		dbWrapper:           dbWrapper,
+		commonProjection:    commonProjection,
+		policy:              policy,
+		cfg:                 cfg,
+		enrichingProjection: enrichingProjection,
 	}
 }
 
@@ -314,7 +313,7 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 	}
 	includeStartingFrom := utils.GetBoolean(g.Query(dto.IncludeStartingFromParam))
 
-	messages, err := mc.commonProjection.GetMessagesEnriched(g.Request.Context(), userId, chatId, size, startingFromItemId, includeStartingFrom, reverse)
+	messages, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), userId, chatId, size, startingFromItemId, includeStartingFrom, reverse)
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error getting messages", "err", err)
 		g.Status(http.StatusInternalServerError)

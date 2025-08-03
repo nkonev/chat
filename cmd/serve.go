@@ -74,6 +74,7 @@ func RunServe() {
 			cqrs.ConfigureEventBus,
 			cqrs.ConfigureEventProcessor,
 			cqrs.ConfigureCommonProjection,
+			cqrs.NewEnrichingProjection,
 			handlers.NewChatHandler,
 			handlers.NewParticipantHandler,
 			handlers.NewMessageHandler,

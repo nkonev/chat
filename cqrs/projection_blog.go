@@ -109,8 +109,8 @@ func (m *CommonProjection) isMessageBlogPost(ctx context.Context, co db.CommonOp
 	return blog, nil
 }
 
-func (m *CommonProjection) GetBlogsEnriched(ctx context.Context, size int32, offset int64, reverseOrder bool) ([]dto.BlogViewEnrichedDto, error) {
-	blogs, err := m.GetBlogs(ctx, size, offset, reverseOrder)
+func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, offset int64, reverseOrder bool) ([]dto.BlogViewEnrichedDto, error) {
+	blogs, err := m.cp.GetBlogs(ctx, size, offset, reverseOrder)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting blogs", "err", err)
 		return nil, err
@@ -192,8 +192,8 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 	return ma, nil
 }
 
-func (m *CommonProjection) GetBlogEnriched(ctx context.Context, blogId int64) (*dto.BlogEnrichedDto, error) {
-	blog, err := m.GetBlog(ctx, blogId)
+func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64) (*dto.BlogEnrichedDto, error) {
+	blog, err := m.cp.GetBlog(ctx, blogId)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting blog", "err", err)
 		return nil, err
@@ -313,8 +313,8 @@ func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperatio
 	return ma, nil
 }
 
-func (m *CommonProjection) GetCommentsEnriched(ctx context.Context, blogId int64, size int32, offset int64, reverseOrder bool) ([]dto.CommentViewEnrichedDto, error) {
-	comments, err := m.GetComments(ctx, blogId, size, offset, reverseOrder)
+func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId int64, size int32, offset int64, reverseOrder bool) ([]dto.CommentViewEnrichedDto, error) {
+	comments, err := m.cp.GetComments(ctx, blogId, size, offset, reverseOrder)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting blog comments", "err", err)
 		return nil, err
