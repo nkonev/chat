@@ -66,9 +66,15 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 
 		_, err = tx.ExecContext(ctx, `
 			update message
-			set	content = $3, update_date_time = $4
+			set	
+			    content = $3
+				, embed_message_id = $4
+				, embed_chat_id = $5
+				, embed_owner_id = $6
+				, embed_message_type = $7
+				, update_date_time = $8
 			where chat_id = $2 and id = $1 
-		`, event.Id, event.ChatId, event.Content, event.AdditionalData.CreatedAt)
+		`, event.Id, event.ChatId, event.Content, event.EmbedMessageId, event.EmbedMessageChatId, event.EmbedMessageOwnerId, event.EmbedMessageType, event.AdditionalData.CreatedAt)
 		if err != nil {
 			return err
 		}
