@@ -1,6 +1,3 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
@@ -15,34 +12,11 @@ import (
 	"go-cqrs-chat-example/services"
 	"os"
 
-	"github.com/spf13/cobra"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 )
 
-// serveCmd represents the serve command
-var serveCmd = &cobra.Command{
-	Use:   "serve",
-	Short: "Start server",
-	Long:  `Start http server and CQRS infrastructure`,
-	Run: func(cmd *cobra.Command, args []string) {
-		RunServe()
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(serveCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// serveCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-}
+const CommandServeName = "serve"
 
 func RunServe() {
 	cfg, err := config.CreateTypedConfig()

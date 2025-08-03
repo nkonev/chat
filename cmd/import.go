@@ -1,6 +1,3 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
@@ -14,33 +11,9 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 	"os"
-
-	"github.com/spf13/cobra"
 )
 
-// importCmd represents the import command
-var importCmd = &cobra.Command{
-	Use:   "import",
-	Short: "Import events",
-	Long:  `Import events from stdin or a file to the event topic. If the topic already contains events, the events from the file are going to be appended.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		RunImport()
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(importCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// importCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// importCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-}
+const CommandImportName = "import"
 
 func RunImport() {
 	cfg, err := config.CreateTypedConfig()
