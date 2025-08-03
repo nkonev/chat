@@ -199,7 +199,7 @@ type MakeMessageBlogPost struct {
 
 func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy) (int64, error) {
 	var copyCommand *ChatCreate
-	err := reprint.FromTo(sp, copyCommand)
+	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
 		return 0, err
 	}
@@ -257,7 +257,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus E
 
 func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy) error {
 	var copyCommand *ChatEdit
-	err := reprint.FromTo(sp, copyCommand)
+	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
 		return err
 	}
@@ -490,7 +490,7 @@ func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error 
 
 func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *services.SanitizerPolicy) (int64, error) {
 	var copyCommand *MessageCreate
-	err := reprint.FromTo(sp, copyCommand)
+	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
 		return 0, err
 	}
@@ -644,7 +644,7 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 
 func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, userId int64, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *services.SanitizerPolicy) error {
 	var copyCommand *MessageEdit
-	err := reprint.FromTo(sp, copyCommand)
+	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
 		return err
 	}

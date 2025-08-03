@@ -10,6 +10,12 @@ download:
 generate:
 	mockery
 
+infra:
+	docker compose up -d
+	./scripts/wait-for-it.sh -t 30 127.0.0.1:5432 -- echo 'postgresql-citus-coordinator-1 is up'
+	./scripts/wait-for-it.sh -t 30 127.0.0.1:9092 -- echo 'kafka is up'
+	./scripts/wait-for-it.sh -t 30 127.0.0.1:16686 -- echo 'jaeger web ui is up'
+
 .PHONY: test
 test: export CHAT_LOGGER.LEVEL = warn
 test: export CHAT_POSTGRESQL.PRETTYLOG = false

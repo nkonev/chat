@@ -98,8 +98,8 @@ func (rc *TestRestClient) DeleteMessage(ctx context.Context, behalfUserId int64,
 	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "DELETE", "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Delete", nil, nil)
 }
 
-func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, chatId int64, queryParams *url.Values) ([]dto.MessageViewDto, error) {
-	return query[any, []dto.MessageViewDto](ctx, &rc.restClient, behalfUserId, "GET", "/chat/"+utils.ToString(chatId)+"/message/search", "message.Search", nil, queryParams)
+func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, chatId int64, queryParams *url.Values) ([]dto.MessageViewEnrichedDto, error) {
+	return query[any, []dto.MessageViewEnrichedDto](ctx, &rc.restClient, behalfUserId, "GET", "/chat/"+utils.ToString(chatId)+"/message/search", "message.Search", nil, queryParams)
 }
 
 func (rc *TestRestClient) MakeMessageBlogPost(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {

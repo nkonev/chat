@@ -61,7 +61,7 @@ func TestImport(t *testing.T) {
 		lc fx.Lifecycle,
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, []int64{user1}).Return([]dto.User{mockUser1}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, []int64{user1}).Return([]*dto.User{&mockUser1}, nil)
 
 		ctx := context.Background()
 
@@ -153,7 +153,7 @@ func TestImport(t *testing.T) {
 		lc fx.Lifecycle,
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, []int64{user1}).Return([]dto.User{mockUser1}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, []int64{user1}).Return([]*dto.User{&mockUser1}, nil)
 
 		ctx := context.Background()
 

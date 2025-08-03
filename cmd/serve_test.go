@@ -72,7 +72,7 @@ func TestUnreads(t *testing.T) {
 		const chat1Name = "new chat 1"
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2, mockUser3}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2, &mockUser3}, nil)
 
 		ctx := context.Background()
 
@@ -238,7 +238,7 @@ func TestPinChat(t *testing.T) {
 		const chat1Name = "new chat 1"
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
 
 		ctx := context.Background()
 
@@ -359,7 +359,7 @@ func TestDeleteChat(t *testing.T) {
 		const chat1Name = "new chat 1"
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
 
 		ctx := context.Background()
 
@@ -468,7 +468,7 @@ func TestAddParticipant(t *testing.T) {
 		const chat1Name = "new chat 1"
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
 
 		ctx := context.Background()
 
@@ -595,7 +595,7 @@ func TestDeleteParticipant(t *testing.T) {
 		const chat1Name = "new chat 1"
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
 
 		ctx := context.Background()
 
@@ -715,7 +715,7 @@ func TestChangeParticipant(t *testing.T) {
 		const chat1Name = "new chat 1"
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1, mockUser2}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
 
 		ctx := context.Background()
 
@@ -774,7 +774,7 @@ func TestEditMessage(t *testing.T) {
 		lc fx.Lifecycle,
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{}, nil)
 
 		const user1 int64 = 1
 		const chat1Name = "new chat 1"
@@ -891,7 +891,7 @@ func TestBlog(t *testing.T) {
 		const chat1Name = "new chat 1"
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{mockUser1}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1}, nil)
 
 		ctx := context.Background()
 
@@ -943,7 +943,7 @@ func TestChatPaginate(t *testing.T) {
 		lc fx.Lifecycle,
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{}, nil)
 
 		const user1 int64 = 1
 		const num = 1000
@@ -1006,7 +1006,7 @@ func TestMessagePaginate(t *testing.T) {
 		lc fx.Lifecycle,
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]dto.User{}, nil)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{}, nil)
 
 		const user1 int64 = 1
 		const chat1Name = "new chat 1"

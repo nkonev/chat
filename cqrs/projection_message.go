@@ -434,7 +434,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 			    m.blog_post,
 				m.embed_message_type as embed_message_type,
 				me.id as embed_message_reply_id,
-				me.text as embed_message_reply_text,
+				me.content as embed_message_reply_text,
 				me.owner_id as embed_message_reply_owner_id,
 				m.embed_message_id as embed_message_resend_id,
 				m.embed_chat_id as embed_message_resend_chat_id,
@@ -442,10 +442,12 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 			    m.create_date_time,
 			    m.update_date_time
 			from message m
-			where chat_id = $1 %s
+			left join message me 
+			on (m.chat_id = me.chat_id and m.embed_message_id = me.id and m.embed_message_type = '%v')
+			where m.chat_id = $1 %s
 			order by m.id %s 
 			limit $2
-		`, paginationKeyset, order),
+		`, dto.EmbedMessageTypeReply, paginationKeyset, order),
 		queryArgs...)
 	if err != nil {
 		return ma, err
