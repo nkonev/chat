@@ -286,6 +286,7 @@ func TestResendMessage(t *testing.T) {
 		require.NotNil(t, message1.EmbedMessage)
 		assert.Equal(t, dto.EmbedMessageTypeResend, message1.EmbedMessage.EmbedType)
 		assert.Equal(t, message1Text, message1.EmbedMessage.Text)
+		assert.Equal(t, message1Id, message1.EmbedMessage.Id)
 		assert.Equal(t, chat1Id, *message1.EmbedMessage.ChatId)
 		assert.Equal(t, chat1Name, *message1.EmbedMessage.ChatName)
 		assert.Equal(t, user1, message1.EmbedMessage.Owner.Id)
