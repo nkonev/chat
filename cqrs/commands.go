@@ -754,7 +754,7 @@ func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, comm
 			receiver.EmbedMessageChatId = &embedMessageRequest.ChatId
 			return nil
 		}
-		return errors.New("Unexpected branch, logical mistake")
+		return fmt.Errorf("Unexpected embed type '%v'", embedMessageRequest.EmbedType)
 	}
 
 	return nil

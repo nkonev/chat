@@ -79,6 +79,13 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		Content:        mcd.Content,
 		OwnerId:        userId,
 	}
+	if mcd.EmbedMessageRequest != nil {
+		cc.EmbedMessage = &cqrs.EmbedMessage{
+			Id:        mcd.EmbedMessageRequest.Id,
+			ChatId:    mcd.EmbedMessageRequest.ChatId,
+			EmbedType: mcd.EmbedMessageRequest.EmbedType,
+		}
+	}
 
 	mid, err := cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, mc.cfg, mc.lgr, mc.policy)
 	if err != nil {
@@ -126,6 +133,13 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 		MessageId:      ccd.Id,
 		ChatId:         chatId,
 		Content:        ccd.Content,
+	}
+	if ccd.EmbedMessageRequest != nil {
+		cc.EmbedMessage = &cqrs.EmbedMessage{
+			Id:        ccd.EmbedMessageRequest.Id,
+			ChatId:    ccd.EmbedMessageRequest.ChatId,
+			EmbedType: ccd.EmbedMessageRequest.EmbedType,
+		}
 	}
 
 	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, userId, mc.cfg, mc.lgr, mc.policy)
