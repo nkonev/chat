@@ -2,6 +2,8 @@ package dto
 
 import "time"
 
+const NoMessageContent = ""
+
 type MessageViewDto struct {
 	Id       int64
 	OwnerId  int64
@@ -31,13 +33,13 @@ type EmbedMessageResponse struct {
 }
 
 type MessageViewEnrichedDto struct {
-	Id                   int64                 `json:"id"`
-	OwnerId              int64                 `json:"ownerId"`
-	Content              string                `json:"text"` // for sake compatibility
-	BlogPost             bool                  `json:"blogPost"`
-	EmbedMessage *EmbedMessageResponse `json:"embedMessage"`
-	CreateDateTime       time.Time             `json:"createDateTime"`
-	UpdateDateTime       *time.Time            `json:"editDateTime"` // for sake compatibility
+	Id             int64                 `json:"id"`
+	OwnerId        int64                 `json:"ownerId"`
+	Content        string                `json:"text"` // for sake compatibility
+	BlogPost       bool                  `json:"blogPost"`
+	EmbedMessage   *EmbedMessageResponse `json:"embedMessage"`
+	CreateDateTime time.Time             `json:"createDateTime"`
+	UpdateDateTime *time.Time            `json:"editDateTime"` // for sake compatibility
 
 	Owner *User `json:"owner"`
 }

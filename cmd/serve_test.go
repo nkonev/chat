@@ -273,7 +273,7 @@ func TestResendMessage(t *testing.T) {
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		// user 1 resends the message from chat 1 to chat 2
-		message1ResentId, err := testRestClient.CreateMessage(ctx, user1, chat2Id, "", client.NewMessageCreateOptionResend(chat1Id, message1Id))
+		message1ResentId, err := testRestClient.CreateMessage(ctx, user1, chat2Id, dto.NoMessageContent, client.NewMessageCreateOptionResend(chat1Id, message1Id))
 		require.NoError(t, err, "error in resending message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
