@@ -294,6 +294,117 @@ func TestResendMessage(t *testing.T) {
 	})
 }
 
+func TestReplyMessage(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// user 1 adds user 2 to chat 1
+		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
+		require.NoError(t, err, "error in adding participant")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert user 2 sees chat 1
+		user2ChatsNew, err := testRestClient.GetChatsByUserId(ctx, user2, nil)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user2ChatsNew))
+		chat1OfUser2 := user2ChatsNew[0]
+		assert.Equal(t, chat1Name, chat1OfUser2.Title)
+
+		const message1Text = "new message 1"
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user2, chat1Id, message1Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		const message2Text = "It is a reply"
+
+		// user 1 replies on the message of user 2
+		message1ResentId, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text, client.NewMessageCreateOptionReply(message1Id))
+		require.NoError(t, err, "error in resending message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert that chat 1 contains the embed message
+		{
+			chat1Messages, err := testRestClient.GetMessages(ctx, user1, chat1Id, nil)
+			require.NoError(t, err, "error in getting messages")
+			assert.Equal(t, 2, len(chat1Messages))
+			repliedMessage2 := chat1Messages[1]
+			assert.Equal(t, message1ResentId, repliedMessage2.Id)
+			require.NotNil(t, repliedMessage2.EmbedMessage)
+			assert.Equal(t, message2Text, repliedMessage2.Content)
+			assert.Equal(t, dto.EmbedMessageTypeReply, repliedMessage2.EmbedMessage.EmbedType)
+			assert.Equal(t, message1Text, repliedMessage2.EmbedMessage.Text)
+			assert.Equal(t, message1Id, repliedMessage2.EmbedMessage.Id)
+			assert.Equal(t, user2, repliedMessage2.EmbedMessage.Owner.Id)
+			assert.Equal(t, user2Login, repliedMessage2.EmbedMessage.Owner.Login)
+		}
+
+		const message2TextNew = "It is a reply new"
+		err = testRestClient.EditMessage(ctx, user1, chat1Id, message1ResentId, message2TextNew, client.NewMessageCreateOptionReply(message1Id))
+		require.NoError(t, err, "error in resending message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert that chat 1 contains the embed message
+		{
+			chat1Messages, err := testRestClient.GetMessages(ctx, user1, chat1Id, nil)
+			require.NoError(t, err, "error in getting messages")
+			assert.Equal(t, 2, len(chat1Messages))
+			repliedMessage2 := chat1Messages[1]
+			assert.Equal(t, message1ResentId, repliedMessage2.Id)
+			require.NotNil(t, repliedMessage2.EmbedMessage)
+			assert.Equal(t, message2TextNew, repliedMessage2.Content)
+			assert.Equal(t, dto.EmbedMessageTypeReply, repliedMessage2.EmbedMessage.EmbedType)
+			assert.Equal(t, message1Text, repliedMessage2.EmbedMessage.Text)
+			assert.Equal(t, message1Id, repliedMessage2.EmbedMessage.Id)
+			assert.Equal(t, user2, repliedMessage2.EmbedMessage.Owner.Id)
+			assert.Equal(t, user2Login, repliedMessage2.EmbedMessage.Owner.Login)
+		}
+	})
+}
+
 func TestPinChat(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,

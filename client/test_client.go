@@ -105,10 +105,20 @@ type MessageCreateOptionResend struct {
 	messageId  int64
 }
 
+type MessageCreateOptionReply struct {
+	messageId int64
+}
+
 func NewMessageCreateOptionResend(fromChatId, messageId int64) *MessageCreateOptionResend {
 	return &MessageCreateOptionResend{
 		fromChatId: fromChatId,
 		messageId:  messageId,
+	}
+}
+
+func NewMessageCreateOptionReply(messageId int64) *MessageCreateOptionReply {
+	return &MessageCreateOptionReply{
+		messageId: messageId,
 	}
 }
 
@@ -117,6 +127,13 @@ func (r *MessageCreateOptionResend) Apply(d *dto.MessageCreateDto) {
 		Id:        r.messageId,
 		ChatId:    r.fromChatId,
 		EmbedType: dto.EmbedMessageTypeResend,
+	}
+}
+
+func (r *MessageCreateOptionReply) Apply(d *dto.MessageCreateDto) {
+	d.EmbedMessageRequest = &dto.EmbedMessageRequest{
+		Id:        r.messageId,
+		EmbedType: dto.EmbedMessageTypeReply,
 	}
 }
 
@@ -138,13 +155,19 @@ func (rc *TestRestClient) CreateMessage(ctx context.Context, behalfUserId int64,
 	return resp.Id, nil
 }
 
-func (rc *TestRestClient) EditMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64, text string) error {
+func (rc *TestRestClient) EditMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64, text string, messageCreateOptions ...MessageCreateOption) error {
 	req := dto.MessageEditDto{
 		Id: messageId,
 		MessageCreateDto: dto.MessageCreateDto{
 			Content: text,
 		},
 	}
+	for _, opt := range messageCreateOptions {
+		if opt != nil {
+			opt.Apply(&req.MessageCreateDto)
+		}
+	}
+
 	return queryNoResponse[dto.MessageEditDto](ctx, &rc.restClient, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/message", "message.Edit", &req, nil)
 }
 

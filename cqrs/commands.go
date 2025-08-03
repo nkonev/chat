@@ -373,6 +373,15 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 }
 
 func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	exists, err := commonProjection.checkChatExists(ctx, dba, s.ChatId)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", s.ChatId))
+	}
+
 	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
