@@ -50,6 +50,15 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 
 func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		chatExists, err := m.checkChatExists(ctx, tx, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !chatExists {
+			m.lgr.InfoContext(ctx, "Skipping MessageEdited because there is no chat", "chat_id", event.ChatId, "message_id", event.Id)
+			return nil
+		}
+
 		messageExists, errInner := m.checkMessageExists(ctx, tx, event.ChatId, event.Id)
 		if errInner != nil {
 			return errInner
