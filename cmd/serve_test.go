@@ -281,16 +281,16 @@ func TestResendMessage(t *testing.T) {
 		chat2Messages, err := testRestClient.GetMessages(ctx, user1, chat2Id, nil)
 		require.NoError(t, err, "error in getting messages")
 		assert.Equal(t, 1, len(chat2Messages))
-		message1 := chat2Messages[0]
-		assert.Equal(t, message1ResentId, message1.Id)
-		require.NotNil(t, message1.EmbedMessage)
-		assert.Equal(t, dto.EmbedMessageTypeResend, message1.EmbedMessage.EmbedType)
-		assert.Equal(t, message1Text, message1.EmbedMessage.Text)
-		assert.Equal(t, message1Id, message1.EmbedMessage.Id)
-		assert.Equal(t, chat1Id, *message1.EmbedMessage.ChatId)
-		assert.Equal(t, chat1Name, *message1.EmbedMessage.ChatName)
-		assert.Equal(t, user1, message1.EmbedMessage.Owner.Id)
-		assert.Equal(t, user1Login, message1.EmbedMessage.Owner.Login)
+		resentMessage1 := chat2Messages[0]
+		assert.Equal(t, message1ResentId, resentMessage1.Id)
+		require.NotNil(t, resentMessage1.EmbedMessage)
+		assert.Equal(t, dto.EmbedMessageTypeResend, resentMessage1.EmbedMessage.EmbedType)
+		assert.Equal(t, message1Text, resentMessage1.EmbedMessage.Text)
+		assert.Equal(t, message1Id, resentMessage1.EmbedMessage.Id)
+		assert.Equal(t, chat1Id, *resentMessage1.EmbedMessage.ChatId)
+		assert.Equal(t, chat1Name, *resentMessage1.EmbedMessage.ChatName)
+		assert.Equal(t, user1, resentMessage1.EmbedMessage.Owner.Id)
+		assert.Equal(t, user1Login, resentMessage1.EmbedMessage.Owner.Login)
 	})
 }
 
