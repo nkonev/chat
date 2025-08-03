@@ -1,114 +1,118 @@
 package config
 
 import (
-	"bytes"
 	"embed"
 	"fmt"
+	"github.com/traefik/paerser/env"
+	"github.com/traefik/paerser/file"
+	"github.com/traefik/paerser/flag"
 	"go-cqrs-chat-example/app"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
+const configLongPrefix = "--config"
+const configShortPrefix = "-c"
+
 type KafkaConfig struct {
-	BootstrapServers    []string            `mapstructure:"bootstrapServers"`
-	Topic               string              `mapstructure:"topic"`
-	NumPartitions       int32               `mapstructure:"numPartitions"`
-	ReplicationFactor   int16               `mapstructure:"replicationFactor"`
-	Retention           string              `mapstructure:"retention"`
-	ConsumerGroup       string              `mapstructure:"consumerGroup"`
-	KafkaProducerConfig KafkaProducerConfig `mapstructure:"producer"`
-	KafkaConsumerConfig KafkaConsumerConfig `mapstructure:"consumer"`
+	BootstrapServers  []string
+	Topic             string
+	NumPartitions     int32
+	ReplicationFactor int16
+	Retention         string
+	ConsumerGroup     string
+	Producer          KafkaProducerConfig
+	Consumer          KafkaConsumerConfig
 }
 
 type KafkaProducerConfig struct {
-	RetryMax      int           `mapstructure:"retryMax"`
-	ReturnSuccess bool          `mapstructure:"returnSuccess"`
-	RetryBackoff  time.Duration `mapstructure:"retryBackoff"`
-	ClientId      string        `mapstructure:"clientId"`
+	RetryMax      int
+	ReturnSuccess bool
+	RetryBackoff  time.Duration
+	ClientId      string
 }
 
 type KafkaConsumerConfig struct {
-	ReturnErrors         bool          `mapstructure:"returnErrors"`
-	ClientId             string        `mapstructure:"clientId"`
-	NackResendSleep      time.Duration `mapstructure:"nackResendSleep"`
-	ReconnectRetrySleep  time.Duration `mapstructure:"reconnectRetrySleep"`
-	OffsetCommitInterval time.Duration `mapstructure:"offsetCommitInterval"`
+	ReturnErrors         bool
+	ClientId             string
+	NackResendSleep      time.Duration
+	ReconnectRetrySleep  time.Duration
+	OffsetCommitInterval time.Duration
 }
 
 type OtlpConfig struct {
-	Endpoint string `mapstructure:"endpoint"`
+	Endpoint string
 }
 
 type HttpServerConfig struct {
-	Address        string        `mapstructure:"address"`
-	ReadTimeout    time.Duration `mapstructure:"readTimeout"`
-	WriteTimeout   time.Duration `mapstructure:"writeTimeout"`
-	MaxHeaderBytes int           `mapstructure:"maxHeaderBytes"`
+	Address        string
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
+	MaxHeaderBytes int
 }
 
 type MigrationConfig struct {
-	MigrationTable    string        `mapstructure:"migrationTable"`
-	StatementDuration time.Duration `mapstructure:"statementDuration"`
+	MigrationTable    string
+	StatementDuration time.Duration
 }
 
 type PostgreSQLConfig struct {
-	Url                string          `mapstructure:"url"`
-	MaxOpenConnections int             `mapstructure:"maxOpenConnections"`
-	MaxIdleConnections int             `mapstructure:"maxIdleConnections"`
-	MaxLifetime        time.Duration   `mapstructure:"maxLifetime"`
-	MigrationConfig    MigrationConfig `mapstructure:"migration"`
-	PrettyLog          bool            `mapstructure:"prettyLog"`
-	Dump               bool            `mapstructure:"dump"`
+	Url                string
+	MaxOpenConnections int
+	MaxIdleConnections int
+	MaxLifetime        time.Duration
+	Migration          MigrationConfig
+	PrettyLog          bool
+	Dump               bool
 }
 
 type CqrsConfig struct {
-	SleepBeforeEvent                time.Duration `mapstructure:"sleepBeforeEvent"`
-	CheckAreEventsProcessedInterval time.Duration `mapstructure:"checkAreEventsProcessedInterval"`
-	Dump                            bool          `mapstructure:"dump"`
-	PrettyLog                       bool          `mapstructure:"prettyLog"`
-	ExportConfig                    ExportConfig  `mapstructure:"export"`
-	ImportConfig                    ImportConfig  `mapstructure:"import"`
+	SleepBeforeEvent                time.Duration
+	CheckAreEventsProcessedInterval time.Duration
+	Dump                            bool
+	PrettyLog                       bool
+	Export                          ExportConfig
+	Import                          ImportConfig
 }
 
 type RestClientConfig struct {
-	MaxIdleConns       int           `mapstructure:"maxIdleConns"`
-	IdleConnTimeout    time.Duration `mapstructure:"idleConnTimeout"`
-	DisableCompression bool          `mapstructure:"disableCompression"`
-	Dump               bool          `mapstructure:"dump"`
-	PrettyLog          bool          `mapstructure:"prettyLog"`
+	MaxIdleConns       int
+	IdleConnTimeout    time.Duration
+	DisableCompression bool
+	Dump               bool
+	PrettyLog          bool
 }
 
 type ImportConfig struct {
-	File string `mapstructure:"file"`
+	File string
 }
 
 type ExportConfig struct {
-	File string `mapstructure:"file"`
+	File string
 }
 
 type ChatUserViewConfig struct {
-	MaxViewableParticipants int32 `mapstructure:"maxViewableParticipants"`
+	MaxViewableParticipants int32
 }
 
 type ProjectionsConfig struct {
-	ChatUserViewConfig ChatUserViewConfig `mapstructure:"chatUserView"`
+	ChatUserView ChatUserViewConfig
 }
 
 type LoggerConfig struct {
-	Level string `mapstructure:"level"`
-	Json  bool   `mapstructure:"json"`
+	Level string
+	Json  bool
 }
 
 type AaaConfig struct {
-	AaaUrlConfig AaaUrlConfig `mapstructure:"url"`
+	Url AaaUrlConfig
 }
 
 type AaaUrlConfig struct {
-	Base     string `mapstructure:"base"`
-	GetUsers string `mapstructure:"getUsers"`
+	Base     string
+	GetUsers string
 }
 
 func (lc *LoggerConfig) GetLevel() slog.Leveler {
@@ -121,51 +125,92 @@ func (lc *LoggerConfig) GetLevel() slog.Leveler {
 }
 
 type MessageConfig struct {
-	AllowedMediaUrls  string `mapstructure:"allowedMediaUrls"`  // comma-separated
-	AllowedIframeUrls string `mapstructure:"allowedIframeUrls"` // comma-separated
-	MaxMedias         int    `mapstructure:"maxMedias"`
+	AllowedMediaUrls  string // comma-separated
+	AllowedIframeUrls string // comma-separated
+	MaxMedias         int
 }
 
 type AppConfig struct {
-	KafkaConfig       KafkaConfig       `mapstructure:"kafka"`
-	OtlpConfig        OtlpConfig        `mapstructure:"otlp"`
-	PostgreSQLConfig  PostgreSQLConfig  `mapstructure:"postgresql"`
-	HttpServerConfig  HttpServerConfig  `mapstructure:"server"`
-	CqrsConfig        CqrsConfig        `mapstructure:"cqrs"`
-	RestClientConfig  RestClientConfig  `mapstructure:"http"`
-	ProjectionsConfig ProjectionsConfig `mapstructure:"projections"`
-	LoggerConfig      LoggerConfig      `mapstructure:"logger"`
-	AaaConfig         AaaConfig         `mapstructure:"aaa"`
-	MessageConfig     MessageConfig     `mapstructure:"message"`
-	FrontendUrl       string            `mapstructure:"frontendUrl"`
+	Kafka       KafkaConfig
+	Otlp        OtlpConfig
+	PostgreSQL  PostgreSQLConfig
+	Server      HttpServerConfig
+	Cqrs        CqrsConfig
+	Http        RestClientConfig
+	Projections ProjectionsConfig
+	Logger      LoggerConfig
+	Aaa         AaaConfig
+	Message     MessageConfig
+	FrontendUrl string
 }
 
 //go:embed config
 var configFs embed.FS
 
-func CreateTypedConfig() (*AppConfig, error) {
-	return createTypedConfig("config-dev.yml")
+func CreateTypedConfig(args []string) (*AppConfig, error) {
+	return createTypedConfig("config-dev.yml", args[:]...)
 }
 
 func CreateTestTypedConfig() (*AppConfig, error) {
 	return createTypedConfig("config-test.yml")
 }
 
-func createTypedConfig(filename string) (*AppConfig, error) {
+func createTypedConfig(filename string, args ...string) (*AppConfig, error) {
 	conf := AppConfig{}
-	viper.SetConfigType("yaml")
+	var err error
 
-	if embedBytes, err := configFs.ReadFile("config/" + filename); err != nil {
-		return nil, fmt.Errorf("Fatal error during reading embedded config file: %s \n", err)
-	} else if err = viper.ReadConfig(bytes.NewBuffer(embedBytes)); err != nil {
-		return nil, fmt.Errorf("Fatal error during viper reading embedded config file: %s \n", err)
+	var argsToReadConfig []string
+
+	if len(args) > 0 && (strings.HasPrefix(args[0], configLongPrefix) || strings.HasPrefix(args[0], configShortPrefix)) {
+		// load provided config
+		stringWithConfig := args[0]
+		var thePath = stringWithConfig
+		thePath, _ = strings.CutPrefix(thePath, configLongPrefix)
+		thePath, _ = strings.CutPrefix(thePath, configShortPrefix)
+
+		if strings.HasPrefix(thePath, "=") {
+			thePath, _ = strings.CutPrefix(thePath, "=")
+			argsToReadConfig = args[1:]
+		} else {
+			if len(args) < 2 {
+				return nil, fmt.Errorf("expected file argument")
+			}
+			thePath = args[1]
+			argsToReadConfig = args[2:]
+		}
+
+		thePath = strings.TrimSpace(thePath)
+
+		err = file.Decode(thePath, &conf)
+		if err != nil {
+			return nil, fmt.Errorf("config file loaded failed. %v\n", err)
+		}
+
+	} else {
+		// load default embed config
+		embedBytes, err := configFs.ReadFile("config/" + filename)
+		if err != nil {
+			return nil, fmt.Errorf("Fatal error during reading embedded config file: %s \n", err)
+		}
+		fileContentString := string(embedBytes)
+
+		err = file.DecodeContent(fileContentString, ".yml", &conf)
+
+		if err != nil {
+			return nil, fmt.Errorf("config file loaded failed. %v\n", err)
+		}
+
+		argsToReadConfig = args
 	}
 
-	viper.SetEnvPrefix(strings.ToUpper(app.TRACE_RESOURCE))
-	viper.AutomaticEnv()
-	err := viper.GetViper().Unmarshal(&conf)
+	err = env.Decode(os.Environ(), strings.ToUpper(app.TRACE_RESOURCE)+"_", &conf)
 	if err != nil {
-		return nil, fmt.Errorf("config file loaded failed. %v\n", err)
+		return nil, err
+	}
+	
+	err = flag.Decode(argsToReadConfig, &conf)
+	if err != nil {
+		return nil, err
 	}
 
 	return &conf, nil

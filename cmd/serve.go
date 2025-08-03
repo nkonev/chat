@@ -18,8 +18,8 @@ import (
 
 const CommandServeName = "serve"
 
-func RunServe() {
-	cfg, err := config.CreateTypedConfig()
+func RunServe(args []string) {
+	cfg, err := config.CreateTypedConfig(args)
 	if err != nil {
 		panic(err)
 	}

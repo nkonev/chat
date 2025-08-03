@@ -791,13 +791,13 @@ func SanitizeMessage(policy *services.SanitizerPolicy, input string) string {
 func TrimAmdSanitizeMessage(ctx context.Context, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *services.SanitizerPolicy, input string) (string, error) {
 	sanitizedHtml := Trim(SanitizeMessage(policy, input))
 
-	whitelist := cfg.MessageConfig.AllowedMediaUrls
+	whitelist := cfg.Message.AllowedMediaUrls
 	wlArr := strings.Split(whitelist, ",")
 	frontendUrl := cfg.FrontendUrl
 	wlArr = append(wlArr, frontendUrl)
 	wlArr = append(wlArr, "") // storage urls without protocol://host:port
 
-	iframeWhitelist := cfg.MessageConfig.AllowedIframeUrls
+	iframeWhitelist := cfg.Message.AllowedIframeUrls
 	iframeWlArr := strings.Split(iframeWhitelist, ",")
 
 	// Load the HTML document
@@ -808,7 +808,7 @@ func TrimAmdSanitizeMessage(ctx context.Context, cfg *config.AppConfig, lgr *log
 	}
 
 	var retErr error
-	maxMediasCount := cfg.MessageConfig.MaxMedias
+	maxMediasCount := cfg.Message.MaxMedias
 	mediaCount := 0
 
 	doc.Find("img").Each(func(i int, s *goquery.Selection) {

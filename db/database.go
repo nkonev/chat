@@ -28,9 +28,9 @@ func makeLoggingDriver(cfg *config.AppConfig, lgr *logger.LoggerWrapper) driver.
 			return time.Now(), nil
 		},
 		PostExec: func(c context.Context, ctx interface{}, stmt *proxy.Stmt, args []driver.NamedValue, _ driver.Result, err error) error {
-			if cfg.PostgreSQLConfig.Dump {
+			if cfg.PostgreSQL.Dump {
 				s := fmt.Sprintf("Exec: %s; args = %v (%s)\n", stmt.QueryString, writeNamedValues(args), time.Since(ctx.(time.Time)))
-				if cfg.PostgreSQLConfig.PrettyLog {
+				if cfg.PostgreSQL.PrettyLog {
 					fmt.Printf("[SQL] trace_id=%s: %s\n", logger.GetTraceId(c), s)
 				} else {
 					lgr.DebugContext(c, s)
@@ -43,9 +43,9 @@ func makeLoggingDriver(cfg *config.AppConfig, lgr *logger.LoggerWrapper) driver.
 			return time.Now(), nil
 		},
 		PostQuery: func(c context.Context, ctx interface{}, stmt *proxy.Stmt, args []driver.NamedValue, rows driver.Rows, err error) error {
-			if cfg.PostgreSQLConfig.Dump {
+			if cfg.PostgreSQL.Dump {
 				s := fmt.Sprintf("Query: %s; args = %v (%s)\n", stmt.QueryString, writeNamedValues(args), time.Since(ctx.(time.Time)))
-				if cfg.PostgreSQLConfig.PrettyLog {
+				if cfg.PostgreSQL.PrettyLog {
 					fmt.Printf("[SQL] trace_id=%s: %s\n", logger.GetTraceId(c), s)
 				} else {
 					lgr.DebugContext(c, s)
@@ -179,7 +179,7 @@ func ConfigureDatabase(
 		semconv.DBSystemPostgreSQL,
 	))
 
-	connector, err := otDriver.(driver.DriverContext).OpenConnector(cfg.PostgreSQLConfig.Url)
+	connector, err := otDriver.(driver.DriverContext).OpenConnector(cfg.PostgreSQL.Url)
 	if err != nil {
 		return nil, err
 	}
@@ -191,9 +191,9 @@ func ConfigureDatabase(
 	if err != nil {
 		return nil, err
 	}
-	db.SetConnMaxLifetime(cfg.PostgreSQLConfig.MaxLifetime)
-	db.SetMaxIdleConns(cfg.PostgreSQLConfig.MaxIdleConnections)
-	db.SetMaxOpenConns(cfg.PostgreSQLConfig.MaxOpenConnections)
+	db.SetConnMaxLifetime(cfg.PostgreSQL.MaxLifetime)
+	db.SetMaxIdleConns(cfg.PostgreSQL.MaxIdleConnections)
+	db.SetMaxOpenConns(cfg.PostgreSQL.MaxOpenConnections)
 
 	err = db.Ping()
 	if err != nil {
@@ -271,9 +271,9 @@ func (db *DB) Reset(mc config.MigrationConfig) error {
 }
 
 func RunMigrations(db *DB, cfg *config.AppConfig) error {
-	return db.Migrate(cfg.PostgreSQLConfig.MigrationConfig)
+	return db.Migrate(cfg.PostgreSQL.Migration)
 }
 
 func RunResetDatabase(db *DB, cfg *config.AppConfig) error {
-	return db.Reset(cfg.PostgreSQLConfig.MigrationConfig)
+	return db.Reset(cfg.PostgreSQL.Migration)
 }

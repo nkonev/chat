@@ -15,15 +15,16 @@ func main() {
 	}
 
 	theCmd := os.Args[1]
+	remainingArgs := os.Args[2:]
 	switch theCmd {
 	case cmd.CommandImportName:
-		cmd.RunImport()
+		cmd.RunImport(remainingArgs)
 	case cmd.CommandExportName:
-		cmd.RunExport()
+		cmd.RunExport(remainingArgs)
 	case cmd.CommandResetName:
-		cmd.RunReset()
+		cmd.RunReset(remainingArgs)
 	case cmd.CommandServeName:
-		cmd.RunServe()
+		cmd.RunServe(remainingArgs)
 	default:
 		fmt.Printf("Unknown command '%v'. Expected command one of %v\n", theCmd, allCommands)
 		os.Exit(1)

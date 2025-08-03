@@ -73,11 +73,11 @@ func ConfigureHttpServer(
 	bindHttpHandlers(ginRouter, chatHandler, participantHandler, messageHandler, blogHandler)
 
 	httpServer := &http.Server{
-		Addr:           cfg.HttpServerConfig.Address,
+		Addr:           cfg.Server.Address,
 		Handler:        ginRouter.Handler(),
-		ReadTimeout:    cfg.HttpServerConfig.ReadTimeout,
-		WriteTimeout:   cfg.HttpServerConfig.WriteTimeout,
-		MaxHeaderBytes: cfg.HttpServerConfig.MaxHeaderBytes,
+		ReadTimeout:    cfg.Server.ReadTimeout,
+		WriteTimeout:   cfg.Server.WriteTimeout,
+		MaxHeaderBytes: cfg.Server.MaxHeaderBytes,
 	}
 
 	lc.Append(fx.Hook{

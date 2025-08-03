@@ -67,12 +67,12 @@ func NewBaseLogger(w io.Writer, cfg *config.AppConfig) *slog.Logger {
 	}
 
 	bh := &slog.HandlerOptions{
-		Level:       cfg.LoggerConfig.GetLevel(),
+		Level:       cfg.Logger.GetLevel(),
 		ReplaceAttr: replaceFunc,
 		AddSource:   true,
 	}
 	commonAttrs := []slog.Attr{slog.String("service", app.TRACE_RESOURCE)}
-	if cfg.LoggerConfig.Json {
+	if cfg.Logger.Json {
 		h := &TracingContextHandler{slog.NewJSONHandler(w, bh).WithAttrs(commonAttrs)}
 		baseLogger = slog.New(h)
 	} else {

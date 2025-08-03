@@ -15,8 +15,8 @@ import (
 
 const CommandImportName = "import"
 
-func RunImport() {
-	cfg, err := config.CreateTypedConfig()
+func RunImport(args []string) {
+	cfg, err := config.CreateTypedConfig(args)
 	if err != nil {
 		panic(err)
 	}

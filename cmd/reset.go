@@ -15,8 +15,8 @@ import (
 
 const CommandResetName = "reset"
 
-func RunReset() {
-	cfg, err := config.CreateTypedConfig()
+func RunReset(args []string) {
+	cfg, err := config.CreateTypedConfig(args)
 	if err != nil {
 		panic(err)
 	}

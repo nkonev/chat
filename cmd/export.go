@@ -12,8 +12,8 @@ import (
 
 const CommandExportName = "export"
 
-func RunExport() {
-	cfg, err := config.CreateTypedConfig()
+func RunExport(args []string) {
+	cfg, err := config.CreateTypedConfig(args)
 	if err != nil {
 		panic(err)
 	}

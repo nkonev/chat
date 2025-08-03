@@ -60,7 +60,7 @@ func ConfigureTraceExporter(
 	cfg *config.AppConfig,
 	lc fx.Lifecycle,
 ) (*otlptrace.Exporter, error) {
-	traceExporterConn, err := grpc.DialContext(context.Background(), cfg.OtlpConfig.Endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	traceExporterConn, err := grpc.DialContext(context.Background(), cfg.Otlp.Endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		return nil, err
 	}

@@ -25,7 +25,7 @@ func ConfigureKafkaAdmin(
 	kafkaAdminConfig := sarama.NewConfig()
 	kafkaAdminConfig.Version = sarama.V4_0_0_0
 
-	kafkaAdmin, err := sarama.NewClusterAdmin(cfg.KafkaConfig.BootstrapServers, kafkaAdminConfig)
+	kafkaAdmin, err := sarama.NewClusterAdmin(cfg.Kafka.BootstrapServers, kafkaAdminConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -49,13 +49,13 @@ func RunCreateTopic(
 	cfg *config.AppConfig,
 	kafkaAdmin sarama.ClusterAdmin,
 ) error {
-	retention := cfg.KafkaConfig.Retention
-	topicName := cfg.KafkaConfig.Topic
+	retention := cfg.Kafka.Retention
+	topicName := cfg.Kafka.Topic
 	lgr.Info("Creating topic", "topic", topicName)
 
 	err := kafkaAdmin.CreateTopic(topicName, &sarama.TopicDetail{
-		NumPartitions:     cfg.KafkaConfig.NumPartitions,
-		ReplicationFactor: cfg.KafkaConfig.ReplicationFactor,
+		NumPartitions:     cfg.Kafka.NumPartitions,
+		ReplicationFactor: cfg.Kafka.ReplicationFactor,
 		ConfigEntries: map[string]*string{
 			// https://kafka.apache.org/documentation/#topicconfigs_retention.ms
 			"retention.ms": &retention,
@@ -77,16 +77,16 @@ func RunDeleteTopic(
 	cfg *config.AppConfig,
 	kafkaAdmin sarama.ClusterAdmin,
 ) error {
-	lgr.Warn("Removing topic", "topic", cfg.KafkaConfig.Topic)
-	err := kafkaAdmin.DeleteTopic(cfg.KafkaConfig.Topic)
+	lgr.Warn("Removing topic", "topic", cfg.Kafka.Topic)
+	err := kafkaAdmin.DeleteTopic(cfg.Kafka.Topic)
 	if err != nil {
 		if errors.Is(err, sarama.ErrUnknownTopicOrPartition) {
-			lgr.Warn("Topic does not exists", "topic", cfg.KafkaConfig.Topic)
+			lgr.Warn("Topic does not exists", "topic", cfg.Kafka.Topic)
 		} else {
 			return err
 		}
 	}
-	lgr.Warn("Topic was removed", "topic", cfg.KafkaConfig.Topic)
+	lgr.Warn("Topic was removed", "topic", cfg.Kafka.Topic)
 	return nil
 }
 
@@ -97,11 +97,11 @@ func RunResetPartitions(
 ) error {
 	lgr.Info("Start reset partitions")
 
-	err := kafkaAdmin.DeleteConsumerGroup(cfg.KafkaConfig.ConsumerGroup)
+	err := kafkaAdmin.DeleteConsumerGroup(cfg.Kafka.ConsumerGroup)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "The group id does not exist") {
-			lgr.Info("There is no consumer group", "consumer_group", cfg.KafkaConfig.ConsumerGroup)
+			lgr.Info("There is no consumer group", "consumer_group", cfg.Kafka.ConsumerGroup)
 		} else {
 			return err
 		}
@@ -120,7 +120,7 @@ func ConfigureSaramaClient(
 	config := sarama.NewConfig()
 	config.Version = sarama.V4_0_0_0
 
-	client, err := sarama.NewClient(cfg.KafkaConfig.BootstrapServers, config)
+	client, err := sarama.NewClient(cfg.Kafka.BootstrapServers, config)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func WaitForAllEventsProcessed(
 		},
 	})
 
-	du := cfg.CqrsConfig.CheckAreEventsProcessedInterval
+	du := cfg.Cqrs.CheckAreEventsProcessedInterval
 
 	for {
 		lgr.Info("Checking for the current offsets will be equal to the latest ones for all partitions")
@@ -187,10 +187,10 @@ func getMaxOffsets(
 	cfg *config.AppConfig,
 	client sarama.Client,
 ) ([]int64, error) {
-	maxOffsets := make([]int64, cfg.KafkaConfig.NumPartitions)
+	maxOffsets := make([]int64, cfg.Kafka.NumPartitions)
 
-	for i := range cfg.KafkaConfig.NumPartitions {
-		offset, err := client.GetOffset(cfg.KafkaConfig.Topic, i, sarama.OffsetNewest)
+	for i := range cfg.Kafka.NumPartitions {
+		offset, err := client.GetOffset(cfg.Kafka.Topic, i, sarama.OffsetNewest)
 		if err != nil {
 			return maxOffsets, err
 		}
@@ -226,15 +226,15 @@ func isEndOnAllPartitions(
 		return true, nil
 	}
 
-	offsetManager, err := sarama.NewOffsetManagerFromClient(cfg.KafkaConfig.ConsumerGroup, client)
+	offsetManager, err := sarama.NewOffsetManagerFromClient(cfg.Kafka.ConsumerGroup, client)
 	if err != nil {
 		return false, err
 	}
 	defer offsetManager.Close()
 
-	givenOffsets := make([]int64, cfg.KafkaConfig.NumPartitions)
-	for i := range cfg.KafkaConfig.NumPartitions {
-		partitionManager, err := offsetManager.ManagePartition(cfg.KafkaConfig.Topic, i)
+	givenOffsets := make([]int64, cfg.Kafka.NumPartitions)
+	for i := range cfg.Kafka.NumPartitions {
+		partitionManager, err := offsetManager.ManagePartition(cfg.Kafka.Topic, i)
 		if err != nil {
 			if errors.Is(err, sarama.ErrIncompleteResponse) {
 				lgr.Info("Skipping partition", "partition", i)
@@ -253,7 +253,7 @@ func isEndOnAllPartitions(
 	}
 
 	hasOneInitialized := false
-	for i := range cfg.KafkaConfig.NumPartitions {
+	for i := range cfg.Kafka.NumPartitions {
 		if givenOffsets[i] == -1 {
 			continue
 		} else {
@@ -289,7 +289,7 @@ func Export(
 	config := sarama.NewConfig()
 	config.Version = sarama.V4_0_0_0
 
-	newConsumer, err := sarama.NewConsumer(cfg.KafkaConfig.BootstrapServers, config)
+	newConsumer, err := sarama.NewConsumer(cfg.Kafka.BootstrapServers, config)
 	if err != nil {
 		return err
 	}
@@ -297,10 +297,10 @@ func Export(
 
 	var writer io.Writer
 	var f *os.File
-	if cfg.CqrsConfig.ExportConfig.File == "stdout" {
+	if cfg.Cqrs.Export.File == "stdout" {
 		writer = os.Stdout
 	} else {
-		f, err = os.Create(cfg.CqrsConfig.ExportConfig.File)
+		f, err = os.Create(cfg.Cqrs.Export.File)
 		if err != nil {
 			return err
 		}
@@ -310,7 +310,7 @@ func Export(
 		defer f.Close()
 	}
 
-	for i := range cfg.KafkaConfig.NumPartitions {
+	for i := range cfg.Kafka.NumPartitions {
 		partitionMaxOffset := maxOffsets[i]
 		if partitionMaxOffset == 0 {
 			lgr.Info("Skipping partition because absence of messages", "partition", i)
@@ -319,7 +319,7 @@ func Export(
 
 		lgr.Info("Reading partition and it's max offset", "partition", i, "offset", partitionMaxOffset)
 
-		partitionConsumer, err := newConsumer.ConsumePartition(cfg.KafkaConfig.Topic, i, sarama.OffsetOldest)
+		partitionConsumer, err := newConsumer.ConsumePartition(cfg.Kafka.Topic, i, sarama.OffsetOldest)
 		if err != nil {
 			return err
 		}
@@ -386,7 +386,7 @@ func Import(
 	config.Version = sarama.V4_0_0_0
 	config.Producer.Return.Successes = true
 
-	producer, err := sarama.NewSyncProducer(cfg.KafkaConfig.BootstrapServers, config)
+	producer, err := sarama.NewSyncProducer(cfg.Kafka.BootstrapServers, config)
 	if err != nil {
 		return err
 	}
@@ -394,10 +394,10 @@ func Import(
 
 	var reader io.Reader
 	var f *os.File
-	if cfg.CqrsConfig.ExportConfig.File == "stdin" {
+	if cfg.Cqrs.Export.File == "stdin" {
 		reader = os.Stdin
 	} else {
-		f, err = os.Open(cfg.CqrsConfig.ExportConfig.File)
+		f, err = os.Open(cfg.Cqrs.Export.File)
 		if err != nil {
 			return err
 		}
@@ -431,7 +431,7 @@ func Import(
 		}
 
 		msg := &sarama.ProducerMessage{
-			Topic:     cfg.KafkaConfig.Topic,
+			Topic:     cfg.Kafka.Topic,
 			Key:       sarama.ByteEncoder(aKey),
 			Value:     sarama.ByteEncoder(aValue),
 			Partition: int32(partition),

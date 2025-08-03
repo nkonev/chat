@@ -61,12 +61,12 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUse
 	defer span.End()
 	httpReq = httpReq.WithContext(ctx)
 
-	if rc.cfg.RestClientConfig.Dump {
+	if rc.cfg.Http.Dump {
 		dumpReq, err := httputil.DumpRequestOut(httpReq, true)
 		if err != nil {
 			return nil, err
 		}
-		if rc.cfg.RestClientConfig.PrettyLog {
+		if rc.cfg.Http.PrettyLog {
 			fmt.Printf("%s >>>\n", rc.clientName)
 			fmt.Printf("%s\n", string(dumpReq))
 		} else {
@@ -86,12 +86,12 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUse
 		return nil, fmt.Errorf("%v response responded non-2xx code: %v", opName, code)
 	}
 
-	if rc.cfg.RestClientConfig.Dump {
+	if rc.cfg.Http.Dump {
 		dumpResp, err := httputil.DumpResponse(httpResp, true)
 		if err != nil {
 			return nil, err
 		}
-		if rc.cfg.RestClientConfig.PrettyLog {
+		if rc.cfg.Http.PrettyLog {
 			fmt.Printf("%s <<<\n", rc.clientName)
 			fmt.Printf("%s\n", string(dumpResp))
 		} else {

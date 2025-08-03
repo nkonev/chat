@@ -50,15 +50,15 @@ func ConfigurePublisher(
 ) (message.Publisher, error) {
 	// You can use any Pub/Sub implementation from here: https://watermill.io/pubsubs/
 	kafkaProducerConfig := sarama.NewConfig()
-	kafkaProducerConfig.Producer.Retry.Max = cfg.KafkaConfig.KafkaProducerConfig.RetryMax
-	kafkaProducerConfig.Producer.Return.Successes = cfg.KafkaConfig.KafkaProducerConfig.ReturnSuccess
+	kafkaProducerConfig.Producer.Retry.Max = cfg.Kafka.Producer.RetryMax
+	kafkaProducerConfig.Producer.Return.Successes = cfg.Kafka.Producer.ReturnSuccess
 	kafkaProducerConfig.Version = sarama.V4_0_0_0
-	kafkaProducerConfig.Metadata.Retry.Backoff = cfg.KafkaConfig.KafkaProducerConfig.RetryBackoff
-	kafkaProducerConfig.ClientID = cfg.KafkaConfig.KafkaProducerConfig.ClientId
+	kafkaProducerConfig.Metadata.Retry.Backoff = cfg.Kafka.Producer.RetryBackoff
+	kafkaProducerConfig.ClientID = cfg.Kafka.Producer.ClientId
 
 	publisher, err := kafka.NewPublisher(
 		kafka.PublisherConfig{
-			Brokers:               cfg.KafkaConfig.BootstrapServers,
+			Brokers:               cfg.Kafka.BootstrapServers,
 			OverwriteSaramaConfig: kafkaProducerConfig,
 			Marshaler:             kafkaMarshaler,
 		},
@@ -100,13 +100,13 @@ func ConfigureCqrsRouter(
 	cqrsRouter.AddMiddleware(wotel.Trace(wotel.WithTextMapPropagator(propagator), wotel.WithTracer(tr)))
 	cqrsRouter.AddMiddleware(func(h message.HandlerFunc) message.HandlerFunc {
 		return func(msg *message.Message) ([]*message.Message, error) {
-			if cfg.CqrsConfig.SleepBeforeEvent > 0 {
+			if cfg.Cqrs.SleepBeforeEvent > 0 {
 				lgr.InfoContext(msg.Context(), "Sleeping")
-				time.Sleep(cfg.CqrsConfig.SleepBeforeEvent)
+				time.Sleep(cfg.Cqrs.SleepBeforeEvent)
 			}
 
-			if cfg.CqrsConfig.Dump {
-				if cfg.CqrsConfig.PrettyLog {
+			if cfg.Cqrs.Dump {
+				if cfg.Cqrs.PrettyLog {
 					fmt.Printf("[kafka subscriber] Received message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(msg.Context()), msg.Metadata, string(msg.Payload))
 				} else {
 					lgr.Info(fmt.Sprintf("[kafka subscriber] Received message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(msg.Context()), msg.Metadata, string(msg.Payload)))
@@ -168,13 +168,13 @@ func ConfigureEventBus(
 	eventBusRoot, err := cqrs.NewEventBusWithConfig(publisher, cqrs.EventBusConfig{
 		GeneratePublishTopic: func(params cqrs.GenerateEventPublishTopicParams) (string, error) {
 			// We are using one topic for all events to maintain the order of events.
-			return cfg.KafkaConfig.Topic, nil
+			return cfg.Kafka.Topic, nil
 		},
 		Marshaler: cqrsMarshaler,
 		Logger:    watermillLoggerAdapter,
 		OnPublish: func(params cqrs.OnEventSendParams) error {
-			if cfg.CqrsConfig.Dump {
-				if cfg.CqrsConfig.PrettyLog {
+			if cfg.Cqrs.Dump {
+				if cfg.Cqrs.PrettyLog {
 					fmt.Printf("[kafka publisher] Sending message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), params.Message.Metadata, string(params.Message.Payload))
 				} else {
 					lgr.Info(fmt.Sprintf("[kafka publisher] Sending message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), params.Message.Metadata, string(params.Message.Payload)))
@@ -199,27 +199,27 @@ func ConfigureEventProcessor(
 	commonProjection *CommonProjection,
 ) (*cqrs.EventGroupProcessor, error) {
 	kafkaConsumerConfig := sarama.NewConfig()
-	kafkaConsumerConfig.Consumer.Return.Errors = cfg.KafkaConfig.KafkaConsumerConfig.ReturnErrors
+	kafkaConsumerConfig.Consumer.Return.Errors = cfg.Kafka.Consumer.ReturnErrors
 	kafkaConsumerConfig.Version = sarama.V4_0_0_0
-	kafkaConsumerConfig.ClientID = cfg.KafkaConfig.KafkaConsumerConfig.ClientId
+	kafkaConsumerConfig.ClientID = cfg.Kafka.Consumer.ClientId
 	kafkaConsumerConfig.Consumer.Offsets.Initial = sarama.OffsetOldest // need for to work after import
-	kafkaConsumerConfig.Consumer.Offsets.AutoCommit.Interval = cfg.KafkaConfig.KafkaConsumerConfig.OffsetCommitInterval
+	kafkaConsumerConfig.Consumer.Offsets.AutoCommit.Interval = cfg.Kafka.Consumer.OffsetCommitInterval
 
 	eventProcessor, err := cqrs.NewEventGroupProcessorWithConfig(
 		cqrsRouter,
 		cqrs.EventGroupProcessorConfig{
 			GenerateSubscribeTopic: func(params cqrs.EventGroupProcessorGenerateSubscribeTopicParams) (string, error) {
-				return cfg.KafkaConfig.Topic, nil
+				return cfg.Kafka.Topic, nil
 			},
 			SubscriberConstructor: func(params cqrs.EventGroupProcessorSubscriberConstructorParams) (message.Subscriber, error) {
 				return kafka.NewSubscriber(
 					kafka.SubscriberConfig{
-						Brokers:               cfg.KafkaConfig.BootstrapServers,
+						Brokers:               cfg.Kafka.BootstrapServers,
 						OverwriteSaramaConfig: kafkaConsumerConfig,
 						ConsumerGroup:         params.EventGroupName,
 						Unmarshaler:           kafkaMarshaler,
-						NackResendSleep:       cfg.KafkaConfig.KafkaConsumerConfig.NackResendSleep,
-						ReconnectRetrySleep:   cfg.KafkaConfig.KafkaConsumerConfig.ReconnectRetrySleep,
+						NackResendSleep:       cfg.Kafka.Consumer.NackResendSleep,
+						ReconnectRetrySleep:   cfg.Kafka.Consumer.ReconnectRetrySleep,
 					},
 					watermillLoggerAdapter,
 				)
@@ -235,7 +235,7 @@ func ConfigureEventProcessor(
 	// All messages from this group will have one subscription.
 	// When message arrives, Watermill will match it with the correct handler.
 	err = eventProcessor.AddHandlersGroup(
-		cfg.KafkaConfig.ConsumerGroup,
+		cfg.Kafka.ConsumerGroup,
 		cqrs.NewGroupEventHandler(commonProjection.OnChatCreated),
 		cqrs.NewGroupEventHandler(commonProjection.OnChatEdited),
 		cqrs.NewGroupEventHandler(commonProjection.OnChatRemoved),

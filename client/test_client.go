@@ -20,16 +20,16 @@ type TestRestClient struct {
 
 func NewTestRestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestRestClient {
 	tr := &http.Transport{
-		MaxIdleConns:       cfg.RestClientConfig.MaxIdleConns,
-		IdleConnTimeout:    cfg.RestClientConfig.IdleConnTimeout,
-		DisableCompression: cfg.RestClientConfig.DisableCompression,
+		MaxIdleConns:       cfg.Http.MaxIdleConns,
+		IdleConnTimeout:    cfg.Http.IdleConnTimeout,
+		DisableCompression: cfg.Http.DisableCompression,
 	}
 	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	trR := otelhttp.NewTransport(tr)
 	client := &http.Client{Transport: trR}
 	trcr := otel.Tracer("test/rest/client")
 
-	return &TestRestClient{restClient{client, "http://localhost" + cfg.HttpServerConfig.Address, trcr, cfg, lgr, "[test http client]"}}
+	return &TestRestClient{restClient{client, "http://localhost" + cfg.Server.Address, trcr, cfg, lgr, "[test http client]"}}
 }
 
 type ChatCreateOption interface {
