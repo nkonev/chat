@@ -13,6 +13,7 @@ type ChatCreated struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`
 	Title          string          `json:"title"`
+	CanResend      bool            `json:"canResend"`
 }
 
 type ChatEdited struct {
@@ -21,6 +22,7 @@ type ChatEdited struct {
 	Title          string          `json:"title"`
 	Blog           bool            `json:"blog"`
 	BehalfUserId   int64           `json:"behalfUserId"`
+	CanResend      bool            `json:"canResend"`
 }
 
 type ChatDeleted struct {

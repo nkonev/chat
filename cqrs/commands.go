@@ -66,6 +66,7 @@ type ChatCreate struct {
 	AdditionalData *AdditionalData
 	Title          string
 	ParticipantIds []int64
+	CanResend      bool
 }
 
 type ChatEdit struct {
@@ -75,6 +76,7 @@ type ChatEdit struct {
 	ParticipantIdsToAdd []int64
 	Blog                bool // desired state
 	BehalfUserId        int64
+	CanResend           bool
 }
 
 func (cc *ChatEdit) IsValidatabale() bool {
@@ -227,6 +229,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus E
 		AdditionalData: copyCommand.AdditionalData,
 		ChatId:         chatId,
 		Title:          copyCommand.Title,
+		CanResend:      copyCommand.CanResend,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {
@@ -284,6 +287,7 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		Title:          copyCommand.Title,
 		Blog:           copyCommand.Blog,
 		BehalfUserId:   copyCommand.BehalfUserId,
+		CanResend:      copyCommand.CanResend,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {
@@ -734,7 +738,9 @@ func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, comm
 			receiver.EmbedMessageType = &embedMessageRequest.EmbedType
 			return nil
 		} else if embedMessageRequest.EmbedType == dto.EmbedMessageTypeResend {
-			// check if this input.EmbedChatId resendable
+			receiver.EmbedMessageId = &embedMessageRequest.Id
+			receiver.EmbedMessageType = &embedMessageRequest.EmbedType
+
 			chat, err := commonProjection.GetChatBasic(ctx, dba, embedMessageRequest.ChatId)
 			if err != nil {
 				return err

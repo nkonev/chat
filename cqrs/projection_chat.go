@@ -37,9 +37,11 @@ func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32
 
 func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated) error {
 	_, err := m.db.ExecContext(ctx, `
-		insert into chat_common(id, title, create_date_time) values ($1, $2, $3)
-		on conflict(id) do update set title = excluded.title, create_date_time = excluded.create_date_time
-	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt)
+		insert into chat_common(id, title, create_date_time, can_resend) values ($1, $2, $3, $4)
+		on conflict(id) do update set 
+		    title = excluded.title
+		    , can_resend = excluded.can_resend
+	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.CanResend)
 	if err != nil {
 		return err
 	}
@@ -84,9 +86,10 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 		_, errInner = tx.ExecContext(ctx, `
 			update chat_common
 			set title = $2,
-			    blog = $3
+			    blog = $3,
+			    can_resend = $4
 			where id = $1
-		`, event.ChatId, event.Title, event.Blog)
+		`, event.ChatId, event.Title, event.Blog, event.CanResend)
 		if errInner != nil {
 			return errInner
 		}
@@ -549,7 +552,7 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 		return result, nil
 	}
 
-	// TODO setting can_resend, tet_a_tet
+	// TODO setting tet_a_tet
 	rows, err := co.QueryContext(ctx, `
 		SELECT 
 			c.id, 

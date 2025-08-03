@@ -31,10 +31,33 @@ func NewTestRestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestRe
 	return &TestRestClient{restClient{client, "http://localhost" + cfg.HttpServerConfig.Address, trcr, cfg, lgr, "[test http client]"}}
 }
 
-func (rc *TestRestClient) CreateChat(ctx context.Context, behalfUserId int64, chatName string) (int64, error) {
+type ChatCreateOption interface {
+	Apply(*dto.ChatCreateDto)
+}
+
+type ChatParamResend struct {
+	v bool
+}
+
+func NewChatOptionResend(v bool) *ChatParamResend {
+	return &ChatParamResend{v: v}
+}
+
+func (r *ChatParamResend) Apply(d *dto.ChatCreateDto) {
+	d.CanResend = r.v
+}
+
+func (rc *TestRestClient) CreateChat(ctx context.Context, behalfUserId int64, chatName string, chatCreateOptions ...ChatCreateOption) (int64, error) {
 	req := dto.ChatCreateDto{
 		Title: chatName,
 	}
+
+	for _, opt := range chatCreateOptions {
+		if opt != nil {
+			opt.Apply(&req)
+		}
+	}
+
 	resp, err := query[dto.ChatCreateDto, dto.IdResponse](ctx, &rc.restClient, behalfUserId, "POST", "/chat", "chat.Create", &req, nil)
 	if err != nil {
 		return 0, err
@@ -65,18 +88,49 @@ func (rc *TestRestClient) DeleteChat(ctx context.Context, behalfUserId int64, ch
 	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, "DELETE", "/chat/"+utils.ToString(chatId), "chat.Delete", nil, nil)
 }
 
-func (rc *TestRestClient) GetChatsByUserId(ctx context.Context, behalfUserId int64, queryParams *url.Values) ([]dto.ChatViewDto, error) {
-	return query[any, []dto.ChatViewDto](ctx, &rc.restClient, behalfUserId, "GET", "/chat/search", "chat.Search", nil, queryParams)
+func (rc *TestRestClient) GetChatsByUserId(ctx context.Context, behalfUserId int64, queryParams *url.Values) ([]dto.ChatViewEnrichedDto, error) {
+	return query[any, []dto.ChatViewEnrichedDto](ctx, &rc.restClient, behalfUserId, "GET", "/chat/search", "chat.Search", nil, queryParams)
 }
 
 func (rc *TestRestClient) SearchBlogs(ctx context.Context) ([]dto.BlogViewDto, error) {
 	return query[any, []dto.BlogViewDto](ctx, &rc.restClient, 0, "GET", "/blog/search", "blog.Search", nil, nil)
 }
 
-func (rc *TestRestClient) CreateMessage(ctx context.Context, behalfUserId int64, chatId int64, text string) (int64, error) {
+type MessageCreateOption interface {
+	Apply(*dto.MessageCreateDto)
+}
+
+type MessageCreateOptionResend struct {
+	toChatId  int64
+	messageId int64
+}
+
+func NewMessageCreateOptionResend(toChatId, messageId int64) *MessageCreateOptionResend {
+	return &MessageCreateOptionResend{
+		toChatId:  toChatId,
+		messageId: messageId,
+	}
+}
+
+func (r *MessageCreateOptionResend) Apply(d *dto.MessageCreateDto) {
+	d.EmbedMessageRequest = &dto.EmbedMessageRequest{
+		Id:        r.messageId,
+		ChatId:    r.toChatId,
+		EmbedType: dto.EmbedMessageTypeResend,
+	}
+}
+
+func (rc *TestRestClient) CreateMessage(ctx context.Context, behalfUserId int64, chatId int64, text string, messageCreateOptions ...MessageCreateOption) (int64, error) {
 	req := dto.MessageCreateDto{
 		Content: text,
 	}
+
+	for _, opt := range messageCreateOptions {
+		if opt != nil {
+			opt.Apply(&req)
+		}
+	}
+
 	resp, err := query[dto.MessageCreateDto, dto.IdResponse](ctx, &rc.restClient, behalfUserId, "POST", "/chat/"+utils.ToString(chatId)+"/message", "message.Create", &req, nil)
 	if err != nil {
 		return 0, err

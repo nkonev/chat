@@ -24,7 +24,11 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 				    (select m.content from blog_message m),
 				    (select left(strip_tags(m.content), $2) from blog_message m),
 					$3
-				on conflict(id) do update set owner_id = excluded.owner_id, title = excluded.title, post = excluded.post, preview = excluded.preview, create_date_time = excluded.create_date_time
+				on conflict(id) do update set 
+					owner_id = excluded.owner_id
+					, title = excluded.title
+					, post = excluded.post
+					, preview = excluded.preview
 			`, chatId, 512, createdTime)
 	if errInner != nil {
 		return errInner

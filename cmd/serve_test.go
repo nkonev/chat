@@ -200,6 +200,100 @@ func TestUnreads(t *testing.T) {
 	})
 }
 
+func TestResendMessage(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1 src"
+		const chat2Name = "new chat 1 dst"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionResend(true))
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+
+		chat2Id, err := testRestClient.CreateChat(ctx, user2, chat2Name)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat2Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// user 2 adds user 1 to chat 2
+		err = testRestClient.AddChatParticipants(ctx, user2, chat2Id, []int64{user1})
+		require.NoError(t, err, "error in adding participant")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert user 1 sees chat 2
+		user1ChatsNew, err := testRestClient.GetChatsByUserId(ctx, user1, nil)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 2, len(user1ChatsNew))
+		chat1OfUser1 := user1ChatsNew[0]
+		chat2OfUser1 := user1ChatsNew[1]
+		assert.Equal(t, chat1Name, chat2OfUser1.Title)
+		assert.Equal(t, chat2Name, chat1OfUser1.Title)
+
+		const message1Text = "message 1 from chat 1"
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// user 1 resends the message from chat 1 to chat 2
+		message1ResentId, err := testRestClient.CreateMessage(ctx, user1, chat2Id, "", client.NewMessageCreateOptionResend(chat1Id, message1Id))
+
+		require.NoError(t, err, "error in resending message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert that chat 2 contains the embed message
+		chat2Messages, err := testRestClient.GetMessages(ctx, user1, chat2Id, nil)
+		require.NoError(t, err, "error in getting messages")
+		assert.Equal(t, 1, len(chat2Messages))
+		message1 := chat2Messages[0]
+		assert.Equal(t, message1ResentId, message1.Id)
+		require.NotNil(t, message1.EmbedMessage)
+		assert.Equal(t, dto.EmbedMessageTypeResend, message1.EmbedMessage.EmbedType)
+		assert.Equal(t, message1Text, message1.EmbedMessage.Text)
+		assert.Equal(t, chat1Id, *message1.EmbedMessage.ChatId)
+		assert.Equal(t, chat1Name, *message1.EmbedMessage.ChatName)
+		assert.Equal(t, user1, message1.EmbedMessage.Owner.Id)
+		assert.Equal(t, user1Login, message1.EmbedMessage.Owner.Login)
+	})
+}
+
 func TestPinChat(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,

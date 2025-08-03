@@ -22,10 +22,17 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 		}
 
 		_, err = tx.ExecContext(ctx, `
-		insert into message(id, chat_id, owner_id, content, create_date_time, update_date_time) 
-			values ($1, $2, $3, $4, $5, $6)
-		on conflict(chat_id, id) do update set owner_id = excluded.owner_id, content = excluded.content, create_date_time = excluded.create_date_time, update_date_time = excluded.update_date_time
-	`, event.Id, event.ChatId, event.OwnerId, event.Content, event.AdditionalData.CreatedAt, nil)
+		insert into message(id, chat_id, owner_id, content, embed_message_id, embed_chat_id, embed_owner_id, embed_message_type, create_date_time, update_date_time) 
+			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		on conflict(chat_id, id) do update set 
+		    owner_id = excluded.owner_id
+		    , content = excluded.content
+			, embed_message_id = excluded.embed_message_id
+		    , embed_chat_id = excluded.embed_chat_id
+		    , embed_owner_id = excluded.embed_owner_id
+		    , embed_message_type = excluded.embed_message_type
+		    , update_date_time = excluded.update_date_time
+	`, event.Id, event.ChatId, event.OwnerId, event.Content, event.EmbedMessageId, event.EmbedMessageChatId, event.EmbedMessageOwnerId, event.EmbedMessageType, event.AdditionalData.CreatedAt, nil)
 		if err != nil {
 			return err
 		}
@@ -214,7 +221,9 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, co db.CommonOp
 			idt.unread_messages,
 			idt.last_message_id
 		from input_data idt
-		on conflict (user_id, chat_id) do update set unread_messages = excluded.unread_messages, last_message_id = excluded.last_message_id
+		on conflict (user_id, chat_id) do update set 
+			unread_messages = excluded.unread_messages
+			, last_message_id = excluded.last_message_id
 	`, participantIds, chatId, messageId, needSet, needRefresh)
 	return err
 }
@@ -356,44 +365,46 @@ func enrichMessages(messages []dto.MessageViewDto, users map[int64]*dto.User, ch
 			CreateDateTime: m.CreateDateTime,
 			Owner:          users[m.OwnerId],
 		}
-		setEmbed(m, me, users, chats)
+		setEmbed(m, &me, users, chats)
 
 		res = append(res, me)
 	}
 	return res
 }
 
-func setEmbed(srcDbMessage dto.MessageViewDto, dstRet dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) {
-	if srcDbMessage.ResponseEmbeddedMessageReplyOwnerId != nil {
-		embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageReplyOwnerId]
-		dstRet.EmbedMessage = &dto.EmbedMessageResponse{
-			Id:        *srcDbMessage.ResponseEmbeddedMessageReplyId,
-			Text:      *srcDbMessage.ResponseEmbeddedMessageReplyText,
-			EmbedType: *srcDbMessage.ResponseEmbeddedMessageType,
-			Owner:     embeddedUser,
-		}
-	} else if srcDbMessage.ResponseEmbeddedMessageResendOwnerId != nil {
-		embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageResendOwnerId]
-		basicEmbeddedChat := chats[*srcDbMessage.ResponseEmbeddedMessageResendChatId]
-		var embedChatName *string = nil
-		var isParticipant bool
-		if basicEmbeddedChat != nil { // basicEmbeddedChat can be deleted
-			if !basicEmbeddedChat.TetATet {
-				embedChatName = &basicEmbeddedChat.Title
+func setEmbed(srcDbMessage dto.MessageViewDto, dstRet *dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) {
+	if srcDbMessage.ResponseEmbeddedMessageType != nil {
+		if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeReply {
+			embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageReplyOwnerId]
+			dstRet.EmbedMessage = &dto.EmbedMessageResponse{
+				Id:        *srcDbMessage.ResponseEmbeddedMessageReplyId,
+				Text:      *srcDbMessage.ResponseEmbeddedMessageReplyText,
+				EmbedType: *srcDbMessage.ResponseEmbeddedMessageType,
+				Owner:     embeddedUser,
 			}
-			isParticipant = basicEmbeddedChat.BehalfUserIsParticipant
-		}
+		} else if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeResend {
+			embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageResendOwnerId]
+			basicEmbeddedChat := chats[*srcDbMessage.ResponseEmbeddedMessageResendChatId]
+			var embedChatName *string = nil
+			var isParticipant bool
+			if basicEmbeddedChat != nil { // basicEmbeddedChat can be deleted
+				if !basicEmbeddedChat.TetATet {
+					embedChatName = &basicEmbeddedChat.Title
+				}
+				isParticipant = basicEmbeddedChat.BehalfUserIsParticipant
+			}
 
-		dstRet.EmbedMessage = &dto.EmbedMessageResponse{
-			Id:            *srcDbMessage.ResponseEmbeddedMessageResendId,
-			ChatId:        srcDbMessage.ResponseEmbeddedMessageResendChatId,
-			ChatName:      embedChatName,
-			Text:          srcDbMessage.Content,
-			EmbedType:     *srcDbMessage.ResponseEmbeddedMessageType,
-			Owner:         embeddedUser,
-			IsParticipant: isParticipant,
+			dstRet.EmbedMessage = &dto.EmbedMessageResponse{
+				Id:            *srcDbMessage.ResponseEmbeddedMessageResendId,
+				ChatId:        srcDbMessage.ResponseEmbeddedMessageResendChatId,
+				ChatName:      embedChatName,
+				Text:          srcDbMessage.Content,
+				EmbedType:     *srcDbMessage.ResponseEmbeddedMessageType,
+				Owner:         embeddedUser,
+				IsParticipant: isParticipant,
+			}
+			dstRet.Content = ""
 		}
-		dstRet.Content = ""
 	}
 }
 

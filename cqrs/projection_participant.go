@@ -78,11 +78,11 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		insert into chat_user_view(id, title, pinned, user_id, update_date_time, participants_count, participant_ids) 
 			select chat_id, title, pinned, user_id, update_date_time, participants_count, participant_ids from input_data
 		on conflict(user_id, id) do update set
-			pinned = excluded.pinned, 
-			title = excluded.title, 
-			update_date_time = excluded.update_date_time, 
-			participants_count = excluded.participants_count, 
-			participant_ids = excluded.participant_ids
+			pinned = excluded.pinned
+			, title = excluded.title
+			, update_date_time = excluded.update_date_time 
+			, participants_count = excluded.participants_count 
+			, participant_ids = excluded.participant_ids
 		`, GetParticipantIds(event.Participants), event.ChatId, event.AdditionalData.CreatedAt, m.chatUserViewConfig.MaxViewableParticipants)
 		if err != nil {
 			return err

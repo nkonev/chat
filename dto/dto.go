@@ -7,6 +7,7 @@ type IdResponse struct {
 type ChatCreateDto struct {
 	Title          string  `json:"title"`
 	ParticipantIds []int64 `json:"participantIds"`
+	CanResend      bool    `json:"canResend"`
 }
 
 type ChatEditDto struct {
@@ -20,7 +21,7 @@ const EmbedMessageTypeReply = "reply"
 
 type EmbedMessageRequest struct {
 	Id        int64  `json:"id"`
-	ChatId    int64  `json:"chatId"`
+	ChatId    int64  `json:"chatId"` // chat from (src)
 	EmbedType string `json:"embedType"`
 }
 

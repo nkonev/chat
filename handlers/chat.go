@@ -62,6 +62,7 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		AdditionalData: cqrs.GenerateMessageAdditionalData(),
 		Title:          ccd.Title,
 		ParticipantIds: ccd.ParticipantIds,
+		CanResend:      ccd.CanResend,
 	}
 
 	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy)
@@ -107,6 +108,7 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		ParticipantIdsToAdd: ccd.ParticipantIds,
 		Blog:                ccd.Blog,
 		BehalfUserId:        userId,
+		CanResend:           ccd.CanResend,
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy)
