@@ -101,21 +101,21 @@ type MessageCreateOption interface {
 }
 
 type MessageCreateOptionResend struct {
-	toChatId  int64
-	messageId int64
+	fromChatId int64
+	messageId  int64
 }
 
-func NewMessageCreateOptionResend(toChatId, messageId int64) *MessageCreateOptionResend {
+func NewMessageCreateOptionResend(fromChatId, messageId int64) *MessageCreateOptionResend {
 	return &MessageCreateOptionResend{
-		toChatId:  toChatId,
-		messageId: messageId,
+		fromChatId: fromChatId,
+		messageId:  messageId,
 	}
 }
 
 func (r *MessageCreateOptionResend) Apply(d *dto.MessageCreateDto) {
 	d.EmbedMessageRequest = &dto.EmbedMessageRequest{
 		Id:        r.messageId,
-		ChatId:    r.toChatId,
+		ChatId:    r.fromChatId,
 		EmbedType: dto.EmbedMessageTypeResend,
 	}
 }
