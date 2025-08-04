@@ -370,8 +370,8 @@ func TestReplyMessage(t *testing.T) {
 			assert.Equal(t, 2, len(chat1Messages))
 			repliedMessage2 := chat1Messages[1]
 			assert.Equal(t, message1ResentId, repliedMessage2.Id)
-			require.NotNil(t, repliedMessage2.EmbedMessage)
 			assert.Equal(t, message2Text, repliedMessage2.Content)
+			require.NotNil(t, repliedMessage2.EmbedMessage)
 			assert.Equal(t, dto.EmbedMessageTypeReply, repliedMessage2.EmbedMessage.EmbedType)
 			assert.Equal(t, message1Text, repliedMessage2.EmbedMessage.Text)
 			assert.Equal(t, message1Id, repliedMessage2.EmbedMessage.Id)
@@ -391,14 +391,32 @@ func TestReplyMessage(t *testing.T) {
 			assert.Equal(t, 2, len(chat1Messages))
 			repliedMessage2 := chat1Messages[1]
 			assert.Equal(t, message1ResentId, repliedMessage2.Id)
-			require.NotNil(t, repliedMessage2.EmbedMessage)
 			assert.Equal(t, message2TextNew, repliedMessage2.Content)
+			require.NotNil(t, repliedMessage2.EmbedMessage)
 			assert.Equal(t, dto.EmbedMessageTypeReply, repliedMessage2.EmbedMessage.EmbedType)
 			assert.Equal(t, message1Text, repliedMessage2.EmbedMessage.Text)
 			assert.Equal(t, message1Id, repliedMessage2.EmbedMessage.Id)
 			assert.Equal(t, user2, repliedMessage2.EmbedMessage.Owner.Id)
 			assert.Equal(t, user2Login, repliedMessage2.EmbedMessage.Owner.Login)
 		}
+
+		// remove reply
+		const message2TextNewest = "It is a view without reply"
+		err = testRestClient.EditMessage(ctx, user1, chat1Id, message1ResentId, message2TextNewest)
+		require.NoError(t, err, "error in resending message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert that chat 1 contains the embed message
+		{
+			chat1Messages, err := testRestClient.GetMessages(ctx, user1, chat1Id)
+			require.NoError(t, err, "error in getting messages")
+			assert.Equal(t, 2, len(chat1Messages))
+			repliedMessage2 := chat1Messages[1]
+			assert.Equal(t, message1ResentId, repliedMessage2.Id)
+			assert.Nil(t, repliedMessage2.EmbedMessage)
+			assert.Equal(t, message2TextNewest, repliedMessage2.Content)
+		}
+
 	})
 }
 
