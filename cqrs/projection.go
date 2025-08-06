@@ -90,23 +90,16 @@ func (m *CommonProjection) GetNextMessageId(ctx context.Context, tx *db.Tx, chat
 }
 
 func (m *CommonProjection) InitializeMessageIdSequenceIfNeed(ctx context.Context, tx *db.Tx, chatId int64) error {
-	r := tx.QueryRowContext(ctx, "SELECT coalesce(last_generated_message_id, 0) from chat_common where id = $1", chatId)
-	if r.Err() != nil {
-		return r.Err()
-	}
 	var currentGeneratedMessageId int64
-	err := r.Scan(&currentGeneratedMessageId)
+
+	err := sqlscan.Get(ctx, tx, &currentGeneratedMessageId, "SELECT coalesce(last_generated_message_id, 0) from chat_common where id = $1", chatId)
 	if err != nil {
 		return err
 	}
 
 	if currentGeneratedMessageId == 0 {
-		r = tx.QueryRowContext(ctx, "SELECT coalesce(max(id), 0) from message where chat_id = $1", chatId)
-		if r.Err() != nil {
-			return r.Err()
-		}
 		var maxMessageId int64
-		err := r.Scan(&maxMessageId)
+		err = sqlscan.Get(ctx, tx, &maxMessageId, "SELECT coalesce(max(id), 0) from message where chat_id = $1", chatId)
 		if err != nil {
 			return err
 		}
@@ -134,9 +127,8 @@ func (m *CommonProjection) UnsetIsNeedToFastForwardSequences(ctx context.Context
 }
 
 func (m *CommonProjection) GetIsNeedToFastForwardSequences(ctx context.Context, tx *db.Tx) (bool, error) {
-	r := tx.QueryRowContext(ctx, "select exists(select * from technical where need_to_fast_forward_sequences = true)")
 	var e bool
-	err := r.Scan(&e)
+	err := sqlscan.Get(ctx, tx, &e, "select exists(select * from technical where need_to_fast_forward_sequences = true)")
 	if err != nil {
 		return false, err
 	}
