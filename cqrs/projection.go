@@ -78,11 +78,8 @@ const ChatStillNotExists = -1
 
 func (m *CommonProjection) GetNextMessageId(ctx context.Context, tx *db.Tx, chatId int64) (int64, error) {
 	var messageId int64
-	res := tx.QueryRowContext(ctx, "UPDATE chat_common SET last_generated_message_id = last_generated_message_id + 1 WHERE id = $1 RETURNING last_generated_message_id;", chatId)
-	if res.Err() != nil {
-		return 0, res.Err()
-	}
-	if err := res.Scan(&messageId); err != nil {
+	err := sqlscan.Get(ctx, tx, &messageId, "UPDATE chat_common SET last_generated_message_id = last_generated_message_id + 1 WHERE id = $1 RETURNING last_generated_message_id;", chatId)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// there were no rows, but otherwise no error occurred
 			return ChatStillNotExists, nil

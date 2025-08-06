@@ -96,7 +96,7 @@ func ConfigureHttpServer(
 func StructuredLogMiddleware(lgr *logger.LoggerWrapper) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		traceId := logger.GetTraceId(ctx)
+		//traceId := logger.GetTraceId(ctx)
 
 		// Start timer
 		start := time.Now()
@@ -116,13 +116,12 @@ func StructuredLogMiddleware(lgr *logger.LoggerWrapper) gin.HandlerFunc {
 			"path", c.Request.RequestURI,
 			"status", c.Writer.Status(),
 			"referrer", c.Request.Referer(),
-			logger.LogFieldTraceId, traceId,
 		}
 
 		if c.Writer.Status() >= 500 {
-			lgr.Error("Request", entries...)
+			lgr.ErrorContext(ctx, "Request", entries...)
 		} else {
-			lgr.Info("Request", entries...)
+			lgr.InfoContext(ctx, "Request", entries...)
 		}
 	}
 }
