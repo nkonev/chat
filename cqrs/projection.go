@@ -65,7 +65,7 @@ func (m *CommonProjection) InitializeChatIdSequenceIfNeed(ctx context.Context, t
 
 		if maxChatId > 0 {
 			m.lgr.Info("Fast-forwarding chatId sequence")
-			_, err := tx.ExecContext(ctx, "SELECT setval('chat_id_sequence', $1, true)", maxChatId)
+			_, err = tx.ExecContext(ctx, "SELECT setval('chat_id_sequence', $1, true)", maxChatId)
 			if err != nil {
 				return err
 			}
@@ -107,7 +107,7 @@ func (m *CommonProjection) InitializeMessageIdSequenceIfNeed(ctx context.Context
 		if maxMessageId > 0 {
 			m.lgr.Info("Fast-forwarding messageId sequence", "chat_id", chatId)
 
-			_, err := tx.ExecContext(ctx, "update chat_common set last_generated_message_id = $2 where id = $1", chatId, maxMessageId)
+			_, err = tx.ExecContext(ctx, "update chat_common set last_generated_message_id = $2 where id = $1", chatId, maxMessageId)
 			if err != nil {
 				return err
 			}
