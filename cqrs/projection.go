@@ -41,12 +41,8 @@ func NewEnrichingProjection(cp *CommonProjection, lgr *logger.LoggerWrapper, aaa
 }
 
 func (m *CommonProjection) GetNextChatId(ctx context.Context, tx *db.Tx) (int64, error) {
-	r := tx.QueryRowContext(ctx, "select nextval('chat_id_sequence')")
-	if r.Err() != nil {
-		return 0, r.Err()
-	}
 	var nid int64
-	err := r.Scan(&nid)
+	err := sqlscan.Get(ctx, tx, &nid, "select nextval('chat_id_sequence')")
 	if err != nil {
 		return 0, err
 	}
