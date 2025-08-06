@@ -96,7 +96,6 @@ func ConfigureHttpServer(
 func StructuredLogMiddleware(lgr *logger.LoggerWrapper) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		//traceId := logger.GetTraceId(ctx)
 
 		// Start timer
 		start := time.Now()
