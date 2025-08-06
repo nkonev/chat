@@ -394,10 +394,10 @@ func Import(
 
 	var reader io.Reader
 	var f *os.File
-	if cfg.Cqrs.Export.File == "stdin" {
+	if cfg.Cqrs.Import.File == "stdin" {
 		reader = os.Stdin
 	} else {
-		f, err = os.Open(cfg.Cqrs.Export.File)
+		f, err = os.Open(cfg.Cqrs.Import.File)
 		if err != nil {
 			return err
 		}

@@ -138,7 +138,7 @@ go run . serve
 
 curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/chat/search' | jq
 curl -Ss -X GET --url 'http://localhost:8080/chat/1/participants' | jq
-curl -Ss -X GET --url 'http://localhost:8080/chat/1/message/search' | jq
+curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message/search' | jq
 ```
 
 ```sql

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
@@ -53,23 +54,15 @@ func (m *CommonProjection) GetNextChatId(ctx context.Context, tx *db.Tx) (int64,
 }
 
 func (m *CommonProjection) InitializeChatIdSequenceIfNeed(ctx context.Context, tx *db.Tx) error {
-	r := tx.QueryRowContext(ctx, "SELECT is_called FROM chat_id_sequence")
-	if r.Err() != nil {
-		return r.Err()
-	}
 	var called bool
-	err := r.Scan(&called)
+	err := sqlscan.Get(ctx, tx, &called, "SELECT is_called FROM chat_id_sequence")
 	if err != nil {
 		return err
 	}
 
 	if !called {
-		r := tx.QueryRowContext(ctx, "SELECT coalesce(max(id), 0) from chat_common")
-		if r.Err() != nil {
-			return r.Err()
-		}
 		var maxChatId int64
-		err := r.Scan(&maxChatId)
+		err = sqlscan.Get(ctx, tx, &maxChatId, "SELECT coalesce(max(id), 0) from chat_common")
 		if err != nil {
 			return err
 		}
