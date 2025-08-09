@@ -149,6 +149,7 @@ func RunHttpServer(
 			lgr.Info("Http server is closed")
 		} else if err != nil {
 			lgr.Error("Got http server error", "err", err)
+			panic(err)
 		}
 	}()
 }
