@@ -5,21 +5,21 @@ import "time"
 const NoMessageContent = ""
 
 type MessageViewDto struct {
-	Id       int64
-	OwnerId  int64
-	Content  string
-	BlogPost bool
+	Id       int64  `db:"id"`
+	OwnerId  int64  `db:"owner_id"`
+	Content  string `db:"content"`
+	BlogPost bool   `db:"blog_post"`
 
-	ResponseEmbeddedMessageType          *string
-	ResponseEmbeddedMessageReplyId       *int64
-	ResponseEmbeddedMessageReplyText     *string
-	ResponseEmbeddedMessageReplyOwnerId  *int64
-	ResponseEmbeddedMessageResendId      *int64
-	ResponseEmbeddedMessageResendChatId  *int64
-	ResponseEmbeddedMessageResendOwnerId *int64
+	ResponseEmbeddedMessageType          *string `db:"embed_message_type"`
+	ResponseEmbeddedMessageReplyId       *int64  `db:"embed_message_reply_id"`
+	ResponseEmbeddedMessageReplyText     *string `db:"embed_message_reply_text"`
+	ResponseEmbeddedMessageReplyOwnerId  *int64  `db:"embed_message_reply_owner_id"`
+	ResponseEmbeddedMessageResendId      *int64  `db:"embed_message_resend_id"`
+	ResponseEmbeddedMessageResendChatId  *int64  `db:"embed_message_resend_chat_id"`
+	ResponseEmbeddedMessageResendOwnerId *int64  `db:"embed_message_resend_owner_id"`
 
-	CreateDateTime time.Time  `json:"createDateTime"`
-	UpdateDateTime *time.Time `json:"editDateTime"` // for sake compatibility
+	CreateDateTime time.Time  `db:"create_date_time"`
+	UpdateDateTime *time.Time `db:"update_date_time"`
 }
 
 type EmbedMessageResponse struct {
@@ -45,7 +45,7 @@ type MessageViewEnrichedDto struct {
 }
 
 type MessageBasic struct {
-	Id      int64
-	OwnerId int64
-	Content string
+	Id      int64  `db:"id"`
+	OwnerId int64  `db:"owner_id"`
+	Content string `db:"content"`
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
@@ -255,12 +256,8 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 }
 
 func (m *CommonProjection) checkMessageExists(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
-	rm := co.QueryRowContext(ctx, "select exists (select * from message where chat_id = $1 and id = $2)", chatId, messageId)
-	if rm.Err() != nil {
-		return false, rm.Err()
-	}
 	var messageExists bool
-	err := rm.Scan(&messageExists)
+	err := sqlscan.Get(ctx, co, &messageExists, "select exists (select * from message where chat_id = $1 and id = $2)", chatId, messageId)
 	if err != nil {
 		return false, err
 	}
@@ -268,12 +265,8 @@ func (m *CommonProjection) checkMessageExists(ctx context.Context, co db.CommonO
 }
 
 func (m *CommonProjection) GetMessageOwner(ctx context.Context, chatId, messageId int64) (int64, error) {
-	r := m.db.QueryRowContext(ctx, "select owner_id from message where (chat_id, id) = ($1, $2)", chatId, messageId)
-	if r.Err() != nil {
-		return 0, r.Err()
-	}
 	var ownerId int64
-	err := r.Scan(&ownerId)
+	err := sqlscan.Get(ctx, m.db, &ownerId, "select owner_id from message where (chat_id, id) = ($1, $2)", chatId, messageId)
 	if err != nil {
 		return 0, err
 	}
@@ -281,41 +274,38 @@ func (m *CommonProjection) GetMessageOwner(ctx context.Context, chatId, messageI
 }
 
 func (m *CommonProjection) GetLastMessageReaded(ctx context.Context, chatId, userId int64) (int64, bool, int64, error) {
-	r := m.db.QueryRowContext(ctx, `
+	type lastMessageReaded struct {
+		LastReadedMessageId int64 `db:"last_readed_message_id"`
+		Has                 bool  `db:"has"`
+		MaxMessageId        int64 `db:"max_message_id"`
+	}
+
+	res := lastMessageReaded{}
+
+	err := sqlscan.Get(ctx, m.db, &res, `
 	with
 	chat_messages as (
 		select m.id from message m where m.chat_id = $2
 	)
 	select 
-	    um.last_message_id, 
-	    exists(select * from chat_messages m where m.id = um.last_message_id),
-	    (select max(m.id) from chat_messages m)
+	    um.last_message_id as last_readed_message_id, 
+	    exists(select * from chat_messages m where m.id = um.last_message_id) as has,
+	    (select max(m.id) from chat_messages m) as max_message_id
 	from unread_messages_user_view um 
     where (um.user_id, um.chat_id) = ($1, $2)
 	`, userId, chatId)
-	if r.Err() != nil {
-		return 0, false, 0, r.Err()
-	}
-	var lastReadedMessageId int64
-	var has bool
-	var maxMessageId int64
-	err := r.Scan(&lastReadedMessageId, &has, &maxMessageId)
 	if err != nil {
 		return 0, false, 0, err
 	}
-	return lastReadedMessageId, has, maxMessageId, nil
+	return res.LastReadedMessageId, res.Has, res.MaxMessageId, nil
 }
 
 func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (int64, error) {
-	r := m.db.QueryRowContext(ctx, `
-	select coalesce(inn.max_id, 0) 
-	from (select max(id) as max_id from message m where m.chat_id = $1) inn
-	`, chatId)
-	if r.Err() != nil {
-		return 0, r.Err()
-	}
 	var maxMessageId int64
-	err := r.Scan(&maxMessageId)
+	err := sqlscan.Get(ctx, m.db, &maxMessageId, `
+		select coalesce(inn.max_id, 0) 
+		from (select max(id) as max_id from message m where m.chat_id = $1) inn
+		`, chatId)
 	if err != nil {
 		return 0, err
 	}
@@ -452,7 +442,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		queryArgs = append(queryArgs, *startingFromItemId)
 	}
 
-	rows, err := co.QueryContext(ctx, fmt.Sprintf(`
+	err := sqlscan.Select(ctx, co, &ma, fmt.Sprintf(`
 			select 
 			    m.id,
 			    m.owner_id,
@@ -475,45 +465,19 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 			limit $2
 		`, dto.EmbedMessageTypeReply, paginationKeyset, order),
 		queryArgs...)
+
 	if err != nil {
 		return ma, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var cd dto.MessageViewDto
-		err = rows.Scan(
-			&cd.Id,
-			&cd.OwnerId,
-			&cd.Content,
-			&cd.BlogPost,
-			&cd.ResponseEmbeddedMessageType,
-			&cd.ResponseEmbeddedMessageReplyId,
-			&cd.ResponseEmbeddedMessageReplyText,
-			&cd.ResponseEmbeddedMessageReplyOwnerId,
-			&cd.ResponseEmbeddedMessageResendId,
-			&cd.ResponseEmbeddedMessageResendChatId,
-			&cd.ResponseEmbeddedMessageResendOwnerId,
-			&cd.CreateDateTime,
-			&cd.UpdateDateTime,
-		)
-		if err != nil {
-			return ma, err
-		}
-		ma = append(ma, cd)
 	}
 	return ma, nil
 }
 
 func (m *CommonProjection) GetMessageBasic(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.MessageBasic, error) {
-	r := co.QueryRowContext(ctx, `
+	var msg dto.MessageBasic
+	err := sqlscan.Get(ctx, co, &msg, `
 	select m.id, m.owner_id, m.content
 	from message m where m.chat_id = $1 and m.id = $2
 	`, chatId, messageId)
-	if r.Err() != nil {
-		return nil, r.Err()
-	}
-	var msg dto.MessageBasic
-	err := r.Scan(&msg.Id, &msg.OwnerId, &msg.Content)
 	if errors.Is(err, sql.ErrNoRows) {
 		// there were no rows, but otherwise no error occurred
 		return nil, nil
