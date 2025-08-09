@@ -5,32 +5,27 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/georgysavva/scany/v2/sqlscan"
 	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
 	"slices"
+	"time"
 )
 
 func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32, offset int64) ([]int64, error) {
 	ma := []int64{}
-	rows, err := tx.QueryContext(ctx, `
+
+	err := sqlscan.Select(ctx, tx, &ma, `
 		select c.id
 		from chat_common c
 		order by c.id asc 
 		limit $1 offset $2
 	`, size, offset)
+
 	if err != nil {
 		return ma, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var ii int64
-		err = rows.Scan(&ii)
-		if err != nil {
-			return ma, err
-		}
-		ma = append(ma, ii)
 	}
 	return ma, nil
 }
@@ -306,12 +301,10 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 }
 
 func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOperations, chatId int64) (bool, error) {
-	rc := co.QueryRowContext(ctx, "select exists (select * from chat_common where id = $1)", chatId)
-	if rc.Err() != nil {
-		return false, rc.Err()
-	}
 	var chatExists bool
-	err := rc.Scan(&chatExists)
+
+	err := sqlscan.Get(ctx, co, &chatExists, "select exists (select * from chat_common where id = $1)", chatId)
+
 	if err != nil {
 		return false, err
 	}
@@ -392,8 +385,23 @@ func makeParticipantsWithAdmin(participants []ParticipantWithAdmin, users map[in
 	return res
 }
 
+type chatDto struct {
+	Id                 int64            `db:"id"`
+	Title              string           `db:"title"`
+	Pinned             bool             `db:"pinned"`
+	UnreadMessages     int64            `db:"unread_messages"`
+	LastMessageId      *int64           `db:"last_message_id"`
+	LastMessageOwnerId *int64           `db:"last_message_owner_id"`
+	LastMessageContent *string          `db:"last_message_content"`
+	ParticipantsCount  int64            `db:"participants_count"`
+	ParticipantIds     pgtype.Int8Array `db:"participant_ids"` // ids of last N participants
+	Blog               bool             `db:"blog"`
+	UpdateDateTime     *time.Time       `db:"update_date_time"`
+}
+
 func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool) ([]dto.ChatViewDto, error) {
-	ma := []dto.ChatViewDto{}
+	list := []chatDto{}
+	res := []dto.ChatViewDto{}
 
 	queryArgs := []any{participantId, size}
 
@@ -421,12 +429,12 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 	// it is optimized (all order by in the same table)
 	// so querying a page (using keyset) from a large amount of chats is fast
 	// it's the root cause why we use cqrs
-	rows, err := m.db.QueryContext(ctx, fmt.Sprintf(`
+	err := sqlscan.Select(ctx, m.db, &list, fmt.Sprintf(`
 		select 
 		    ch.id,
 		    ch.title,
 		    ch.pinned,
-		    coalesce(m.unread_messages, 0),
+		    coalesce(m.unread_messages, 0) as unread_messages,
 		    ch.last_message_id,
 		    ch.last_message_owner_id,
 		    ch.last_message_content,
@@ -444,32 +452,36 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		`, paginationKeyset, order, offset),
 		queryArgs...)
 	if err != nil {
-		return ma, err
+		return res, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var cd dto.ChatViewDto
-		var participantIds = pgtype.Int8Array{}
-		err = rows.Scan(&cd.Id, &cd.Title, &cd.Pinned, &cd.UnreadMessages, &cd.LastMessageId, &cd.LastMessageOwnerId, &cd.LastMessageContent, &cd.ParticipantsCount, &participantIds, &cd.Blog, &cd.UpdateDateTime)
+
+	for i, de := range list {
+		mapped := dto.ChatViewDto{
+			Id:                 de.Id,
+			Title:              de.Title,
+			Pinned:             de.Pinned,
+			UnreadMessages:     de.UnreadMessages,
+			LastMessageId:      de.LastMessageId,
+			LastMessageOwnerId: de.LastMessageOwnerId,
+			LastMessageContent: de.LastMessageContent,
+			ParticipantsCount:  de.ParticipantsCount,
+			Blog:               de.Blog,
+			UpdateDateTime:     de.UpdateDateTime,
+		}
+		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {
-			return ma, err
+			return res, fmt.Errorf("error during mapping on index %d: %w", i, err)
 		}
-		cd.ParticipantIds = []int64{}
-		for _, aParticipantId := range participantIds.Elements {
-			cd.ParticipantIds = append(cd.ParticipantIds, aParticipantId.Int)
-		}
-		ma = append(ma, cd)
+
+		res = append(res, mapped)
 	}
-	return ma, nil
+
+	return res, nil
 }
 
 func (m *CommonProjection) GetChatByUserIdAndChatId(ctx context.Context, userId, chatId int64) (string, error) {
-	r := m.db.QueryRowContext(ctx, "select c.title from chat_user_view ch join chat_common c on ch.id = c.id where ch.user_id = $1 and ch.id = $2", userId, chatId)
-	if r.Err() != nil {
-		return "", r.Err()
-	}
 	var t string
-	err := r.Scan(&t)
+	err := sqlscan.Get(ctx, m.db, &t, "select c.title from chat_user_view ch join chat_common c on ch.id = c.id where ch.user_id = $1 and ch.id = $2", userId, chatId)
 	if err != nil {
 		return "", err
 	}
@@ -477,8 +489,8 @@ func (m *CommonProjection) GetChatByUserIdAndChatId(ctx context.Context, userId,
 }
 
 type ParticipantWithAdmin struct {
-	ParticipantId int64 `json:"participantId"`
-	ChatAdmin     bool  `json:"chatAdmin"`
+	ParticipantId int64 `json:"participantId" db:"user_id"`
+	ChatAdmin     bool  `json:"chatAdmin" db:"chat_admin"`
 }
 
 func GetParticipantIds(participants []ParticipantWithAdmin) []int64 {
@@ -498,7 +510,8 @@ func getParticipantChatAdmins(participants []ParticipantWithAdmin) []bool {
 }
 
 func getParticipantIdsCommon(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]ParticipantWithAdmin, error) {
-	var rows *sql.Rows
+	list := make([]ParticipantWithAdmin, 0)
+
 	var err error
 
 	order := "asc"
@@ -506,37 +519,41 @@ func getParticipantIdsCommon(ctx context.Context, co db.CommonOperations, chatId
 		order = "desc"
 	}
 
+	sqlArgs := []any{chatId, participantsSize, participantsOffset}
+	condition := ""
 	if len(excluding) > 0 {
-		rows, err = co.QueryContext(ctx, fmt.Sprintf("SELECT user_id, chat_admin FROM chat_participant WHERE chat_id = $1 AND user_id not in (select * from unnest(cast ($4 as bigint[]))) order by create_date_time %s LIMIT $2 OFFSET $3", order), chatId, participantsSize, participantsOffset, excluding)
-	} else {
-		rows, err = co.QueryContext(ctx, fmt.Sprintf("SELECT user_id, chat_admin FROM chat_participant WHERE chat_id = $1 order by create_date_time %s LIMIT $2 OFFSET $3", order), chatId, participantsSize, participantsOffset)
+		condition = "AND user_id NOT IN (select * from unnest(cast ($4 as bigint[])))"
+		sqlArgs = append(sqlArgs, excluding)
 	}
-
+	sqlQuery := fmt.Sprintf(`
+		SELECT 
+		    user_id,
+		    chat_admin 
+		FROM chat_participant
+		WHERE chat_id = $1
+			%s
+		ORDER BY create_date_time %s
+		LIMIT $2 OFFSET $3
+	`, condition, order)
+	err = sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("error during interacting with db: %w", err)
-	}
-	defer rows.Close()
-	list := make([]ParticipantWithAdmin, 0)
-	for rows.Next() {
-		var pwa ParticipantWithAdmin
-		if err = rows.Scan(&pwa.ParticipantId, &pwa.ChatAdmin); err != nil {
-			return nil, fmt.Errorf("error during interacting with db: %w", err)
-		}
-		list = append(list, pwa)
 	}
 	return list, nil
 }
 
 func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperations, chatId int64) (*dto.ChatBasic, error) {
-	r := co.QueryRowContext(ctx, `
-	select ch.id, ch.title, ch.can_resend
-	from chat_common ch where ch.id = $1
-	`, chatId)
-	if r.Err() != nil {
-		return nil, r.Err()
-	}
 	var cht dto.ChatBasic
-	err := r.Scan(&cht.Id, &cht.Title, &cht.CanResend)
+
+	err := sqlscan.Get(ctx, co, &cht, `
+		select 
+		    ch.id,
+		    ch.title,
+		    ch.can_resend,
+		    ch.tet_a_tet
+		from chat_common ch where ch.id = $1
+	`, chatId)
+
 	if errors.Is(err, sql.ErrNoRows) {
 		// there were no rows, but otherwise no error occurred
 		return nil, nil
@@ -552,12 +569,13 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 		return result, nil
 	}
 
+	list := []dto.BasicChatDtoExtended{}
 	// TODO setting tet_a_tet
-	rows, err := co.QueryContext(ctx, `
+	err := sqlscan.Select(ctx, co, &list, `
 		SELECT 
 			c.id, 
 			c.title,
-			(cp.user_id is not null),
+			(cp.user_id is not null) as behalf_user_is_participant,
 			c.tet_a_tet,
 			c.can_resend
 		FROM chat_common c 
@@ -568,18 +586,8 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	list := make([]*dto.BasicChatDtoExtended, 0)
-	for rows.Next() {
-		chatDto := new(dto.BasicChatDtoExtended)
-		if err = rows.Scan(&chatDto.Id, &chatDto.Title, &chatDto.BehalfUserIsParticipant, &chatDto.TetATet, &chatDto.CanResend); err != nil {
-			return nil, err
-		} else {
-			list = append(list, chatDto)
-		}
-	}
 	for _, bc := range list {
-		result[bc.Id] = bc
+		result[bc.Id] = &bc
 	}
 	return result, nil
 }
