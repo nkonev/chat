@@ -74,7 +74,7 @@ func ConfigureHttpServer(
 	ginRouter.Use(StructuredLogMiddleware(lgr))
 	ginRouter.Use(WriteTraceToHeaderMiddleware())
 	if cfg.Server.Dump {
-		ginRouter.Use(DumpRequestMiddleware(lgr, cfg))
+		ginRouter.Use(DumpMiddleware(lgr, cfg))
 	}
 	ginRouter.Use(gin.Recovery())
 
@@ -85,11 +85,7 @@ func ConfigureHttpServer(
 		ReadTimeout:    cfg.Server.ReadTimeout,
 		WriteTimeout:   cfg.Server.WriteTimeout,
 		MaxHeaderBytes: cfg.Server.MaxHeaderBytes,
-	}
-	if cfg.Server.Dump {
-		httpServer.Handler = &dumpingWrapper{router: ginRouter, lgr: lgr, cfg: cfg}
-	} else {
-		httpServer.Handler = ginRouter.Handler()
+		Handler:        ginRouter.Handler(),
 	}
 
 	lc.Append(fx.Hook{
@@ -106,68 +102,47 @@ func ConfigureHttpServer(
 	return httpServer
 }
 
-type dumpingWrapper struct {
-	router *gin.Engine
-	lgr    *logger.LoggerWrapper
-	cfg    *config.AppConfig
-}
-
-func (wr *dumpingWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// https://stackoverflow.com/questions/66528234/log-http-responsewriter-content
-	rww := NewResponseWriterWrapper(w)
-	// w.Header()
-
-	wr.router.Handler().ServeHTTP(rww, r)
-
-	if wr.cfg.Server.PrettyLog && !wr.cfg.Logger.Json {
-		fmt.Printf("<<< HTTP RESPONSE\n%s\n", rww.String())
-	} else {
-		traceId := rww.Header().Get(headerTraceId)
-		ctx := context.WithValue(r.Context(), logger.CtxKeyTraceId, traceId)
-		wr.lgr.InfoContext(ctx, "<<< HTTP RESPONSE "+rww.String())
-	}
-}
-
 type ResponseWriterWrapper struct {
-	w          *http.ResponseWriter
+	gin.ResponseWriter
 	body       *bytes.Buffer
 	statusCode *int
 }
 
 // NewResponseWriterWrapper static function creates a wrapper for the http.ResponseWriter
-func NewResponseWriterWrapper(w http.ResponseWriter) ResponseWriterWrapper {
+func NewResponseWriterWrapper(w gin.ResponseWriter) ResponseWriterWrapper {
 	var buf bytes.Buffer
 	var statusCode int = 200
 	return ResponseWriterWrapper{
-		w:          &w,
-		body:       &buf,
-		statusCode: &statusCode,
+		ResponseWriter: w,
+		body:           &buf,
+		statusCode:     &statusCode,
 	}
 }
 
 func (rww ResponseWriterWrapper) Write(buf []byte) (int, error) {
 	rww.body.Write(buf)
-	return (*rww.w).Write(buf)
+	return rww.ResponseWriter.Write(buf)
 }
 
 // Header function overwrites the http.ResponseWriter Header() function
 func (rww ResponseWriterWrapper) Header() http.Header {
-	return (*rww.w).Header()
+	return rww.ResponseWriter.Header()
 }
 
 // WriteHeader function overwrites the http.ResponseWriter WriteHeader() function
 func (rww ResponseWriterWrapper) WriteHeader(statusCode int) {
 	(*rww.statusCode) = statusCode
-	(*rww.w).WriteHeader(statusCode)
+	rww.ResponseWriter.WriteHeader(statusCode)
 }
 
 func (rww ResponseWriterWrapper) String() string {
 	var buf bytes.Buffer
 	buf.WriteString(fmt.Sprintf("status code %d\n", *(rww.statusCode)))
 
-	for k, v := range (*rww.w).Header() {
+	for k, v := range rww.ResponseWriter.Header() {
 		buf.WriteString(fmt.Sprintf("%s: %v\n", k, v))
 	}
+	buf.WriteString("\n")
 
 	buf.WriteString(rww.body.String())
 	buf.WriteString("\n")
@@ -219,8 +194,13 @@ func WriteTraceToHeaderMiddleware() gin.HandlerFunc {
 	}
 }
 
-func DumpRequestMiddleware(lgr *logger.LoggerWrapper, cfg *config.AppConfig) gin.HandlerFunc {
+func DumpMiddleware(lgr *logger.LoggerWrapper, cfg *config.AppConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// https://stackoverflow.com/questions/66528234/log-http-responsewriter-content
+		rww := NewResponseWriterWrapper(c.Writer)
+		// w.Header()
+		c.Writer = rww
+
 		dumpReq, err := httputil.DumpRequest(c.Request, true)
 		if err != nil {
 			lgr.ErrorContext(c.Request.Context(), "Error during dumping http request", "err", err)
@@ -235,6 +215,12 @@ func DumpRequestMiddleware(lgr *logger.LoggerWrapper, cfg *config.AppConfig) gin
 		}
 
 		c.Next()
+
+		if cfg.Server.PrettyLog && !cfg.Logger.Json {
+			fmt.Printf("<<< HTTP RESPONSE\n%s\n", rww.String())
+		} else {
+			lgr.InfoContext(c.Request.Context(), "<<< HTTP RESPONSE "+rww.String())
+		}
 	}
 }
 

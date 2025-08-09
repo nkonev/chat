@@ -12,21 +12,10 @@ import (
 )
 
 const LogFieldTraceId = "trace_id"
-const CtxKeyTraceId = "ctx_trace_id"
 
 func GetTraceId(ctx context.Context) string {
 	sc := trace.SpanFromContext(ctx).SpanContext()
 	tr := sc.TraceID()
-
-	if !tr.IsValid() {
-		v := ctx.Value(CtxKeyTraceId)
-		if v != nil {
-			str, ok := v.(string)
-			if ok {
-				return str
-			}
-		}
-	}
 	return tr.String()
 }
 
