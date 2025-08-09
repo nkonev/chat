@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
@@ -91,12 +92,8 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 }
 
 func (m *CommonProjection) isChatBlog(ctx context.Context, co db.CommonOperations, chatId int64) (bool, error) {
-	r := co.QueryRowContext(ctx, "select exists(select * from chat_common where id = $1 and blog = true)", chatId)
-	if r.Err() != nil {
-		return false, r.Err()
-	}
 	var blog bool
-	err := r.Scan(&blog)
+	err := sqlscan.Get(ctx, co, &blog, "select exists(select * from chat_common where id = $1 and blog = true)", chatId)
 	if err != nil {
 		return false, err
 	}
@@ -104,9 +101,8 @@ func (m *CommonProjection) isChatBlog(ctx context.Context, co db.CommonOperation
 }
 
 func (m *CommonProjection) isMessageBlogPost(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
-	r := co.QueryRowContext(ctx, "select exists(select * from message where chat_id = $1 and id = $2 and blog_post = true order by id desc limit 1)", chatId, messageId)
 	var blog bool
-	err := r.Scan(&blog)
+	err := sqlscan.Get(ctx, co, &blog, "select exists(select * from message where chat_id = $1 and id = $2 and blog_post = true order by id desc limit 1)", chatId, messageId)
 	if err != nil {
 		return false, err
 	}
@@ -170,7 +166,7 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 		order = "desc"
 	}
 
-	rows, err := m.db.QueryContext(ctx, fmt.Sprintf(`
+	err := sqlscan.Select(ctx, m.db, &ma, fmt.Sprintf(`
 		select 
 		    b.id,
 			b.owner_id,
@@ -183,15 +179,6 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 	`, order), size, offset)
 	if err != nil {
 		return ma, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var cd dto.BlogViewDto
-		err = rows.Scan(&cd.Id, &cd.OwnerId, &cd.Title, &cd.Preview, &cd.CreateDateTime)
-		if err != nil {
-			return ma, err
-		}
-		ma = append(ma, cd)
 	}
 	return ma, nil
 }
@@ -246,7 +233,8 @@ func enrichBlog(blog *dto.BlogDto, users map[int64]*dto.User) *dto.BlogEnrichedD
 }
 
 func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*dto.BlogDto, error) {
-	row := m.db.QueryRowContext(ctx, `
+	var res *dto.BlogDto
+	err := sqlscan.Get(ctx, m.db, &res, `
 		select 
 		    b.id,
 			b.owner_id,
@@ -257,12 +245,6 @@ func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*dto.Blog
 		where b.id = $1
 		order by b.create_date_time desc 
 	`, blogId)
-	if row.Err() != nil {
-		return nil, row.Err()
-	}
-
-	var cd dto.BlogDto
-	err := row.Scan(&cd.Id, &cd.OwnerId, &cd.Title, &cd.Post, &cd.CreateDateTime)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// there were no rows, but otherwise no error occurred
@@ -271,13 +253,13 @@ func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*dto.Blog
 		return nil, err
 	}
 
-	return &cd, nil
+	return res, nil
 }
 
 func (m *CommonProjection) getBlogPostMessageId(ctx context.Context, co db.CommonOperations, blogId int64) (int64, error) {
-	res := co.QueryRowContext(ctx, "select id from message where chat_id = $1 and blog_post = true order by id desc limit 1", blogId)
 	var messageId int64
-	if err := res.Scan(&messageId); err != nil {
+	err := sqlscan.Get(ctx, co, &messageId, "select id from message where chat_id = $1 and blog_post = true order by id desc limit 1", blogId)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// there were no rows, but otherwise no error occurred
 			return 0, nil
@@ -295,25 +277,23 @@ func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperatio
 		order = "desc"
 	}
 
-	rows, err := co.QueryContext(ctx, fmt.Sprintf(`
-		select id, owner_id, content, create_date_time, update_date_time
+	err := sqlscan.Select(ctx, co, &ma, fmt.Sprintf(`
+		select 
+		    id, 
+		    owner_id,
+		    content, 
+		    create_date_time,
+		    update_date_time
 		from message 
 		where chat_id = $1 and id > $2
 		order by id %s
 		limit $3 offset $4
 	`, order), blogId, postMessageId, size, offset)
+
 	if err != nil {
 		return ma, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var cd dto.CommentViewDto
-		err = rows.Scan(&cd.Id, &cd.OwnerId, &cd.Content, &cd.CreateDateTime, &cd.UpdateDateTime)
-		if err != nil {
-			return ma, err
-		}
-		ma = append(ma, cd)
-	}
+
 	return ma, nil
 }
 

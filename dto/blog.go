@@ -4,11 +4,11 @@ import "time"
 
 // list view
 type BlogViewDto struct {
-	Id             int64     `json:"id"`
-	OwnerId        *int64    `json:"ownerId"`
-	Title          string    `json:"title"`
-	Preview        *string   `json:"preview"`
-	CreateDateTime time.Time `json:"createDateTime"`
+	Id             int64     `json:"id" db:"id"`
+	OwnerId        *int64    `json:"ownerId" db:"owner_id"`
+	Title          string    `json:"title" db:"title"`
+	Preview        *string   `json:"preview" db:"preview"`
+	CreateDateTime time.Time `json:"createDateTime" db:"create_date_time"`
 }
 
 type BlogViewEnrichedDto struct {
@@ -17,11 +17,11 @@ type BlogViewEnrichedDto struct {
 }
 
 type BlogDto struct {
-	Id             int64     `json:"id"`
-	OwnerId        *int64    `json:"ownerId"`
-	Title          string    `json:"title"`
-	Post           *string   `json:"post"`
-	CreateDateTime time.Time `json:"createDateTime"`
+	Id             int64     `json:"id" db:"id"`
+	OwnerId        *int64    `json:"ownerId" db:"owner_id"`
+	Title          string    `json:"title" db:"title"`
+	Post           *string   `json:"post" db:"post"`
+	CreateDateTime time.Time `json:"createDateTime" db:"create_date_time"`
 }
 
 type BlogEnrichedDto struct {
@@ -30,11 +30,11 @@ type BlogEnrichedDto struct {
 }
 
 type CommentViewDto struct {
-	Id             int64      `json:"id"`
-	OwnerId        int64      `json:"ownerId"`
-	Content        string     `json:"content"`
-	CreateDateTime time.Time  `json:"createDateTime"`
-	UpdateDateTime *time.Time `json:"editDateTime"` // for sake compatibility
+	Id             int64      `json:"id" db:"id"`
+	OwnerId        int64      `json:"ownerId" db:"owner_id"`
+	Content        string     `json:"content" db:"content"`
+	CreateDateTime time.Time  `json:"createDateTime" db:"create_date_time"`
+	UpdateDateTime *time.Time `json:"editDateTime" db:"update_date_time"` // for sake compatibility
 }
 
 type CommentViewEnrichedDto struct {
