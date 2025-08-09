@@ -2,6 +2,7 @@ package cqrs
 
 import (
 	"context"
+	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
@@ -227,12 +228,8 @@ func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co
 }
 
 func (m *CommonProjection) IsChatAdmin(ctx context.Context, co db.CommonOperations, userId, chatId int64) (bool, error) {
-	rm := co.QueryRowContext(ctx, "SELECT exists(SELECT * FROM chat_participant WHERE user_id = $1 AND chat_id = $2 AND chat_admin = true LIMIT 1)", userId, chatId)
-	if rm.Err() != nil {
-		return false, rm.Err()
-	}
 	var admin bool
-	err := rm.Scan(&admin)
+	err := sqlscan.Get(ctx, co, &admin, "SELECT exists(SELECT * FROM chat_participant WHERE user_id = $1 AND chat_id = $2 AND chat_admin = true LIMIT 1)", userId, chatId)
 	if err != nil {
 		return false, err
 	}
