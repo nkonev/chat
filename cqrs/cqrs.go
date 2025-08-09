@@ -106,10 +106,10 @@ func ConfigureCqrsRouter(
 			}
 
 			if cfg.Cqrs.Dump {
-				if cfg.Cqrs.PrettyLog {
+				if cfg.Cqrs.PrettyLog && !cfg.Logger.Json {
 					fmt.Printf("[kafka subscriber] Received message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(msg.Context()), msg.Metadata, string(msg.Payload))
 				} else {
-					lgr.Info(fmt.Sprintf("[kafka subscriber] Received message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(msg.Context()), msg.Metadata, string(msg.Payload)))
+					lgr.InfoContext(msg.Context(), fmt.Sprintf("[kafka subscriber] Received message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(msg.Context()), msg.Metadata, string(msg.Payload)))
 				}
 			}
 			return h(msg)
@@ -174,10 +174,10 @@ func ConfigureEventBus(
 		Logger:    watermillLoggerAdapter,
 		OnPublish: func(params cqrs.OnEventSendParams) error {
 			if cfg.Cqrs.Dump {
-				if cfg.Cqrs.PrettyLog {
+				if cfg.Cqrs.PrettyLog && !cfg.Logger.Json {
 					fmt.Printf("[kafka publisher] Sending message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), params.Message.Metadata, string(params.Message.Payload))
 				} else {
-					lgr.Info(fmt.Sprintf("[kafka publisher] Sending message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), params.Message.Metadata, string(params.Message.Payload)))
+					lgr.InfoContext(params.Message.Context(), fmt.Sprintf("[kafka publisher] Sending message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), params.Message.Metadata, string(params.Message.Payload)))
 				}
 			}
 			return nil

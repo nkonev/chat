@@ -30,7 +30,7 @@ func makeLoggingDriver(cfg *config.AppConfig, lgr *logger.LoggerWrapper) driver.
 		PostExec: func(c context.Context, ctx interface{}, stmt *proxy.Stmt, args []driver.NamedValue, _ driver.Result, err error) error {
 			if cfg.PostgreSQL.Dump {
 				s := fmt.Sprintf("Exec: %s; args = %v (%s)\n", stmt.QueryString, writeNamedValues(args), time.Since(ctx.(time.Time)))
-				if cfg.PostgreSQL.PrettyLog {
+				if cfg.PostgreSQL.PrettyLog && !cfg.Logger.Json {
 					fmt.Printf("[SQL] trace_id=%s: %s\n", logger.GetTraceId(c), s)
 				} else {
 					lgr.DebugContext(c, s)
@@ -45,7 +45,7 @@ func makeLoggingDriver(cfg *config.AppConfig, lgr *logger.LoggerWrapper) driver.
 		PostQuery: func(c context.Context, ctx interface{}, stmt *proxy.Stmt, args []driver.NamedValue, rows driver.Rows, err error) error {
 			if cfg.PostgreSQL.Dump {
 				s := fmt.Sprintf("Query: %s; args = %v (%s)\n", stmt.QueryString, writeNamedValues(args), time.Since(ctx.(time.Time)))
-				if cfg.PostgreSQL.PrettyLog {
+				if cfg.PostgreSQL.PrettyLog && !cfg.Logger.Json {
 					fmt.Printf("[SQL] trace_id=%s: %s\n", logger.GetTraceId(c), s)
 				} else {
 					lgr.DebugContext(c, s)

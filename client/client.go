@@ -66,12 +66,12 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUse
 		if err != nil {
 			return nil, err
 		}
-		if rc.cfg.Http.PrettyLog {
+		if rc.cfg.Http.PrettyLog && !rc.cfg.Logger.Json {
 			fmt.Printf("%s >>>\n", rc.clientName)
 			fmt.Printf("%s\n", string(dumpReq))
 		} else {
-			rc.lgr.Info(fmt.Sprintf("%s >>>", rc.clientName))
-			rc.lgr.Info(string(dumpReq))
+			rc.lgr.InfoContext(ctx, fmt.Sprintf("%s >>>", rc.clientName))
+			rc.lgr.InfoContext(ctx, string(dumpReq))
 		}
 	}
 
@@ -91,12 +91,12 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUse
 		if err != nil {
 			return nil, err
 		}
-		if rc.cfg.Http.PrettyLog {
+		if rc.cfg.Http.PrettyLog && !rc.cfg.Logger.Json {
 			fmt.Printf("%s <<<\n", rc.clientName)
 			fmt.Printf("%s\n", string(dumpResp))
 		} else {
-			rc.lgr.Info(fmt.Sprintf("%s <<<", rc.clientName))
-			rc.lgr.Info(string(dumpResp))
+			rc.lgr.InfoContext(ctx, fmt.Sprintf("%s <<<", rc.clientName))
+			rc.lgr.InfoContext(ctx, string(dumpResp))
 		}
 	}
 	return httpResp, err
