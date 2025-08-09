@@ -7,10 +7,8 @@ import (
 )
 
 func main() {
-	var allCommands = []string{cmd.CommandExportName, cmd.CommandImportName, cmd.CommandResetName, cmd.CommandServeName}
-
 	if len(os.Args) < 2 {
-		fmt.Printf("No command provided. Expected command one of %v\n", allCommands)
+		fmt.Printf("No command provided. Expected command one of %v\n", cmd.AllCommands)
 		os.Exit(1)
 	}
 
@@ -23,10 +21,12 @@ func main() {
 		cmd.RunExport(remainingArgs)
 	case cmd.CommandResetName:
 		cmd.RunReset(remainingArgs)
+	case cmd.CommandHelpName:
+		cmd.RunHelp(remainingArgs)
 	case cmd.CommandServeName:
 		cmd.RunServe(remainingArgs)
 	default:
-		fmt.Printf("Unknown command '%v'. Expected command one of %v\n", theCmd, allCommands)
+		fmt.Printf("Unknown command '%v'. Expected command one of %v\n", theCmd, cmd.AllCommands)
 		os.Exit(1)
 	}
 }

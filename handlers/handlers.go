@@ -140,8 +140,10 @@ func WriteTraceToHeaderMiddleware() gin.HandlerFunc {
 func RunHttpServer(
 	lgr *logger.LoggerWrapper,
 	httpServer *http.Server,
+	cfg *config.AppConfig,
 ) {
 	go func() {
+		lgr.InfoContext(context.Background(), "http server is configured with address", "http_address", cfg.Server.Address)
 		err := httpServer.ListenAndServe()
 		if errors.Is(err, http.ErrServerClosed) {
 			lgr.Info("Http server is closed")
