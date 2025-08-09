@@ -209,8 +209,7 @@ func DumpMiddleware(lgr *logger.LoggerWrapper, cfg *config.AppConfig) gin.Handle
 				fmt.Printf("HTTP REQUEST >>>\n")
 				fmt.Printf("%s\n", string(dumpReq))
 			} else {
-				lgr.InfoContext(c.Request.Context(), fmt.Sprintf("HTTP REQUEST >>>"))
-				lgr.InfoContext(c.Request.Context(), string(dumpReq))
+				lgr.DebugContext(c.Request.Context(), fmt.Sprintf("HTTP REQUEST >>> %s", string(dumpReq)))
 			}
 		}
 
@@ -219,7 +218,7 @@ func DumpMiddleware(lgr *logger.LoggerWrapper, cfg *config.AppConfig) gin.Handle
 		if cfg.Server.PrettyLog && !cfg.Logger.Json {
 			fmt.Printf("<<< HTTP RESPONSE\n%s\n", rww.String())
 		} else {
-			lgr.InfoContext(c.Request.Context(), "<<< HTTP RESPONSE "+rww.String())
+			lgr.DebugContext(c.Request.Context(), "<<< HTTP RESPONSE "+rww.String())
 		}
 	}
 }
