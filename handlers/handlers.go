@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/config"
@@ -11,8 +13,11 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/fx"
 	"net/http"
+	"net/http/httputil"
 	"time"
 )
+
+const headerTraceId = "trace-id"
 
 func bindHttpHandlers(
 	ginRouter *gin.Engine,
@@ -68,16 +73,23 @@ func ConfigureHttpServer(
 	ginRouter.Use(otelgin.Middleware(app.TRACE_RESOURCE))
 	ginRouter.Use(StructuredLogMiddleware(lgr))
 	ginRouter.Use(WriteTraceToHeaderMiddleware())
+	if cfg.Server.Dump {
+		ginRouter.Use(DumpRequestMiddleware(lgr, cfg))
+	}
 	ginRouter.Use(gin.Recovery())
 
 	bindHttpHandlers(ginRouter, chatHandler, participantHandler, messageHandler, blogHandler)
 
 	httpServer := &http.Server{
 		Addr:           cfg.Server.Address,
-		Handler:        ginRouter.Handler(),
 		ReadTimeout:    cfg.Server.ReadTimeout,
 		WriteTimeout:   cfg.Server.WriteTimeout,
 		MaxHeaderBytes: cfg.Server.MaxHeaderBytes,
+	}
+	if cfg.Server.Dump {
+		httpServer.Handler = &dumpingWrapper{router: ginRouter, lgr: lgr, cfg: cfg}
+	} else {
+		httpServer.Handler = ginRouter.Handler()
 	}
 
 	lc.Append(fx.Hook{
@@ -93,6 +105,76 @@ func ConfigureHttpServer(
 
 	return httpServer
 }
+
+type dumpingWrapper struct {
+	router *gin.Engine
+	lgr    *logger.LoggerWrapper
+	cfg    *config.AppConfig
+}
+
+func (wr *dumpingWrapper) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// https://stackoverflow.com/questions/66528234/log-http-responsewriter-content
+	rww := NewResponseWriterWrapper(w)
+	// w.Header()
+
+	wr.router.Handler().ServeHTTP(rww, r)
+
+	if wr.cfg.Server.PrettyLog && !wr.cfg.Logger.Json {
+		fmt.Printf("<<< HTTP RESPONSE\n%s\n", rww.String())
+	} else {
+		traceId := rww.Header().Get(headerTraceId)
+		ctx := context.WithValue(r.Context(), logger.CtxKeyTraceId, traceId)
+		wr.lgr.InfoContext(ctx, "<<< HTTP RESPONSE "+rww.String())
+	}
+}
+
+type ResponseWriterWrapper struct {
+	w          *http.ResponseWriter
+	body       *bytes.Buffer
+	statusCode *int
+}
+
+// NewResponseWriterWrapper static function creates a wrapper for the http.ResponseWriter
+func NewResponseWriterWrapper(w http.ResponseWriter) ResponseWriterWrapper {
+	var buf bytes.Buffer
+	var statusCode int = 200
+	return ResponseWriterWrapper{
+		w:          &w,
+		body:       &buf,
+		statusCode: &statusCode,
+	}
+}
+
+func (rww ResponseWriterWrapper) Write(buf []byte) (int, error) {
+	rww.body.Write(buf)
+	return (*rww.w).Write(buf)
+}
+
+// Header function overwrites the http.ResponseWriter Header() function
+func (rww ResponseWriterWrapper) Header() http.Header {
+	return (*rww.w).Header()
+}
+
+// WriteHeader function overwrites the http.ResponseWriter WriteHeader() function
+func (rww ResponseWriterWrapper) WriteHeader(statusCode int) {
+	(*rww.statusCode) = statusCode
+	(*rww.w).WriteHeader(statusCode)
+}
+
+func (rww ResponseWriterWrapper) String() string {
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("status code %d\n", *(rww.statusCode)))
+
+	for k, v := range (*rww.w).Header() {
+		buf.WriteString(fmt.Sprintf("%s: %v\n", k, v))
+	}
+
+	buf.WriteString(rww.body.String())
+	buf.WriteString("\n")
+
+	return buf.String()
+}
+
 func StructuredLogMiddleware(lgr *logger.LoggerWrapper) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -129,11 +211,30 @@ func WriteTraceToHeaderMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		traceId := logger.GetTraceId(c.Request.Context())
 
-		c.Writer.Header().Set("trace-id", traceId)
+		c.Writer.Header().Set(headerTraceId, traceId)
 
 		// Process Request
 		c.Next()
 
+	}
+}
+
+func DumpRequestMiddleware(lgr *logger.LoggerWrapper, cfg *config.AppConfig) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		dumpReq, err := httputil.DumpRequest(c.Request, true)
+		if err != nil {
+			lgr.ErrorContext(c.Request.Context(), "Error during dumping http request", "err", err)
+		} else {
+			if cfg.Server.PrettyLog && !cfg.Logger.Json {
+				fmt.Printf("HTTP REQUEST >>>\n")
+				fmt.Printf("%s\n", string(dumpReq))
+			} else {
+				lgr.InfoContext(c.Request.Context(), fmt.Sprintf("HTTP REQUEST >>>"))
+				lgr.InfoContext(c.Request.Context(), string(dumpReq))
+			}
+		}
+
+		c.Next()
 	}
 }
 

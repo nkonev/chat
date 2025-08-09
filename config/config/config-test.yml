@@ -35,6 +35,8 @@ server:
   readTimeout: "10s"
   writeTimeout: "10s"
   maxHeaderBytes: 20000000
+  dump: true
+  prettyLog: true
 cqrs:
   # sleepBeforeEvent: 500ms
   sleepBeforeEvent: 0

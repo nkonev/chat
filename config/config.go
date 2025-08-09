@@ -51,6 +51,8 @@ type HttpServerConfig struct {
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
 	MaxHeaderBytes int
+	Dump           bool
+	PrettyLog      bool
 }
 
 type MigrationConfig struct {
@@ -207,7 +209,7 @@ func createTypedConfig(filename string, args ...string) (*AppConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	err = flag.Decode(argsToReadConfig, &conf)
 	if err != nil {
 		return nil, err
