@@ -138,7 +138,7 @@ func (rww ResponseWriterWrapper) WriteHeader(statusCode int) {
 
 func (rww ResponseWriterWrapper) String() string {
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("status code %d\n", *(rww.statusCode)))
+	buf.WriteString(fmt.Sprintf("HTTP %d\n", *(rww.statusCode)))
 
 	for k, v := range rww.ResponseWriter.Header() {
 		buf.WriteString(fmt.Sprintf("%s: %v\n", k, v))
@@ -207,19 +207,19 @@ func DumpMiddleware(lgr *logger.LoggerWrapper, cfg *config.AppConfig) gin.Handle
 			lgr.ErrorContext(c.Request.Context(), "Error during dumping http request", "err", err)
 		} else {
 			if cfg.Server.PrettyLog && !cfg.Logger.Json {
-				fmt.Printf("HTTP REQUEST >>>\n")
+				fmt.Printf(">>> HTTP REQUEST trace_id=%s\n", logger.GetTraceId(c.Request.Context()))
 				fmt.Printf("%s\n", string(dumpReq))
 			} else {
-				lgr.DebugContext(c.Request.Context(), fmt.Sprintf("HTTP REQUEST >>> %s", string(dumpReq)))
+				lgr.InfoContext(c.Request.Context(), fmt.Sprintf(">>> HTTP REQUEST %s", string(dumpReq)))
 			}
 		}
 
 		c.Next()
 
 		if cfg.Server.PrettyLog && !cfg.Logger.Json {
-			fmt.Printf("<<< HTTP RESPONSE\n%s\n", rww.String())
+			fmt.Printf("<<< HTTP RESPONSE trace_id=%s \n%s\n", logger.GetTraceId(c.Request.Context()), rww.String())
 		} else {
-			lgr.DebugContext(c.Request.Context(), "<<< HTTP RESPONSE "+rww.String())
+			lgr.InfoContext(c.Request.Context(), "<<< HTTP RESPONSE "+rww.String())
 		}
 	}
 }

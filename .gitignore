@@ -13,4 +13,4 @@ __debug_bin
 .vscode/
 *.log
 event.json
-go-cqrs-chat-example
+chat

@@ -1,3 +1,5 @@
+EXECUTABLE := chat
+
 .PHONY: test-verbose
 test-verbose:
 	# here is timeout for all tests
@@ -9,6 +11,12 @@ download:
 
 generate:
 	mockery
+
+package: package-go
+
+package-go:
+	rm -f $(EXECUTABLE)
+	CGO_ENABLED=0 go build -o $(EXECUTABLE) -trimpath -ldflags '-w -extldflags "-static"'
 
 infra:
 	docker compose up -d

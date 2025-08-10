@@ -33,7 +33,7 @@ func makeLoggingDriver(cfg *config.AppConfig, lgr *logger.LoggerWrapper) driver.
 				if cfg.PostgreSQL.PrettyLog && !cfg.Logger.Json {
 					fmt.Printf("[SQL] trace_id=%s: %s\n", logger.GetTraceId(c), s)
 				} else {
-					lgr.DebugContext(c, s)
+					lgr.InfoContext(c, s)
 				}
 			}
 			return err
@@ -48,7 +48,7 @@ func makeLoggingDriver(cfg *config.AppConfig, lgr *logger.LoggerWrapper) driver.
 				if cfg.PostgreSQL.PrettyLog && !cfg.Logger.Json {
 					fmt.Printf("[SQL] trace_id=%s: %s\n", logger.GetTraceId(c), s)
 				} else {
-					lgr.DebugContext(c, s)
+					lgr.InfoContext(c, s)
 				}
 			}
 			return err
