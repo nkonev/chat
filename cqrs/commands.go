@@ -219,6 +219,15 @@ func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus E
 		}
 	}
 
+	if copyCommand.TetATet {
+		if len(copyCommand.ParticipantIds) != 2 {
+			return 0, NewValidationError("Error during validation: tet-a-tet chat doesn't have 2 participants")
+		}
+		if copyCommand.ParticipantIds[0] == copyCommand.ParticipantIds[1] {
+			return 0, NewValidationError("Error during validation: tet-a-tet should have different participants")
+		}
+	}
+
 	chatId, err := db.TransactWithResult(ctx, dba, func(tx *db.Tx) (int64, error) {
 		return commonProjection.GetNextChatId(ctx, tx)
 	})
@@ -281,6 +290,19 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		if err = copyCommand.Validate(); err != nil {
 			return NewValidationError(fmt.Sprintf("Error during validation: %v", err))
 		}
+	}
+
+	cb, err := commonProjection.GetChatBasic(ctx, dba, copyCommand.ChatId)
+	if err != nil {
+		return err
+	}
+
+	if cb == nil {
+		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", copyCommand.ChatId))
+	}
+
+	if cb.TetATet {
+		return NewValidationError("Error during validation: tet-a-tet chat cannot be changed")
 	}
 
 	cc := &ChatEdited{
