@@ -12,6 +12,7 @@ import (
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
 	"go-cqrs-chat-example/services"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -42,7 +43,9 @@ func resetInfra(lgr *logger.LoggerWrapper, cfg *config.AppConfig) {
 		fx.Supply(cfg),
 		fx.Supply(lgr),
 		fx.WithLogger(func(lgr *logger.LoggerWrapper) fxevent.Logger {
-			return &fxevent.SlogLogger{Logger: lgr.Logger}
+			fsl := &fxevent.SlogLogger{Logger: lgr.Logger}
+			fsl.UseLogLevel(slog.LevelDebug)
+			return fsl
 		}),
 		fx.Provide(
 			otel.ConfigureTracePropagator,
@@ -76,7 +79,9 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 		fx.Supply(cfg),
 		fx.Supply(lgr),
 		fx.WithLogger(func(lgr *logger.LoggerWrapper) fxevent.Logger {
-			return &fxevent.SlogLogger{Logger: lgr.Logger}
+			fsl := &fxevent.SlogLogger{Logger: lgr.Logger}
+			fsl.UseLogLevel(slog.LevelDebug)
+			return fsl
 		}),
 		fx.Populate(&s),
 		fx.Provide(

@@ -57,7 +57,7 @@ func NewBaseLogger(w io.Writer, cfg *config.AppConfig) *slog.Logger {
 				Key:   "level",
 				Value: slog.StringValue(strings.ToLower(a.Value.String())),
 			}
-		} else if a.Key == "file" || a.Key == "source" {
+		} else if a.Key == "source" {
 			return slog.Attr{
 				Key:   "caller",
 				Value: a.Value,

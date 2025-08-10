@@ -12,6 +12,7 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
+	"log/slog"
 	"os"
 	"testing"
 
@@ -102,7 +103,9 @@ func TestReset(t *testing.T) {
 		fx.Supply(cfg),
 		fx.Supply(lgr),
 		fx.WithLogger(func(lgr *logger.LoggerWrapper) fxevent.Logger {
-			return &fxevent.SlogLogger{Logger: lgr.Logger}
+			fsl := &fxevent.SlogLogger{Logger: lgr.Logger}
+			fsl.UseLogLevel(slog.LevelDebug)
+			return fsl
 		}),
 		fx.Provide(
 			otel.ConfigureTracePropagator,
