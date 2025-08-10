@@ -197,6 +197,63 @@ func TestUnreads(t *testing.T) {
 	})
 }
 
+func TestCreateTetATetChat(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateTetATetChat(ctx, user1, user2)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user1Chats, err := testRestClient.GetChats(ctx, user1)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user1Chats))
+		chat1OfUser1 := user1Chats[0]
+		assert.Equal(t, user2Login, chat1OfUser1.Title)
+
+		assert.Equal(t, []int64{2, 1}, chat1OfUser1.ParticipantIds)
+		assert.Equal(t, user2Login, chat1OfUser1.Participants[0].Login)
+		assert.Equal(t, user1Login, chat1OfUser1.Participants[1].Login)
+	})
+}
+
 func TestResendMessage(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,

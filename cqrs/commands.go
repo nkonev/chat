@@ -321,7 +321,6 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 				AdditionalData:     copyCommand.AdditionalData,
 				ParticipantIds:     participantIdsPortion,
 				ChatId:             copyCommand.ChatId,
-				Title:              copyCommand.Title,
 				ParticipantsAction: ParticipantsActionRefresh,
 			}
 

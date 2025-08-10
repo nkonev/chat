@@ -116,7 +116,6 @@ type ChatViewRefreshed struct {
 	AdditionalData       *AdditionalData      `json:"additionalData"`
 	ParticipantIds       []int64              `json:"participantIds"`
 	ChatId               int64                `json:"chatId"`
-	Title                string               `json:"title"` // chat title
 	UnreadMessagesAction UnreadMessagesAction `json:"unreadMessagesAction"`
 	LastMessageAction    LastMessageAction    `json:"lastMessageAction"`
 	ParticipantsAction   ParticipantsAction   `json:"participantsAction"`

@@ -353,30 +353,19 @@ func enrichChats(behalfUserId int64, chats []dto.ChatViewDto, users map[int64]*d
 			ChatViewDto:  ch,
 			Participants: makeParticipants(ch.ParticipantIds, users),
 		}
-		if ch.TetATet {
-			oppositeUserIdP := getOppositeParticipant(behalfUserId, &ch)
-			if oppositeUserIdP != nil {
-				oppositeUser := users[*oppositeUserIdP]
+		if che.TetATet {
+			oppa := utils.GetSliceWithout(behalfUserId, che.ParticipantIds)
+			if len(oppa) == 1 {
+				oppositeUserId := oppa[0]
+				oppositeUser := users[oppositeUserId]
 				if oppositeUser != nil {
-					ch.Title = oppositeUser.Login
+					che.Title = oppositeUser.Login
 				}
 			}
 		}
 		res = append(res, che)
 	}
 	return res
-}
-
-func getOppositeParticipant(behalfUserId int64, ch *dto.ChatViewDto) *int64 {
-	if !ch.TetATet {
-		return nil
-	}
-	for _, participantId := range ch.ParticipantIds {
-		if participantId != behalfUserId {
-			return &participantId
-		}
-	}
-	return nil
 }
 
 func makeParticipants(participantIds []int64, users map[int64]*dto.User) []dto.User {

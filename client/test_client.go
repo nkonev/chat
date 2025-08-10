@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
@@ -60,6 +61,16 @@ func (rc *TestRestClient) CreateChat(ctx context.Context, behalfUserId int64, ch
 	}
 
 	resp, err := query[dto.ChatCreateDto, dto.IdResponse](ctx, &rc.restClient, behalfUserId, "POST", "/chat", "chat.Create", &req, nil)
+	if err != nil {
+		return 0, err
+	}
+	return resp.Id, nil
+}
+
+func (rc *TestRestClient) CreateTetATetChat(ctx context.Context, behalfUserId int64, oppositeUserId int64) (int64, error) {
+	strUrl := fmt.Sprintf("/chat/tet-a-tet/%d", oppositeUserId)
+
+	resp, err := query[any, dto.IdResponse](ctx, &rc.restClient, behalfUserId, "PUT", strUrl, "chat.CreateTetATet", nil, nil)
 	if err != nil {
 		return 0, err
 	}
