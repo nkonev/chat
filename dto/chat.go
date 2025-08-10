@@ -5,17 +5,18 @@ import (
 )
 
 type ChatViewDto struct {
-	Id                 int64      `json:"id" db:"id"`
-	Title              string     `json:"title" db:"title"`
-	Pinned             bool       `json:"pinned" db:"pinned"`
-	UnreadMessages     int64      `json:"unreadMessages" db:"unread_messages"`
-	LastMessageId      *int64     `json:"lastMessageId" db:"last_message_id"`
-	LastMessageOwnerId *int64     `json:"lastMessageOwnerId" db:"last_message_owner_id"`
-	LastMessageContent *string    `json:"lastMessageContent" db:"last_message_content"`
-	ParticipantsCount  int64      `json:"participantsCount" db:"participants_count"`
-	ParticipantIds     []int64    `json:"participantIds" db:"participant_ids"` // ids of last N participants
-	Blog               bool       `json:"blog" db:"blog"`
-	UpdateDateTime     *time.Time `json:"lastUpdateDateTime" db:"update_date_time"` // for sake compatibility
+	Id                 int64      `json:"id"`
+	Title              string     `json:"title"`
+	Pinned             bool       `json:"pinned"`
+	UnreadMessages     int64      `json:"unreadMessages"`
+	LastMessageId      *int64     `json:"lastMessageId"`
+	LastMessageOwnerId *int64     `json:"lastMessageOwnerId"`
+	LastMessageContent *string    `json:"lastMessageContent"`
+	ParticipantsCount  int64      `json:"participantsCount"`
+	ParticipantIds     []int64    `json:"participantIds"` // ids of last N participants
+	Blog               bool       `json:"blog"`
+	UpdateDateTime     *time.Time `json:"lastUpdateDateTime"` // for sake compatibility
+	TetATet            bool       `json:"tetATet"`
 }
 
 type ChatId struct {

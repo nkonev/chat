@@ -32,11 +32,24 @@ func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32
 
 func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated) error {
 	_, err := m.db.ExecContext(ctx, `
-		insert into chat_common(id, title, create_date_time, can_resend) values ($1, $2, $3, $4)
+		insert into chat_common(
+			id, 
+			title,
+			create_date_time,
+			can_resend,
+			tet_a_tet
+		) values (
+			$1, 
+			$2,
+			$3,
+			$4,
+			$5
+		)
 		on conflict(id) do update set 
 		    title = excluded.title
-		    , can_resend = excluded.can_resend
-	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.CanResend)
+		    ,can_resend = excluded.can_resend
+		    ,tet_a_tet = excluded.tet_a_tet
+	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.CanResend, event.TetATet)
 	if err != nil {
 		return err
 	}
@@ -323,7 +336,7 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfUserId
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
-	chatsEnriched := enrichChats(chats, utils.ToMap(users))
+	chatsEnriched := enrichChats(behalfUserId, chats, utils.ToMap(users))
 	return chatsEnriched, nil
 }
 
@@ -344,16 +357,37 @@ func getUserIdsFromChats(chats []dto.ChatViewDto) []int64 {
 	return r
 }
 
-func enrichChats(chats []dto.ChatViewDto, users map[int64]*dto.User) []dto.ChatViewEnrichedDto {
+func enrichChats(behalfUserId int64, chats []dto.ChatViewDto, users map[int64]*dto.User) []dto.ChatViewEnrichedDto {
 	res := make([]dto.ChatViewEnrichedDto, 0, len(chats))
 	for _, ch := range chats {
 		che := dto.ChatViewEnrichedDto{
 			ChatViewDto:  ch,
 			Participants: makeParticipants(ch.ParticipantIds, users),
 		}
+		if ch.TetATet {
+			oppositeUserIdP := getOppositeParticipant(behalfUserId, &ch)
+			if oppositeUserIdP != nil {
+				oppositeUser := users[*oppositeUserIdP]
+				if oppositeUser != nil {
+					ch.Title = oppositeUser.Login
+				}
+			}
+		}
 		res = append(res, che)
 	}
 	return res
+}
+
+func getOppositeParticipant(behalfUserId int64, ch *dto.ChatViewDto) *int64 {
+	if !ch.TetATet {
+		return nil
+	}
+	for _, participantId := range ch.ParticipantIds {
+		if participantId != behalfUserId {
+			return &participantId
+		}
+	}
+	return nil
 }
 
 func makeParticipants(participantIds []int64, users map[int64]*dto.User) []dto.User {
@@ -385,21 +419,22 @@ func makeParticipantsWithAdmin(participants []ParticipantWithAdmin, users map[in
 	return res
 }
 
-type chatDto struct {
-	Id                 int64            `db:"id"`
-	Title              string           `db:"title"`
-	Pinned             bool             `db:"pinned"`
-	UnreadMessages     int64            `db:"unread_messages"`
-	LastMessageId      *int64           `db:"last_message_id"`
-	LastMessageOwnerId *int64           `db:"last_message_owner_id"`
-	LastMessageContent *string          `db:"last_message_content"`
-	ParticipantsCount  int64            `db:"participants_count"`
-	ParticipantIds     pgtype.Int8Array `db:"participant_ids"` // ids of last N participants
-	Blog               bool             `db:"blog"`
-	UpdateDateTime     *time.Time       `db:"update_date_time"`
-}
-
 func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool) ([]dto.ChatViewDto, error) {
+	type chatDto struct {
+		Id                 int64            `db:"id"`
+		Title              string           `db:"title"`
+		Pinned             bool             `db:"pinned"`
+		UnreadMessages     int64            `db:"unread_messages"`
+		LastMessageId      *int64           `db:"last_message_id"`
+		LastMessageOwnerId *int64           `db:"last_message_owner_id"`
+		LastMessageContent *string          `db:"last_message_content"`
+		ParticipantsCount  int64            `db:"participants_count"`
+		ParticipantIds     pgtype.Int8Array `db:"participant_ids"` // ids of last N participants
+		Blog               bool             `db:"blog"`
+		UpdateDateTime     *time.Time       `db:"update_date_time"`
+		TetATet            bool             `db:"tet_a_tet"`
+	}
+
 	list := []chatDto{}
 	res := []dto.ChatViewDto{}
 
@@ -441,10 +476,12 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		    ch.participants_count,
 		    ch.participant_ids,
 		    b.id is not null as blog,
-		    ch.update_date_time
+		    ch.update_date_time,
+		    cc.tet_a_tet
 		from chat_user_view ch
 		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = $1)
 		left join blog b on ch.id = b.id
+		left join chat_common cc on cc.id = ch.id
 		where ch.user_id = $1 %s
 		order by (ch.pinned, ch.update_date_time, ch.id) %s
 		limit $2 
@@ -467,6 +504,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 			ParticipantsCount:  de.ParticipantsCount,
 			Blog:               de.Blog,
 			UpdateDateTime:     de.UpdateDateTime,
+			TetATet:            de.TetATet,
 		}
 		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {
@@ -551,7 +589,8 @@ func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperati
 		    ch.title,
 		    ch.can_resend,
 		    ch.tet_a_tet
-		from chat_common ch where ch.id = $1
+		from chat_common ch 
+		where ch.id = $1
 	`, chatId)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -570,7 +609,6 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 	}
 
 	list := []dto.BasicChatDtoExtended{}
-	// TODO setting tet_a_tet
 	err := sqlscan.Select(ctx, co, &list, `
 		SELECT 
 			c.id, 

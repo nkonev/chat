@@ -30,7 +30,7 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 					, title = excluded.title
 					, post = excluded.post
 					, preview = excluded.preview
-			`, chatId, 512, createdTime)
+			`, chatId, m.blogViewConfig.MaxTextPreviewSize, createdTime)
 	if errInner != nil {
 		return errInner
 	}

@@ -16,6 +16,7 @@ type CommonProjection struct {
 	db                 *db.DB
 	lgr                *logger.LoggerWrapper
 	chatUserViewConfig *config.ChatUserViewConfig
+	blogViewConfig     *config.BlogViewConfig
 }
 
 type EnrichingProjection struct {
@@ -29,6 +30,7 @@ func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppCo
 		db:                 db,
 		lgr:                lgr,
 		chatUserViewConfig: &cfg.Projections.ChatUserView,
+		blogViewConfig:     &cfg.Projections.BlogView,
 	}
 }
 

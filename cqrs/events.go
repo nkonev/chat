@@ -14,6 +14,7 @@ type ChatCreated struct {
 	ChatId         int64           `json:"chatId"`
 	Title          string          `json:"title"`
 	CanResend      bool            `json:"canResend"`
+	TetATet        bool            `json:"tetATet"`
 }
 
 type ChatEdited struct {

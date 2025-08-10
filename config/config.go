@@ -2,6 +2,7 @@ package config
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"github.com/traefik/paerser/env"
 	"github.com/traefik/paerser/file"
@@ -96,11 +97,17 @@ type ExportConfig struct {
 }
 
 type ChatUserViewConfig struct {
-	MaxViewableParticipants int32
+	MaxViewableParticipants       int32
+	LastMessageMaxTextPreviewSize int32
+}
+
+type BlogViewConfig struct {
+	MaxTextPreviewSize int32
 }
 
 type ProjectionsConfig struct {
 	ChatUserView ChatUserViewConfig
+	BlogView     BlogViewConfig
 }
 
 type LoggerConfig struct {
@@ -215,5 +222,22 @@ func createTypedConfig(filename string, args ...string) (*AppConfig, error) {
 		return nil, err
 	}
 
+	err = validate(&conf)
+	if err != nil {
+		return nil, err
+	}
+
 	return &conf, nil
+}
+
+func validate(conf *AppConfig) error {
+	if conf == nil {
+		return errors.New("nil config")
+	}
+
+	if conf.Projections.ChatUserView.MaxViewableParticipants < 2 {
+		return fmt.Errorf("max viewable participants = %d < 2", conf.Projections.ChatUserView.MaxViewableParticipants)
+	}
+
+	return nil
 }

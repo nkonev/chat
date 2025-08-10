@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -77,6 +78,49 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 	}
 
 	ch.lgr.InfoContext(g.Request.Context(), "created the chat", "chat_id", chatId)
+
+	m := dto.IdResponse{Id: chatId}
+
+	g.JSON(http.StatusOK, m)
+}
+
+func (ch *ChatHandler) CreateTetAChat(g *gin.Context) {
+
+	oppositeUserId, err := utils.ParseInt64(g.Param(dto.ParticipantIdParam))
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding participantId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	tetATetChatName := fmt.Sprintf("tet_a_tet_%v_%v", userId, oppositeUserId)
+
+	cc := cqrs.ChatCreate{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		Title:          tetATetChatName,
+		ParticipantIds: []int64{oppositeUserId},
+		TetATet:        true,
+	}
+
+	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy)
+	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ChatCreate command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	ch.lgr.InfoContext(g.Request.Context(), "created the tet-a-tet chat", "chat_id", chatId)
 
 	m := dto.IdResponse{Id: chatId}
 

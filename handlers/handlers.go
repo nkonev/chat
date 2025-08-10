@@ -27,6 +27,7 @@ func bindHttpHandlers(
 	blogHandler *BlogHandler,
 ) {
 	ginRouter.POST("/chat", chatHandler.CreateChat)
+	ginRouter.PUT("/chat/tet-a-tet/:participantId", chatHandler.CreateTetAChat)
 	ginRouter.PUT("/chat", chatHandler.EditChat)
 	ginRouter.DELETE("/chat/:id", chatHandler.DeleteChat)
 	ginRouter.PUT("/chat/:id/pin", chatHandler.PinChat)

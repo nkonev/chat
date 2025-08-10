@@ -155,7 +155,7 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, partic
 					select 
 						m.id,
 						m.owner_id, 
-						m.content 
+						left(strip_tags(m.content), $3) as content
 					from message m 
 					where m.chat_id = $2 and m.id = (select max(mm.id) from message mm where mm.chat_id = $2)
 				)
@@ -165,7 +165,7 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, partic
 					last_message_content = (select content from last_message),
 					last_message_owner_id = (select owner_id from last_message)
 				WHERE user_id = any($1) and id = $2;
-			`, participantIds, chatId)
+			`, participantIds, chatId, m.chatUserViewConfig.LastMessageMaxTextPreviewSize)
 	if err != nil {
 		return fmt.Errorf("error during setting last message: %w", err)
 	}

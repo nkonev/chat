@@ -67,6 +67,7 @@ type ChatCreate struct {
 	Title          string
 	ParticipantIds []int64
 	CanResend      bool
+	TetATet        bool
 }
 
 type ChatEdit struct {
@@ -230,6 +231,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus E
 		ChatId:         chatId,
 		Title:          copyCommand.Title,
 		CanResend:      copyCommand.CanResend,
+		TetATet:        copyCommand.TetATet,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {
@@ -246,7 +248,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus E
 	for _, participantId := range copyCommand.ParticipantIds {
 		pa.Participants = append(pa.Participants, ParticipantWithAdmin{
 			ParticipantId: participantId,
-			ChatAdmin:     participantId == behalfUserId,
+			ChatAdmin:     participantId == behalfUserId || copyCommand.TetATet,
 		})
 	}
 
