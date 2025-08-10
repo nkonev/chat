@@ -315,27 +315,28 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		}
 	}
 
-	errOuter := commonProjection.IterateOverChatParticipantIds(ctx, dba, copyCommand.ChatId, nil, func(participantIdsPortion []int64) error {
-		ui := &ChatViewRefreshed{
-			AdditionalData:   copyCommand.AdditionalData,
-			ParticipantIds:   participantIdsPortion,
-			ChatId:           copyCommand.ChatId,
-			ChatCommonAction: ChatCommonActionRefresh,
-			Title:            copyCommand.Title,
-		}
+	if len(copyCommand.ParticipantIdsToAdd) > 0 {
+		errOuter := commonProjection.IterateOverChatParticipantIds(ctx, dba, copyCommand.ChatId, nil, func(participantIdsPortion []int64) error {
+			ui := &ChatViewRefreshed{
+				AdditionalData:     copyCommand.AdditionalData,
+				ParticipantIds:     participantIdsPortion,
+				ChatId:             copyCommand.ChatId,
+				Title:              copyCommand.Title,
+				ParticipantsAction: ParticipantsActionRefresh,
+			}
 
-		if len(copyCommand.ParticipantIdsToAdd) > 0 {
-			ui.ParticipantsAction = ParticipantsActionRefresh
+			errInner := eventBus.Publish(ctx, ui)
+			if errInner != nil {
+				return errInner
+			}
+			return nil
+		})
+		if errOuter != nil {
+			return errOuter
 		}
+	}
 
-		errInner := eventBus.Publish(ctx, ui)
-		if errInner != nil {
-			return errInner
-		}
-		return nil
-	})
-
-	return errOuter
+	return nil
 }
 
 func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {

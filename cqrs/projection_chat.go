@@ -263,17 +263,6 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 			}
 		}
 
-		if event.ChatCommonAction == ChatCommonActionRefresh {
-			_, err := tx.ExecContext(ctx, `
-					UPDATE chat_user_view 
-					SET title = $3
-					WHERE user_id = any($1) and id = $2;
-				`, event.ParticipantIds, event.ChatId, event.Title)
-			if err != nil {
-				return fmt.Errorf("error during increasing unread messages: %w", err)
-			}
-		}
-
 		if event.ParticipantsAction == ParticipantsActionRefresh {
 			_, err := tx.ExecContext(ctx, `
 					with
@@ -467,7 +456,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 	err := sqlscan.Select(ctx, m.db, &list, fmt.Sprintf(`
 		select 
 		    ch.id,
-		    ch.title,
+		    cc.title,
 		    ch.pinned,
 		    coalesce(m.unread_messages, 0) as unread_messages,
 		    ch.last_message_id,
@@ -481,7 +470,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		from chat_user_view ch
 		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = $1)
 		left join blog b on ch.id = b.id
-		left join chat_common cc on cc.id = ch.id
+		join chat_common cc on cc.id = ch.id
 		where ch.user_id = $1 %s
 		order by (ch.pinned, ch.update_date_time, ch.id) %s
 		limit $2 

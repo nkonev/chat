@@ -41,7 +41,6 @@ SELECT create_distributed_table('message', 'chat_id');
 
 create table chat_user_view(
     id bigint not null,
-    title varchar(512) not null,
     pinned boolean not null default false,
     user_id bigint not null,
     update_date_time timestamp not null,

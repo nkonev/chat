@@ -104,12 +104,6 @@ const (
 	LastMessageActionRefresh = iota + 1
 )
 
-type ChatCommonAction int16
-
-const (
-	ChatCommonActionRefresh = iota + 1
-)
-
 type ParticipantsAction int16
 
 const (
@@ -125,7 +119,6 @@ type ChatViewRefreshed struct {
 	Title                string               `json:"title"` // chat title
 	UnreadMessagesAction UnreadMessagesAction `json:"unreadMessagesAction"`
 	LastMessageAction    LastMessageAction    `json:"lastMessageAction"`
-	ChatCommonAction     ChatCommonAction     `json:"chatCommonAction"`
 	ParticipantsAction   ParticipantsAction   `json:"participantsAction"`
 	IncreaseOn           int                  `json:"increaseOn"`
 	OwnerId              int64                `json:"ownerId"` // owner of message

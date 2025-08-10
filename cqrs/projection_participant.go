@@ -67,7 +67,6 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		input_data as (
 			select 
 				c.id as chat_id, 
-				c.title as title, 
 				false as pinned, 
 				u.user_id as user_id, 
 				cast ($3 as timestamp) as update_date_time,
@@ -76,11 +75,10 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			from user_input u
 			cross join (select cc.id, cc.title from chat_common cc where cc.id = $2) c 
 		)
-		insert into chat_user_view(id, title, pinned, user_id, update_date_time, participants_count, participant_ids) 
-			select chat_id, title, pinned, user_id, update_date_time, participants_count, participant_ids from input_data
+		insert into chat_user_view(id, pinned, user_id, update_date_time, participants_count, participant_ids) 
+			select chat_id, pinned, user_id, update_date_time, participants_count, participant_ids from input_data
 		on conflict(user_id, id) do update set
 			pinned = excluded.pinned
-			, title = excluded.title
 			, update_date_time = excluded.update_date_time 
 			, participants_count = excluded.participants_count 
 			, participant_ids = excluded.participant_ids
