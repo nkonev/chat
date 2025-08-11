@@ -16,7 +16,10 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 	_, errInner := tx.ExecContext(ctx, `
 				with blog_message as (
 					select m.* from message m where m.chat_id = $1 and m.blog_post = true
-				)	
+				),
+				set_chat_blog as (
+					update chat_common set blog = true where id = $1
+				)
 				insert into blog(id, owner_id, title, post, preview, create_date_time)
 				select 
 				    cast ($1 as bigint), 
@@ -31,6 +34,16 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 					, post = excluded.post
 					, preview = excluded.preview
 			`, chatId, m.blogViewConfig.MaxTextPreviewSize, createdTime)
+	if errInner != nil {
+		return errInner
+	}
+	return nil
+}
+
+func (m *CommonProjection) removeBlog(ctx context.Context, tx *db.Tx, chatId int64) error {
+	_, errInner := tx.ExecContext(ctx, `
+				delete from blog where id = $1
+			`, chatId)
 	if errInner != nil {
 		return errInner
 	}
@@ -81,7 +94,6 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 			return errInner
 		}
 
-		// TODO think how to "unblog"
 		errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt)
 		if errInner != nil {
 			return errInner

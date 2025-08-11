@@ -120,10 +120,7 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 
 		if blog && !event.Blog {
 			// rm blog
-			_, errInner = tx.ExecContext(ctx, `
-				delete from blog
-				where id = $1
-			`, event.ChatId)
+			err = m.removeBlog(ctx, tx, event.ChatId)
 			if errInner != nil {
 				return errInner
 			}
@@ -181,12 +178,9 @@ func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted
 		}
 
 		if blog {
-			_, errInner = m.db.ExecContext(ctx, `
-			delete from blog
-			where id = $1
-		`, event.ChatId)
-			if errInner != nil {
-				return errInner
+			err = m.removeBlog(ctx, tx, event.ChatId)
+			if err != nil {
+				return err
 			}
 		}
 

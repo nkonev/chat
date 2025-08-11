@@ -1192,7 +1192,10 @@ func TestBlog(t *testing.T) {
 		// await before chat editing
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1Name)
+		// actually not needed
+		// dummy old behaviour. just check for backward compatibility
+		// actually just marking message as blog is enough
+		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1Name, client.NewChatOptionBlog(true))
 		require.NoError(t, err)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
@@ -1219,6 +1222,13 @@ func TestBlog(t *testing.T) {
 		assert.Equal(t, 1, len(comments))
 		assert.Equal(t, message2Id, comments[0].Id)
 		assert.Equal(t, message2Text, comments[0].Content)
+
+		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1Name, client.NewChatOptionBlog(false))
+		require.NoError(t, err, "error in unmaking message blog post")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		blogsNew, err := testRestClient.SearchBlogs(ctx)
+		require.NoError(t, err, "error in searching blog posts")
+		assert.Equal(t, 0, len(blogsNew))
 	})
 }
 
