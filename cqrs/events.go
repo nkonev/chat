@@ -15,6 +15,9 @@ type ChatCreated struct {
 	Title          string          `json:"title"`
 	CanResend      bool            `json:"canResend"`
 	TetATet        bool            `json:"tetATet"`
+	Blog           bool            `json:"blog"`
+	Avatar         *string         `json:"avatar"`
+	AvatarBig      *string         `json:"avatarBig"`
 }
 
 type ChatEdited struct {
@@ -24,6 +27,8 @@ type ChatEdited struct {
 	Blog           bool            `json:"blog"`
 	BehalfUserId   int64           `json:"behalfUserId"`
 	CanResend      bool            `json:"canResend"`
+	Avatar         *string         `json:"avatar"`
+	AvatarBig      *string         `json:"avatarBig"`
 }
 
 type ChatDeleted struct {

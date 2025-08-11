@@ -37,19 +37,28 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 			title,
 			create_date_time,
 			can_resend,
-			tet_a_tet
+			tet_a_tet,
+		    blog,
+			avatar,
+			avatar_big
 		) values (
 			$1, 
 			$2,
 			$3,
 			$4,
-			$5
+			$5,
+		    $6,
+		    $7,
+		    $8
 		)
 		on conflict(id) do update set 
 		    title = excluded.title
 		    ,can_resend = excluded.can_resend
 		    ,tet_a_tet = excluded.tet_a_tet
-	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.CanResend, event.TetATet)
+		    ,blog = excluded.blog
+		    ,avatar = excluded.avatar
+		    ,avatar_big = excluded.avatar_big
+	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.CanResend, event.TetATet, event.Blog, event.Avatar, event.AvatarBig)
 	if err != nil {
 		return err
 	}
@@ -95,9 +104,11 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 			update chat_common
 			set title = $2,
 			    blog = $3,
-			    can_resend = $4
+			    can_resend = $4,
+			    avatar = $5,
+			    avatar_big = $6
 			where id = $1
-		`, event.ChatId, event.Title, event.Blog, event.CanResend)
+		`, event.ChatId, event.Title, event.Blog, event.CanResend, event.Avatar, event.AvatarBig)
 		if errInner != nil {
 			return errInner
 		}
@@ -360,6 +371,7 @@ func enrichChats(behalfUserId int64, chats []dto.ChatViewDto, users map[int64]*d
 				oppositeUser := users[oppositeUserId]
 				if oppositeUser != nil {
 					che.Title = oppositeUser.Login
+					che.Avatar = oppositeUser.Avatar
 				}
 			}
 		}
@@ -411,6 +423,8 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		Blog               bool             `db:"blog"`
 		UpdateDateTime     *time.Time       `db:"update_date_time"`
 		TetATet            bool             `db:"tet_a_tet"`
+		Avatar             *string          `db:"avatar"`
+		AvatarBig          *string          `db:"avatar_big"`
 	}
 
 	list := []chatDto{}
@@ -455,7 +469,9 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		    ch.participant_ids,
 		    b.id is not null as blog,
 		    ch.update_date_time,
-		    cc.tet_a_tet
+		    cc.tet_a_tet,
+			cc.avatar,
+			cc.avatar_big
 		from chat_user_view ch
 		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = $1)
 		left join blog b on ch.id = b.id
@@ -483,6 +499,8 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 			Blog:               de.Blog,
 			UpdateDateTime:     de.UpdateDateTime,
 			TetATet:            de.TetATet,
+			Avatar:             de.Avatar,
+			AvatarBig:          de.AvatarBig,
 		}
 		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {

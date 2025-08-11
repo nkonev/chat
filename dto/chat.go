@@ -19,6 +19,8 @@ type ChatViewDto struct {
 	Blog               bool       `json:"blog"`
 	UpdateDateTime     *time.Time `json:"lastUpdateDateTime"` // for sake compatibility
 	TetATet            bool       `json:"tetATet"`
+	Avatar             *string    `json:"avatar"`
+	AvatarBig          *string    `json:"avatarBig"`
 }
 
 type ChatId struct {

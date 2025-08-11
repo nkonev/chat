@@ -68,6 +68,9 @@ type ChatCreate struct {
 	ParticipantIds []int64
 	CanResend      bool
 	TetATet        bool
+	Blog           bool
+	Avatar         *string
+	AvatarBig      *string
 }
 
 type ChatEdit struct {
@@ -78,6 +81,8 @@ type ChatEdit struct {
 	Blog                bool // desired state
 	BehalfUserId        int64
 	CanResend           bool
+	Avatar              *string
+	AvatarBig           *string
 }
 
 func (cc *ChatEdit) IsValidatabale() bool {
@@ -226,6 +231,9 @@ func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus E
 		if copyCommand.ParticipantIds[0] == copyCommand.ParticipantIds[1] {
 			return 0, NewValidationError("Error during validation: tet-a-tet should have different participants")
 		}
+		if copyCommand.Blog {
+			return 0, NewValidationError("Error during validation: tet-a-tet cannot be blog")
+		}
 	}
 
 	chatId, err := db.TransactWithResult(ctx, dba, func(tx *db.Tx) (int64, error) {
@@ -241,6 +249,9 @@ func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus E
 		Title:          copyCommand.Title,
 		CanResend:      copyCommand.CanResend,
 		TetATet:        copyCommand.TetATet,
+		Blog:           copyCommand.Blog,
+		Avatar:         copyCommand.Avatar,
+		AvatarBig:      copyCommand.AvatarBig,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {
@@ -312,6 +323,8 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		Blog:           copyCommand.Blog,
 		BehalfUserId:   copyCommand.BehalfUserId,
 		CanResend:      copyCommand.CanResend,
+		Avatar:         copyCommand.Avatar,
+		AvatarBig:      copyCommand.AvatarBig,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {

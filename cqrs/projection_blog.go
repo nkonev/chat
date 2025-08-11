@@ -81,6 +81,7 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 			return errInner
 		}
 
+		// TODO think how to "unblog"
 		errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt)
 		if errInner != nil {
 			return errInner

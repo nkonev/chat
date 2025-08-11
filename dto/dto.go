@@ -12,12 +12,14 @@ type ChatCreateDto struct {
 	Title          string  `json:"title"`
 	ParticipantIds []int64 `json:"participantIds"`
 	CanResend      bool    `json:"canResend"`
+	Blog           bool    `json:"blog"`
+	Avatar         *string `json:"avatar"`
+	AvatarBig      *string `json:"avatarBig"`
 }
 
 type ChatEditDto struct {
 	Id int64 `json:"id"`
 	ChatCreateDto
-	Blog bool `json:"blog"`
 }
 
 const EmbedMessageTypeResend = "resend"

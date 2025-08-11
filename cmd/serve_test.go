@@ -73,7 +73,10 @@ func TestUnreads(t *testing.T) {
 
 		ctx := context.Background()
 
-		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		avatar := "http://example.com/avatar.jpg"
+		avatarBig := "http://example.com/avatar-big.jpg"
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionAvatar(&avatar, &avatarBig))
 		require.NoError(t, err, "error in creating chat")
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
@@ -94,6 +97,8 @@ func TestUnreads(t *testing.T) {
 		chat1OfUser1 := user1Chats[0]
 		assert.Equal(t, chat1Name, chat1OfUser1.Title)
 		assert.Equal(t, int64(0), chat1OfUser1.UnreadMessages)
+		assert.Equal(t, avatar, *chat1OfUser1.Avatar)
+		assert.Equal(t, avatarBig, *chat1OfUser1.AvatarBig)
 
 		user2Chats, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
@@ -212,6 +217,8 @@ func TestCreateTetATetChat(t *testing.T) {
 		const user1Login = "admin1"
 		const user2Login = "admin2"
 
+		avatar2 := "http://example.com/avatar-admin2.jpg"
+
 		mockUser1 := dto.User{
 			Id:               user1,
 			Login:            user1Login,
@@ -225,7 +232,7 @@ func TestCreateTetATetChat(t *testing.T) {
 		mockUser2 := dto.User{
 			Id:               user2,
 			Login:            user2Login,
-			Avatar:           nil,
+			Avatar:           &avatar2,
 			ShortInfo:        nil,
 			LoginColor:       nil,
 			LastSeenDateTime: nil,
@@ -247,6 +254,7 @@ func TestCreateTetATetChat(t *testing.T) {
 		assert.Equal(t, 1, len(user1Chats))
 		chat1OfUser1 := user1Chats[0]
 		assert.Equal(t, user2Login, chat1OfUser1.Title)
+		assert.Equal(t, avatar2, *chat1OfUser1.Avatar)
 
 		assert.Equal(t, []int64{2, 1}, chat1OfUser1.ParticipantIds)
 		assert.Equal(t, user2Login, chat1OfUser1.Participants[0].Login)
@@ -806,7 +814,10 @@ func TestAddParticipant(t *testing.T) {
 		assert.Equal(t, []int64{2, 1}, chat1OfUser2.ParticipantIds)
 
 		const chat1NewName = "new chat 1 renamed"
-		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1NewName, false)
+		avatar := "http://example.com/avatar.jpg"
+		avatarBig := "http://example.com/avatar-big.jpg"
+
+		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1NewName, client.NewChatOptionAvatar(&avatar, &avatarBig))
 		require.NoError(t, err, "error in changing chat")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
@@ -815,6 +826,8 @@ func TestAddParticipant(t *testing.T) {
 		assert.Equal(t, 1, len(user1ChatsNew2))
 		chat1OfUser1New2 := user1ChatsNew2[0]
 		assert.Equal(t, chat1NewName, chat1OfUser1New2.Title)
+		assert.Equal(t, avatar, *chat1OfUser1New2.Avatar)
+		assert.Equal(t, avatarBig, *chat1OfUser1New2.AvatarBig)
 		assert.Equal(t, int64(0), chat1OfUser1New2.UnreadMessages)
 		assert.Equal(t, message1.Id, *chat1OfUser1New2.LastMessageId)
 		assert.Equal(t, message1.Content, *chat1OfUser1New2.LastMessageContent)
@@ -1179,7 +1192,7 @@ func TestBlog(t *testing.T) {
 		// await before chat editing
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1Name, false)
+		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1Name)
 		require.NoError(t, err)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 

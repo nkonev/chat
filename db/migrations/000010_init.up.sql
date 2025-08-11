@@ -11,7 +11,9 @@ create table chat_common(
     create_date_time timestamp not null,
     blog boolean not null default false,
     can_resend boolean not null default false,
-    tet_a_tet boolean not null default false
+    tet_a_tet boolean not null default false,
+    avatar text,
+    avatar_big text
 );
 
 create table chat_participant(

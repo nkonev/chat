@@ -64,6 +64,9 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		Title:          ccd.Title,
 		ParticipantIds: ccd.ParticipantIds,
 		CanResend:      ccd.CanResend,
+		Blog:           ccd.Blog,
+		Avatar:         ccd.Avatar,
+		AvatarBig:      ccd.AvatarBig,
 	}
 
 	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy)
@@ -153,6 +156,8 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		Blog:                ccd.Blog,
 		BehalfUserId:        userId,
 		CanResend:           ccd.CanResend,
+		Avatar:              ccd.Avatar,
+		AvatarBig:           ccd.AvatarBig,
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy)

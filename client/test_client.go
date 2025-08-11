@@ -49,6 +49,32 @@ func (r *ChatParamResend) Apply(d *dto.ChatCreateDto) {
 	d.CanResend = r.v
 }
 
+type ChatParamBlog struct {
+	blog bool
+}
+
+func NewChatOptionBlog(blog bool) *ChatParamBlog {
+	return &ChatParamBlog{blog: blog}
+}
+
+func (r *ChatParamBlog) Apply(d *dto.ChatCreateDto) {
+	d.Blog = r.blog
+}
+
+type ChatParamAvatar struct {
+	avatar    *string
+	avatarBig *string
+}
+
+func NewChatOptionAvatar(avatar, avatarBig *string) *ChatParamAvatar {
+	return &ChatParamAvatar{avatar: avatar, avatarBig: avatarBig}
+}
+
+func (r *ChatParamAvatar) Apply(d *dto.ChatCreateDto) {
+	d.Avatar = r.avatar
+	d.AvatarBig = r.avatarBig
+}
+
 func (rc *TestRestClient) CreateChat(ctx context.Context, behalfUserId int64, chatName string, chatCreateOptions ...ChatCreateOption) (int64, error) {
 	req := dto.ChatCreateDto{
 		Title: chatName,
@@ -77,13 +103,20 @@ func (rc *TestRestClient) CreateTetATetChat(ctx context.Context, behalfUserId in
 	return resp.Id, nil
 }
 
-func (rc *TestRestClient) EditChat(ctx context.Context, behalfUserId int64, chatId int64, chatName string, blog bool) error {
+func (rc *TestRestClient) EditChat(ctx context.Context, behalfUserId int64, chatId int64, chatName string, chatCreateOptions ...ChatCreateOption) error {
+	ccd := dto.ChatCreateDto{
+		Title: chatName,
+	}
+
+	for _, opt := range chatCreateOptions {
+		if opt != nil {
+			opt.Apply(&ccd)
+		}
+	}
+
 	req := dto.ChatEditDto{
-		Id: chatId,
-		ChatCreateDto: dto.ChatCreateDto{
-			Title: chatName,
-		},
-		Blog: blog,
+		Id:            chatId,
+		ChatCreateDto: ccd,
 	}
 	err := queryNoResponse[dto.ChatEditDto](ctx, &rc.restClient, behalfUserId, "PUT", "/chat", "chat.Edit", &req, nil)
 	if err != nil {
