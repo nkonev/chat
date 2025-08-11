@@ -4,6 +4,10 @@ type IdResponse struct {
 	Id int64 `json:"id"`
 }
 
+type ErrorMessageDto struct {
+	Message string `json:"message"`
+}
+
 type ChatCreateDto struct {
 	Title          string  `json:"title"`
 	ParticipantIds []int64 `json:"participantIds"`
