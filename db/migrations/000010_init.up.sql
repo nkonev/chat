@@ -9,7 +9,6 @@ create table chat_common(
     title varchar(512) not null,
     last_generated_message_id bigint not null default 0,
     create_date_time timestamp not null,
-    blog boolean not null default false,
     can_resend boolean not null default false,
     tet_a_tet boolean not null default false,
     avatar text,

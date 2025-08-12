@@ -5,20 +5,18 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
 	"time"
+
+	"github.com/georgysavva/scany/v2/sqlscan"
 )
 
 func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId int64, createdTime time.Time) error {
 	_, errInner := tx.ExecContext(ctx, `
 				with blog_message as (
 					select m.* from message m where m.chat_id = $1 and m.blog_post = true
-				),
-				set_chat_blog as (
-					update chat_common set blog = true where id = $1
 				)
 				insert into blog(id, owner_id, title, post, preview, create_date_time)
 				select 
@@ -106,7 +104,7 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 
 func (m *CommonProjection) isChatBlog(ctx context.Context, co db.CommonOperations, chatId int64) (bool, error) {
 	var blog bool
-	err := sqlscan.Get(ctx, co, &blog, "select exists(select * from chat_common where id = $1 and blog = true)", chatId)
+	err := sqlscan.Get(ctx, co, &blog, "select exists(select * from blog where id = $1)", chatId)
 	if err != nil {
 		return false, err
 	}

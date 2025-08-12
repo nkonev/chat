@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/georgysavva/scany/v2/sqlscan"
-	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
 	"slices"
 	"time"
+
+	"github.com/georgysavva/scany/v2/sqlscan"
+	"github.com/jackc/pgtype"
 )
 
 func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32, offset int64) ([]int64, error) {
@@ -38,7 +39,6 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 			create_date_time,
 			can_resend,
 			tet_a_tet,
-		    blog,
 			avatar,
 			avatar_big
 		) values (
@@ -48,17 +48,15 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 			$4,
 			$5,
 		    $6,
-		    $7,
-		    $8
+		    $7
 		)
 		on conflict(id) do update set 
 		    title = excluded.title
 		    ,can_resend = excluded.can_resend
 		    ,tet_a_tet = excluded.tet_a_tet
-		    ,blog = excluded.blog
 		    ,avatar = excluded.avatar
 		    ,avatar_big = excluded.avatar_big
-	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.CanResend, event.TetATet, event.Blog, event.Avatar, event.AvatarBig)
+	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.CanResend, event.TetATet, event.Avatar, event.AvatarBig)
 	if err != nil {
 		return err
 	}
@@ -103,12 +101,11 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 		_, errInner = tx.ExecContext(ctx, `
 			update chat_common
 			set title = $2,
-			    blog = $3,
-			    can_resend = $4,
-			    avatar = $5,
-			    avatar_big = $6
+			    can_resend = $3,
+			    avatar = $4,
+			    avatar_big = $5
 			where id = $1
-		`, event.ChatId, event.Title, event.Blog, event.CanResend, event.Avatar, event.AvatarBig)
+		`, event.ChatId, event.Title, event.CanResend, event.Avatar, event.AvatarBig)
 		if errInner != nil {
 			return errInner
 		}
