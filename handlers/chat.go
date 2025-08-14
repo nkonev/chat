@@ -249,6 +249,56 @@ func (ch *ChatHandler) PinChat(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
+type PutChatNotificationSettingsDto struct {
+	ConsiderMessagesOfThisChatAsUnread bool `json:"considerMessagesOfThisChatAsUnread"`
+}
+
+func (ch *ChatHandler) PutUserChatNotificationSettings(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	req := PutChatNotificationSettingsDto{}
+	err = g.Bind(&req)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding considerMessagesOfThisChatAsUnread", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cc := cqrs.ChatNotificationSettingsSet{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		ChatId:         chatId,
+		Set:            req.ConsiderMessagesOfThisChatAsUnread,
+		ParticipantId:  userId,
+	}
+
+	err = cc.Handle(g.Request.Context(), ch.eventBus)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ChatPin command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.Status(http.StatusOK)
+}
+
+func (ch *ChatHandler) GetUserChatNotificationSettings(g *gin.Context) {
+
+}
+
 func (ch *ChatHandler) SearchChats(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {

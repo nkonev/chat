@@ -68,6 +68,13 @@ type ChatPinned struct {
 	Pinned         bool            `json:"pinned"`
 }
 
+type ChatNotificationSettingsSetted struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ParticipantId  int64           `json:"participantId"`
+	ChatId         int64           `json:"chatId"`
+	Setted         bool            `json:"setted"`
+}
+
 type MessageCommoned struct {
 	Id      int64  `json:"id"` // message id
 	ChatId  int64  `json:"chatId"`
@@ -183,6 +190,10 @@ func (s *ChatPinned) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
+func (s *ChatNotificationSettingsSetted) GetPartitionKey() string {
+	return utils.ToString(s.ChatId)
+}
+
 func (s *MessageCreated) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
@@ -233,6 +244,10 @@ func (s *ParticipantChanged) Name() string {
 
 func (s *ChatPinned) Name() string {
 	return "chatPinned"
+}
+
+func (s *ChatNotificationSettingsSetted) Name() string {
+	return "chatNotificationSettingsSetted"
 }
 
 func (s *MessageCreated) Name() string {

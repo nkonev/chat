@@ -190,6 +190,13 @@ type ChatPin struct {
 	ParticipantId  int64
 }
 
+type ChatNotificationSettingsSet struct {
+	AdditionalData *AdditionalData
+	ChatId         int64
+	Set            bool
+	ParticipantId  int64
+}
+
 type MessageRead struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
@@ -534,6 +541,16 @@ func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error 
 		ParticipantId:  s.ParticipantId,
 		ChatId:         s.ChatId,
 		Pinned:         s.Pin,
+	}
+	return eventBus.Publish(ctx, cp)
+}
+
+func (s *ChatNotificationSettingsSet) Handle(ctx context.Context, eventBus EventBusInterface) error {
+	cp := &ChatNotificationSettingsSetted{
+		AdditionalData: s.AdditionalData,
+		ParticipantId:  s.ParticipantId,
+		ChatId:         s.ChatId,
+		Setted:         s.Set,
 	}
 	return eventBus.Publish(ctx, cp)
 }

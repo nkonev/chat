@@ -214,6 +214,29 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) 
 	return nil
 }
 
+func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context, event *ChatNotificationSettingsSetted) error {
+	_, err := m.db.ExecContext(ctx, `
+		insert into chat_participant_notification(chat_id, user_id, chat_id, user_id)
+		values ($1, $2, $3)
+		on conflict (chat_id, user_id) do update
+		set consider_messages_as_unread = excluded.consider_messages_as_unread
+	`, event.ChatId, event.ParticipantId, event.Setted)
+	if err != nil {
+		return err
+	}
+
+	m.lgr.InfoContext(ctx,
+		"Chat notification settings setted",
+		"user_id", event.ParticipantId,
+		"chat_id", event.ChatId,
+		"setted", event.Setted,
+	)
+
+	// TODO set bools (and add it) onto user_chat_view
+
+	return nil
+}
+
 func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// in oder not to have a potential race condition
