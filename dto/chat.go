@@ -7,20 +7,21 @@ import (
 const NoChatTitle = ""
 
 type ChatViewDto struct {
-	Id                 int64      `json:"id"`
-	Title              string     `json:"title"`
-	Pinned             bool       `json:"pinned"`
-	UnreadMessages     int64      `json:"unreadMessages"`
-	LastMessageId      *int64     `json:"lastMessageId"`
-	LastMessageOwnerId *int64     `json:"lastMessageOwnerId"`
-	LastMessageContent *string    `json:"lastMessageContent"`
-	ParticipantsCount  int64      `json:"participantsCount"`
-	ParticipantIds     []int64    `json:"participantIds"` // ids of last N participants
-	Blog               bool       `json:"blog"`
-	UpdateDateTime     *time.Time `json:"lastUpdateDateTime"` // for sake compatibility
-	TetATet            bool       `json:"tetATet"`
-	Avatar             *string    `json:"avatar"`
-	AvatarBig          *string    `json:"avatarBig"`
+	Id                       int64      `json:"id"`
+	Title                    string     `json:"title"`
+	Pinned                   bool       `json:"pinned"`
+	UnreadMessages           int64      `json:"unreadMessages"`
+	LastMessageId            *int64     `json:"lastMessageId"`
+	LastMessageOwnerId       *int64     `json:"lastMessageOwnerId"`
+	LastMessageContent       *string    `json:"lastMessageContent"`
+	ParticipantsCount        int64      `json:"participantsCount"`
+	ParticipantIds           []int64    `json:"participantIds"` // ids of last N participants
+	Blog                     bool       `json:"blog"`
+	UpdateDateTime           *time.Time `json:"lastUpdateDateTime"` // for sake compatibility
+	TetATet                  bool       `json:"tetATet"`
+	Avatar                   *string    `json:"avatar"`
+	AvatarBig                *string    `json:"avatarBig"`
+	ConsiderMessagesAsUnread bool       `json:"considerMessagesAsUnread"`
 }
 
 type ChatId struct {

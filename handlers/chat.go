@@ -296,7 +296,7 @@ func (ch *ChatHandler) PutUserChatNotificationSettings(g *gin.Context) {
 }
 
 func (ch *ChatHandler) GetUserChatNotificationSettings(g *gin.Context) {
-
+	// TODO implement
 }
 
 func (ch *ChatHandler) SearchChats(g *gin.Context) {

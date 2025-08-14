@@ -216,10 +216,9 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) 
 
 func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context, event *ChatNotificationSettingsSetted) error {
 	_, err := m.db.ExecContext(ctx, `
-		insert into chat_participant_notification(chat_id, user_id, chat_id, user_id)
-		values ($1, $2, $3)
-		on conflict (chat_id, user_id) do update
-		set consider_messages_as_unread = excluded.consider_messages_as_unread
+		update unread_messages_user_view 
+		set consider_messages_as_unread = $3
+		where user_id = $2 and chat_id = 41
 	`, event.ChatId, event.ParticipantId, event.Setted)
 	if err != nil {
 		return err
@@ -232,7 +231,7 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 		"setted", event.Setted,
 	)
 
-	// TODO set bools (and add it) onto user_chat_view
+	// TODO recalculate has_unread_messasges
 
 	return nil
 }
@@ -425,20 +424,21 @@ func makeParticipantsWithAdmin(participants []ParticipantWithAdmin, users map[in
 
 func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool) ([]dto.ChatViewDto, error) {
 	type chatDto struct {
-		Id                 int64            `db:"id"`
-		Title              string           `db:"title"`
-		Pinned             bool             `db:"pinned"`
-		UnreadMessages     int64            `db:"unread_messages"`
-		LastMessageId      *int64           `db:"last_message_id"`
-		LastMessageOwnerId *int64           `db:"last_message_owner_id"`
-		LastMessageContent *string          `db:"last_message_content"`
-		ParticipantsCount  int64            `db:"participants_count"`
-		ParticipantIds     pgtype.Int8Array `db:"participant_ids"` // ids of last N participants
-		Blog               bool             `db:"blog"`
-		UpdateDateTime     *time.Time       `db:"update_date_time"`
-		TetATet            bool             `db:"tet_a_tet"`
-		Avatar             *string          `db:"avatar"`
-		AvatarBig          *string          `db:"avatar_big"`
+		Id                       int64            `db:"id"`
+		Title                    string           `db:"title"`
+		Pinned                   bool             `db:"pinned"`
+		UnreadMessages           int64            `db:"unread_messages"`
+		LastMessageId            *int64           `db:"last_message_id"`
+		LastMessageOwnerId       *int64           `db:"last_message_owner_id"`
+		LastMessageContent       *string          `db:"last_message_content"`
+		ParticipantsCount        int64            `db:"participants_count"`
+		ParticipantIds           pgtype.Int8Array `db:"participant_ids"` // ids of last N participants
+		Blog                     bool             `db:"blog"`
+		UpdateDateTime           *time.Time       `db:"update_date_time"`
+		TetATet                  bool             `db:"tet_a_tet"`
+		Avatar                   *string          `db:"avatar"`
+		AvatarBig                *string          `db:"avatar_big"`
+		ConsiderMessagesAsUnread bool             `db:"consider_messages_as_unread"`
 	}
 
 	list := []chatDto{}
@@ -485,7 +485,8 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		    ch.update_date_time,
 		    cc.tet_a_tet,
 			cc.avatar,
-			cc.avatar_big
+			cc.avatar_big,
+			ch.consider_messages_as_unread
 		from chat_user_view ch
 		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = $1)
 		left join blog b on ch.id = b.id
@@ -502,19 +503,20 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 
 	for i, de := range list {
 		mapped := dto.ChatViewDto{
-			Id:                 de.Id,
-			Title:              de.Title,
-			Pinned:             de.Pinned,
-			UnreadMessages:     de.UnreadMessages,
-			LastMessageId:      de.LastMessageId,
-			LastMessageOwnerId: de.LastMessageOwnerId,
-			LastMessageContent: de.LastMessageContent,
-			ParticipantsCount:  de.ParticipantsCount,
-			Blog:               de.Blog,
-			UpdateDateTime:     de.UpdateDateTime,
-			TetATet:            de.TetATet,
-			Avatar:             de.Avatar,
-			AvatarBig:          de.AvatarBig,
+			Id:                       de.Id,
+			Title:                    de.Title,
+			Pinned:                   de.Pinned,
+			UnreadMessages:           de.UnreadMessages,
+			LastMessageId:            de.LastMessageId,
+			LastMessageOwnerId:       de.LastMessageOwnerId,
+			LastMessageContent:       de.LastMessageContent,
+			ParticipantsCount:        de.ParticipantsCount,
+			Blog:                     de.Blog,
+			UpdateDateTime:           de.UpdateDateTime,
+			TetATet:                  de.TetATet,
+			Avatar:                   de.Avatar,
+			AvatarBig:                de.AvatarBig,
+			ConsiderMessagesAsUnread: de.ConsiderMessagesAsUnread,
 		}
 		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {
