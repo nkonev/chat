@@ -218,9 +218,9 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		_, err := tx.ExecContext(ctx, `
-		update unread_messages_user_view 
+		update chat_user_view 
 		set consider_messages_as_unread = $3
-		where user_id = $2 and chat_id = 41
+		where id = $1 and user_id = $2 
 	`, event.ChatId, event.ParticipantId, event.Setted)
 		if err != nil {
 			return err
@@ -505,7 +505,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		    cc.tet_a_tet,
 			cc.avatar,
 			cc.avatar_big,
-			coalesce(m.consider_messages_as_unread, true) as consider_messages_as_unread
+			coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread
 		from chat_user_view ch
 		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = $1)
 		left join blog b on ch.id = b.id

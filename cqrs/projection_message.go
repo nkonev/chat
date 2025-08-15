@@ -262,11 +262,12 @@ func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, part
 	_, err := tx.ExecContext(ctx, `
 	with input_data as (
 		select 
-			user_id, 
-			coalesce((any_value(unread_messages) filter (where unread_messages > 0 and consider_messages_as_unread)), 0) != 0 as has 
-		from unread_messages_user_view
-		where user_id = any($1)
-		group by (user_id)
+			uv.user_id, 
+			coalesce((any_value(uv.unread_messages) filter (where uv.unread_messages > 0 and ch.consider_messages_as_unread)), 0) != 0 as has 
+		from unread_messages_user_view uv
+		join chat_user_view ch on (uv.user_id, uv.chat_id) = (ch.user_id, ch.id)
+		where uv.user_id = any($1)
+		group by (uv.user_id)
 	)
 	insert into has_unread_messages(user_id, has)
 	select user_id, has from input_data
