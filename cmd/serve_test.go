@@ -187,7 +187,7 @@ func TestUnreads(t *testing.T) {
 		assert.Equal(t, true, user3HasUnreadMessagesNew2)
 
 		const message2Text = "new message 2"
-		_, err = testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text)
+		messageId2, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text)
 		require.NoError(t, err, "error in creating message")
 
 		const message3Text = "new message 3"
@@ -239,6 +239,24 @@ func TestUnreads(t *testing.T) {
 		user3HasUnreadMessagesNew4, err := testRestClient.GetHasUnreadMessages(ctx, user3)
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user3HasUnreadMessagesNew4)
+
+		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, messageId2)
+		require.NoError(t, err, "error in delete message")
+		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, message1Id)
+		require.NoError(t, err, "error in delete message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user1HasUnreadMessagesNew5, err := testRestClient.GetHasUnreadMessages(ctx, user1)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user1HasUnreadMessagesNew5)
+
+		user2HasUnreadMessagesNew5, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user2HasUnreadMessagesNew5)
+
+		user3HasUnreadMessagesNew5, err := testRestClient.GetHasUnreadMessages(ctx, user3)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user3HasUnreadMessagesNew5)
 	})
 }
 
