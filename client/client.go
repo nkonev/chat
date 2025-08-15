@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-cqrs-chat-example/config"
+	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
 	"io"
@@ -37,7 +38,10 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUse
 		"Accept-Encoding": {"gzip, deflate"},
 		"Accept":          {contentType},
 		"Content-Type":    {contentType},
-		"X-UserId":        {utils.ToString(behalfUserId)},
+	}
+
+	if behalfUserId != dto.NonExistentUser {
+		requestHeaders["X-UserId"] = []string{utils.ToString(behalfUserId)}
 	}
 
 	httpReq := &http.Request{

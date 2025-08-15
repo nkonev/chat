@@ -228,7 +228,7 @@ func (rc *TestRestClient) PutUserChatNotificationSettings(ctx context.Context, b
 }
 
 func (rc *TestRestClient) SearchBlogs(ctx context.Context) ([]dto.BlogViewDto, error) {
-	return query[any, []dto.BlogViewDto](ctx, &rc.restClient, 0, http.MethodGet, "/blog/search", "blog.Search", nil, nil)
+	return query[any, []dto.BlogViewDto](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/blog/search", "blog.Search", nil, nil)
 }
 
 type MessageCreateOption interface {
@@ -362,7 +362,7 @@ func (rc *TestRestClient) MakeMessageBlogPost(ctx context.Context, behalfUserId 
 }
 
 func (rc *TestRestClient) SearchBlogComments(ctx context.Context, blogId int64) ([]dto.CommentViewDto, error) {
-	return query[any, []dto.CommentViewDto](ctx, &rc.restClient, 0, http.MethodGet, "/blog/"+utils.ToString(blogId)+"/comment/search", "blog.SearchComments", nil, nil)
+	return query[any, []dto.CommentViewDto](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/blog/"+utils.ToString(blogId)+"/comment/search", "blog.SearchComments", nil, nil)
 }
 
 // You must await after this command, because it takes a time to apply "ParticipantAdd" event
@@ -388,7 +388,7 @@ func (rc *TestRestClient) ChangeChatParticipant(ctx context.Context, behalfUserI
 }
 
 func (rc *TestRestClient) GetChatParticipants(ctx context.Context, chatId int64) ([]dto.UserWithAdmin, error) {
-	return query[any, []dto.UserWithAdmin](ctx, &rc.restClient, 0, http.MethodGet, "/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, nil)
+	return query[any, []dto.UserWithAdmin](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, nil)
 }
 
 func (rc *TestRestClient) ReadMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
@@ -396,5 +396,5 @@ func (rc *TestRestClient) ReadMessage(ctx context.Context, behalfUserId int64, c
 }
 
 func (rc *TestRestClient) HealthCheck(ctx context.Context) error {
-	return queryNoResponse[any](ctx, &rc.restClient, 0, http.MethodGet, "/internal/health", "internal.HealthCheck", nil, nil)
+	return queryNoResponse[any](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/internal/health", "internal.HealthCheck", nil, nil)
 }
