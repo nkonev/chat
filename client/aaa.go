@@ -44,7 +44,7 @@ func (rc *aaaRestClient) GetUsers(ctx context.Context, userIds []int64) ([]*dto.
 	for _, u := range userIds {
 		queryParams.Add("userId", utils.ToString(u))
 	}
-	resp, err := query[any, []*dto.User](ctx, &rc.restClient, 0, "GET", rc.cfg.Aaa.Url.GetUsers, "user.Get", nil, &queryParams)
+	resp, err := query[any, []*dto.User](ctx, &rc.restClient, 0, http.MethodGet, rc.cfg.Aaa.Url.GetUsers, "user.Get", nil, &queryParams)
 	if err != nil {
 		return []*dto.User{}, err
 	}
