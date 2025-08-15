@@ -296,7 +296,30 @@ func (ch *ChatHandler) PutUserChatNotificationSettings(g *gin.Context) {
 }
 
 func (ch *ChatHandler) GetUserChatNotificationSettings(g *gin.Context) {
-	// TODO implement
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cns, err := ch.commonProjection.GetChatNotificationSettings(g.Request.Context(), userId, chatId)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting chat notification settings", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, cns)
 }
 
 func (ch *ChatHandler) SearchChats(g *gin.Context) {

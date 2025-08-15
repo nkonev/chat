@@ -46,3 +46,7 @@ type BasicChatDtoExtended struct {
 	ChatBasic
 	BehalfUserIsParticipant bool `db:"behalf_user_is_participant"`
 }
+
+type UserChatNotificationSettings struct {
+	ConsiderMessagesOfThisChatAsUnread bool `json:"considerMessagesOfThisChatAsUnread" db:"consider_messages_as_unread"`
+}

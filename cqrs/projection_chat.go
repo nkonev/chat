@@ -641,3 +641,17 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 	}
 	return result, nil
 }
+
+func (m *CommonProjection) GetChatNotificationSettings(ctx context.Context, behalfParticipantId int64, chatId int64) (*dto.UserChatNotificationSettings, error) {
+	value := dto.UserChatNotificationSettings{}
+	err := sqlscan.Get(ctx, m.db, &value, "select ch.consider_messages_as_unread from chat_user_view ch where ch.user_id = $1 and ch.id = $2", behalfParticipantId, chatId)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	return &value, err
+}
