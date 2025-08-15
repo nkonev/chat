@@ -548,6 +548,15 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 	return res, nil
 }
 
+func (m *CommonProjection) GetHasUnreadMessages(ctx context.Context, userId int64) (*dto.HasUnreadMessages, error) {
+	var has bool
+	err := sqlscan.Get(ctx, m.db, &has, "select exists (select * from has_unread_messages where user_id = $1 and has = true)", userId)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.HasUnreadMessages{HasUnreadMessages: has}, nil
+}
+
 func (m *CommonProjection) GetChatByUserIdAndChatId(ctx context.Context, userId, chatId int64) (string, error) {
 	var t string
 	err := sqlscan.Get(ctx, m.db, &t, "select c.title from chat_user_view ch join chat_common c on ch.id = c.id where ch.user_id = $1 and ch.id = $2", userId, chatId)

@@ -212,6 +212,14 @@ func (rc *TestRestClient) GetChats(ctx context.Context, behalfUserId int64, chat
 	return query[any, []dto.ChatViewEnrichedDto](ctx, &rc.restClient, behalfUserId, "GET", "/chat/search", "chat.Search", nil, queryParams)
 }
 
+func (rc *TestRestClient) GetHasUnreadMessages(ctx context.Context, behalfUserId int64) (bool, error) {
+	resp, err := query[any, dto.HasUnreadMessages](ctx, &rc.restClient, behalfUserId, "GET", "/chat/has-new-messages", "chat.HasUnreadMessages", nil, nil)
+	if err != nil {
+		return false, err
+	}
+	return resp.HasUnreadMessages, nil
+}
+
 func (rc *TestRestClient) SearchBlogs(ctx context.Context) ([]dto.BlogViewDto, error) {
 	return query[any, []dto.BlogViewDto](ctx, &rc.restClient, 0, "GET", "/blog/search", "blog.Search", nil, nil)
 }

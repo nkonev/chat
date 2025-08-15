@@ -100,9 +100,17 @@ func TestUnreads(t *testing.T) {
 		assert.Equal(t, avatar, *chat1OfUser1.Avatar)
 		assert.Equal(t, avatarBig, *chat1OfUser1.AvatarBig)
 
+		user1HasUnreadMessages, err := testRestClient.GetHasUnreadMessages(ctx, user1)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user1HasUnreadMessages)
+
 		user2Chats, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 0, len(user2Chats))
+
+		user2HasUnreadMessages, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user2HasUnreadMessages)
 
 		user3Chats, err := testRestClient.GetChats(ctx, user3)
 		require.NoError(t, err, "error in getting chats")
@@ -139,12 +147,20 @@ func TestUnreads(t *testing.T) {
 		assert.Equal(t, chat1Name, chat1OfUser2.Title)
 		assert.Equal(t, int64(1), chat1OfUser2.UnreadMessages)
 
+		user2HasUnreadMessagesNew, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user2HasUnreadMessagesNew)
+
 		user3ChatsNew, err := testRestClient.GetChats(ctx, user3)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 1, len(user3ChatsNew))
 		chat1OfUser3 := user3ChatsNew[0]
 		assert.Equal(t, chat1Name, chat1OfUser3.Title)
 		assert.Equal(t, int64(1), chat1OfUser3.UnreadMessages)
+
+		user3HasUnreadMessagesNew, err := testRestClient.GetHasUnreadMessages(ctx, user3)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user3HasUnreadMessagesNew)
 
 		err = testRestClient.ReadMessage(ctx, user2, chat1Id, message1.Id)
 		require.NoError(t, err, "error in reading message")
@@ -156,11 +172,19 @@ func TestUnreads(t *testing.T) {
 		chat1OfUser22 := user2ChatsNew2[0]
 		assert.Equal(t, int64(0), chat1OfUser22.UnreadMessages)
 
+		user2HasUnreadMessagesNew2, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user2HasUnreadMessagesNew2)
+
 		user3ChatsNew2, err := testRestClient.GetChats(ctx, user3)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 1, len(user3ChatsNew2))
 		chat1OfUser32 := user3ChatsNew2[0]
 		assert.Equal(t, int64(1), chat1OfUser32.UnreadMessages)
+
+		user3HasUnreadMessagesNew2, err := testRestClient.GetHasUnreadMessages(ctx, user3)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user3HasUnreadMessagesNew2)
 
 		const message2Text = "new message 2"
 		_, err = testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text)
@@ -178,11 +202,19 @@ func TestUnreads(t *testing.T) {
 		chat1OfUser23 := user2ChatsNew3[0]
 		assert.Equal(t, int64(2), chat1OfUser23.UnreadMessages)
 
+		user2HasUnreadMessagesNew3, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user2HasUnreadMessagesNew3)
+
 		user3ChatsNew3, err := testRestClient.GetChats(ctx, user3)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 1, len(user3ChatsNew3))
 		chat1OfUser33 := user3ChatsNew3[0]
 		assert.Equal(t, int64(3), chat1OfUser33.UnreadMessages)
+
+		user3HasUnreadMessagesNew3, err := testRestClient.GetHasUnreadMessages(ctx, user3)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user3HasUnreadMessagesNew3)
 
 		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, messageId3)
 		require.NoError(t, err, "error in delete message")
@@ -194,11 +226,19 @@ func TestUnreads(t *testing.T) {
 		chat1OfUser24 := user2ChatsNew4[0]
 		assert.Equal(t, int64(1), chat1OfUser24.UnreadMessages)
 
+		user2HasUnreadMessagesNew4, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user2HasUnreadMessagesNew4)
+
 		user3ChatsNew4, err := testRestClient.GetChats(ctx, user3)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 1, len(user3ChatsNew4))
 		chat1OfUser34 := user3ChatsNew4[0]
 		assert.Equal(t, int64(2), chat1OfUser34.UnreadMessages)
+
+		user3HasUnreadMessagesNew4, err := testRestClient.GetHasUnreadMessages(ctx, user3)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user3HasUnreadMessagesNew4)
 	})
 }
 

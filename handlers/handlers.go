@@ -35,6 +35,8 @@ func bindHttpHandlers(
 	ginRouter.GET("/chat/:id/notification", chatHandler.GetUserChatNotificationSettings)
 	ginRouter.GET("/chat/search", chatHandler.SearchChats)
 
+	ginRouter.GET("/chat/has-new-messages", chatHandler.HasNewMessages)
+
 	ginRouter.PUT("/chat/:id/participant", participantHandler.AddParticipant)
 	ginRouter.DELETE("/chat/:id/participant", participantHandler.DeleteParticipant)
 	ginRouter.GET("/chat/:id/participants", participantHandler.GetParticipants)

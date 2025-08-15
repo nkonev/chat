@@ -48,3 +48,7 @@ type ParticipantAddDto struct {
 type ParticipantDeleteDto struct {
 	ParticipantIds []int64 `json:"participantIds"`
 }
+
+type HasUnreadMessages struct {
+	HasUnreadMessages bool `json:"hasUnreadMessages"`
+}
