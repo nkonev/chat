@@ -52,3 +52,7 @@ type ParticipantDeleteDto struct {
 type HasUnreadMessages struct {
 	HasUnreadMessages bool `json:"hasUnreadMessages"`
 }
+
+type PutChatNotificationSettingsDto struct {
+	ConsiderMessagesOfThisChatAsUnread bool `json:"considerMessagesOfThisChatAsUnread"`
+}

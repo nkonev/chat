@@ -220,6 +220,13 @@ func (rc *TestRestClient) GetHasUnreadMessages(ctx context.Context, behalfUserId
 	return resp.HasUnreadMessages, nil
 }
 
+func (rc *TestRestClient) PutUserChatNotificationSettings(ctx context.Context, behalfUserId, chatId int64, consider bool) error {
+	req := dto.PutChatNotificationSettingsDto{
+		ConsiderMessagesOfThisChatAsUnread: consider,
+	}
+	return queryNoResponse[dto.PutChatNotificationSettingsDto](ctx, &rc.restClient, behalfUserId, "PUT", "/chat/"+utils.ToString(chatId)+"/notification", "chat.PutUserChatNotificationSettings", &req, nil)
+}
+
 func (rc *TestRestClient) SearchBlogs(ctx context.Context) ([]dto.BlogViewDto, error) {
 	return query[any, []dto.BlogViewDto](ctx, &rc.restClient, 0, "GET", "/blog/search", "blog.Search", nil, nil)
 }

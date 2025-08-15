@@ -240,6 +240,22 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user3HasUnreadMessagesNew4)
 
+		err = testRestClient.PutUserChatNotificationSettings(ctx, user2, chat1Id, false)
+		require.NoError(t, err, "error in setting contribute into has new messages")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user2HasUnreadMessagesNew41, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user2HasUnreadMessagesNew41)
+
+		err = testRestClient.PutUserChatNotificationSettings(ctx, user2, chat1Id, true)
+		require.NoError(t, err, "error in setting contribute into has new messages")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user2HasUnreadMessagesNew42, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user2HasUnreadMessagesNew42)
+
 		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, messageId2)
 		require.NoError(t, err, "error in delete message")
 		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, message1Id)

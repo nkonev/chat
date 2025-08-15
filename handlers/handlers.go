@@ -31,10 +31,10 @@ func bindHttpHandlers(
 	ginRouter.PUT("/chat", chatHandler.EditChat)
 	ginRouter.DELETE("/chat/:id", chatHandler.DeleteChat)
 	ginRouter.PUT("/chat/:id/pin", chatHandler.PinChat)
-	ginRouter.PUT("/chat/:id/notification", chatHandler.PutUserChatNotificationSettings)
-	ginRouter.GET("/chat/:id/notification", chatHandler.GetUserChatNotificationSettings)
 	ginRouter.GET("/chat/search", chatHandler.SearchChats)
 
+	ginRouter.PUT("/chat/:id/notification", chatHandler.PutUserChatNotificationSettings)
+	ginRouter.GET("/chat/:id/notification", chatHandler.GetUserChatNotificationSettings)
 	ginRouter.GET("/chat/has-new-messages", chatHandler.HasNewMessages)
 
 	ginRouter.PUT("/chat/:id/participant", participantHandler.AddParticipant)

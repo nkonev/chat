@@ -249,10 +249,6 @@ func (ch *ChatHandler) PinChat(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
-type PutChatNotificationSettingsDto struct {
-	ConsiderMessagesOfThisChatAsUnread bool `json:"considerMessagesOfThisChatAsUnread"`
-}
-
 func (ch *ChatHandler) PutUserChatNotificationSettings(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 
@@ -263,7 +259,7 @@ func (ch *ChatHandler) PutUserChatNotificationSettings(g *gin.Context) {
 		return
 	}
 
-	req := PutChatNotificationSettingsDto{}
+	req := dto.PutChatNotificationSettingsDto{}
 	err = g.Bind(&req)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error binding considerMessagesOfThisChatAsUnread", "err", err)
