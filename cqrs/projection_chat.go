@@ -215,25 +215,35 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) 
 }
 
 func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context, event *ChatNotificationSettingsSetted) error {
-	_, err := m.db.ExecContext(ctx, `
+
+	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		_, err := tx.ExecContext(ctx, `
 		update unread_messages_user_view 
 		set consider_messages_as_unread = $3
 		where user_id = $2 and chat_id = 41
 	`, event.ChatId, event.ParticipantId, event.Setted)
-	if err != nil {
-		return err
-	}
+		if err != nil {
+			return err
+		}
 
-	m.lgr.InfoContext(ctx,
-		"Chat notification settings setted",
-		"user_id", event.ParticipantId,
-		"chat_id", event.ChatId,
-		"setted", event.Setted,
-	)
+		m.lgr.InfoContext(ctx,
+			"Chat notification settings setted",
+			"user_id", event.ParticipantId,
+			"chat_id", event.ChatId,
+			"setted", event.Setted,
+		)
 
-	// TODO recalculate has_unread_messasges
+		err = m.updateHasUnreads(ctx, tx, []int64{event.ParticipantId})
+		if err != nil {
+			return err
+		}
 
-	return nil
+		return nil
+	})
+
+	// TODO send consider_messages_as_unread via event
+
+	return errOuter
 }
 
 func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
@@ -251,7 +261,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 			}
 
 			// not owners
-			if len(participantIdsWithoutOwner) > 0 {
+			if len(participantIdsWithoutOwner) > 0 && event.IncreaseOn > 0 {
 				_, err := tx.ExecContext(ctx, `
 					UPDATE unread_messages_user_view 
 					SET unread_messages = unread_messages + $3
@@ -259,6 +269,15 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 				`, participantIdsWithoutOwner, event.ChatId, event.IncreaseOn)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
+				}
+
+				_, err = tx.ExecContext(ctx, `
+					UPDATE has_unread_messages
+					SET has = true
+					WHERE user_id = any($1)
+				`, participantIdsWithoutOwner)
+				if err != nil {
+					return fmt.Errorf("error during setting has unread messages: %w", err)
 				}
 			}
 
@@ -486,7 +505,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		    cc.tet_a_tet,
 			cc.avatar,
 			cc.avatar_big,
-			ch.consider_messages_as_unread
+			coalesce(m.consider_messages_as_unread, true) as consider_messages_as_unread
 		from chat_user_view ch
 		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = $1)
 		left join blog b on ch.id = b.id

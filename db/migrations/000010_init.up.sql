@@ -58,13 +58,14 @@ create table unread_messages_user_view(
     user_id bigint not null,
     chat_id bigint not null,
     unread_messages bigint not null default 0,
-    consider_messages_as_unread BOOLEAN not null default false,
+    consider_messages_as_unread BOOLEAN not null default true,
     last_message_id bigint not null default 0,
     primary key (user_id, chat_id)
 );
 SELECT create_distributed_table('unread_messages_user_view', 'user_id');
 
--- TODO add "has_unread_messasges" (user_id) table
+create table has_unread_messages(user_id bigint primary key, has boolean not null default false);
+SELECT create_distributed_table('has_unread_messages', 'user_id');
 
 create table technical(
     id int primary key,
