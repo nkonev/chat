@@ -124,6 +124,13 @@ const (
 	ParticipantsActionRefresh = iota + 1
 )
 
+type ReadMessagesAction int16
+
+const (
+	ReadMessagesActionOneMessage = iota + 1
+	ReadMessagesActionAllChats
+)
+
 type ChatViewRefreshed struct {
 	AdditionalData       *AdditionalData      `json:"additionalData"`
 	ParticipantIds       []int64              `json:"participantIds"`
@@ -136,10 +143,11 @@ type ChatViewRefreshed struct {
 }
 
 type MessageReaded struct {
-	AdditionalData *AdditionalData `json:"additionalData"`
-	ParticipantId  int64           `json:"participantId"`
-	ChatId         int64           `json:"chatId"`
-	MessageId      int64           `json:"messageId"`
+	AdditionalData     *AdditionalData    `json:"additionalData"`
+	ParticipantId      int64              `json:"participantId"`
+	ChatId             int64              `json:"chatId"`
+	MessageId          int64              `json:"messageId"`
+	ReadMessagesAction ReadMessagesAction `json:"readMessagesAction"`
 }
 
 type MessageBlogPostMade struct {

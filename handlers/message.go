@@ -226,6 +226,32 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 		ChatId:         chatId,
 		MessageId:      messageId,
 		ParticipantId:  userId,
+		ReadAll:        false,
+	}
+
+	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageRead command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.Status(http.StatusOK)
+}
+
+func (mc *MessageHandler) MarkAsReadAll(g *gin.Context) {
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mr := cqrs.MessageRead{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		ParticipantId:  userId,
+		ReadAll:        true,
 	}
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection)

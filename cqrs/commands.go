@@ -202,6 +202,7 @@ type MessageRead struct {
 	ChatId         int64
 	MessageId      int64
 	ParticipantId  int64
+	ReadAll        bool
 }
 
 type MakeMessageBlogPost struct {
@@ -632,26 +633,41 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 }
 
 func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, commonProjection *CommonProjection) error {
-
-	lastMessageReadedId, lastMessgeReadedExists, maxMessageId, err := commonProjection.GetLastMessageReaded(ctx, s.ChatId, s.ParticipantId)
-	if err != nil {
-		return err
-	}
-
-	messageIdToMark := s.MessageId
-
-	if s.MessageId > maxMessageId {
-		messageIdToMark = maxMessageId
-	}
-
-	if (lastMessgeReadedExists && messageIdToMark > lastMessageReadedId) || (!lastMessgeReadedExists && lastMessageReadedId == 0) {
+	if s.ReadAll {
 		cp := &MessageReaded{
-			AdditionalData: s.AdditionalData,
-			ParticipantId:  s.ParticipantId,
-			ChatId:         s.ChatId,
-			MessageId:      messageIdToMark,
+			AdditionalData:     s.AdditionalData,
+			ParticipantId:      s.ParticipantId,
+			ReadMessagesAction: ReadMessagesActionAllChats,
 		}
-		return eventBus.Publish(ctx, cp)
+		err := eventBus.Publish(ctx, cp)
+		if err != nil {
+			return err
+		}
+	} else {
+		lastMessageReadedId, lastMessgeReadedExists, maxMessageId, err := commonProjection.GetLastMessageReaded(ctx, s.ChatId, s.ParticipantId)
+		if err != nil {
+			return err
+		}
+
+		messageIdToMark := s.MessageId
+
+		if s.MessageId > maxMessageId {
+			messageIdToMark = maxMessageId
+		}
+
+		if (lastMessgeReadedExists && messageIdToMark > lastMessageReadedId) || (!lastMessgeReadedExists && lastMessageReadedId == 0) {
+			cp := &MessageReaded{
+				AdditionalData:     s.AdditionalData,
+				ParticipantId:      s.ParticipantId,
+				ChatId:             s.ChatId,
+				MessageId:          messageIdToMark,
+				ReadMessagesAction: ReadMessagesActionOneMessage,
+			}
+			err = eventBus.Publish(ctx, cp)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

@@ -395,6 +395,10 @@ func (rc *TestRestClient) ReadMessage(ctx context.Context, behalfUserId int64, c
 	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/read", "message.Read", nil, nil)
 }
 
+func (rc *TestRestClient) ReadAllMessages(ctx context.Context, behalfUserId int64) error {
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/read", "message.ReadAll", nil, nil)
+}
+
 func (rc *TestRestClient) HealthCheck(ctx context.Context) error {
 	return queryNoResponse[any](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/internal/health", "internal.HealthCheck", nil, nil)
 }

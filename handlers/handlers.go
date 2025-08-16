@@ -46,6 +46,7 @@ func bindHttpHandlers(
 	ginRouter.PUT("/api/chat/:id/message", messageHandler.EditMessage)
 	ginRouter.DELETE("/api/chat/:id/message/:messageId", messageHandler.DeleteMessage)
 	ginRouter.PUT("/api/chat/:id/message/:messageId/read", messageHandler.ReadMessage)
+	ginRouter.PUT("/api/chat/read", messageHandler.MarkAsReadAll)
 	ginRouter.GET("/api/chat/:id/message/search", messageHandler.SearchMessages)
 	ginRouter.PUT("/api/chat/:id/message/:messageId/blog-post", messageHandler.MakeBlogPost)
 

@@ -293,7 +293,19 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 	// but we give a chance to create a row unread_messages_user_view in case lack of it
 	// so message read event has a self-healing effect
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		return m.setUnreadMessages(ctx, tx, []int64{event.ParticipantId}, event.ChatId, event.MessageId, false, false)
+		if event.ReadMessagesAction == ReadMessagesActionOneMessage {
+			return m.setUnreadMessages(ctx, tx, []int64{event.ParticipantId}, event.ChatId, event.MessageId, false, false)
+		} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
+			_, err := tx.ExecContext(ctx, `
+				update unread_messages_user_view uv set unread_messages = 0, last_message_id = (select m.last_message_id from chat_user_view m where m.user_id = $1 and m.id = chat_id) where uv.user_id = $1
+			`, event.ParticipantId)
+			if err != nil {
+				return err
+			}
+			_, err = tx.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", event.ParticipantId)
+			return err
+		}
+		return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
 	})
 	if errOuter != nil {
 		return fmt.Errorf("error during read messages: %w", errOuter)
