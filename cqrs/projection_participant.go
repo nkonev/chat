@@ -141,6 +141,11 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *Part
 			return err
 		}
 
+		err = m.updateHasUnreads(ctx, tx, event.ParticipantIds)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if errOuter != nil {

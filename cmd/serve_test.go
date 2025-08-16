@@ -1041,6 +1041,10 @@ func TestDeleteParticipant(t *testing.T) {
 		assert.Equal(t, int64(2), chat1OfUser2.ParticipantsCount)
 		assert.Equal(t, []int64{2, 1}, chat1OfUser2.ParticipantIds)
 
+		user2HasUnreadMessages, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user2HasUnreadMessages)
+
 		err = testRestClient.DeleteChatParticipants(ctx, user1, chat1Id, []int64{user2})
 		require.NoError(t, err, "error in removing chat participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
@@ -1048,6 +1052,11 @@ func TestDeleteParticipant(t *testing.T) {
 		user2ChatsNew2, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 0, len(user2ChatsNew2))
+
+		// after removing from chat user 2 got no unread messages
+		user2HasUnreadMessagesNew2, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user2HasUnreadMessagesNew2)
 
 		chat1Participants2, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in chat participants")

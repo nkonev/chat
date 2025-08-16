@@ -257,20 +257,31 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 	return nil
 }
 
-// should be called after upserting into unread_messages_user_view
+// should be called after upserting into unread_messages_user_view otherwise it's going to reset has to false
 func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, participantIds []int64) error {
 	_, err := tx.ExecContext(ctx, `
-	with input_data as (
+	with
+	normalized_user as (
+		select unnest(cast ($1 as bigint[])) as user_id
+	),	
+	users_hases as (
 		select 
 			uv.user_id, 
-			coalesce((any_value(uv.unread_messages) filter (where uv.unread_messages > 0 and ch.consider_messages_as_unread)), 0) != 0 as has 
+			(any_value(uv.unread_messages) filter (where uv.unread_messages > 0 and ch.consider_messages_as_unread)) != 0 as has 
 		from unread_messages_user_view uv
 		join chat_user_view ch on (uv.user_id, uv.chat_id) = (ch.user_id, ch.id)
-		where uv.user_id = any($1)
+		where uv.user_id = any(array[$1])
 		group by (uv.user_id)
+	),
+	normalized_users_hases as (
+		select 
+			nu.user_id,
+			coalesce(uh.has, false) as has
+		from normalized_user nu
+		left join users_hases uh on nu.user_id = uh.user_id
 	)
 	insert into has_unread_messages(user_id, has)
-	select user_id, has from input_data
+	select user_id, has from normalized_users_hases
 	on conflict (user_id) do update
 	set has = excluded.has
 	`, participantIds)
