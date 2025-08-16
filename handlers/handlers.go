@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/logger"
@@ -18,6 +19,8 @@ import (
 )
 
 const headerTraceId = "trace-id"
+const headerUserId = "X-UserId"
+const headerCorrelationId = "X-CorrelationId"
 
 func bindHttpHandlers(
 	ginRouter *gin.Engine,
@@ -60,8 +63,19 @@ func bindHttpHandlers(
 }
 
 func getUserId(g *gin.Context) (int64, error) {
-	uh := g.Request.Header.Get("X-UserId")
+	uh := g.Request.Header.Get(headerUserId)
 	return utils.ParseInt64(uh)
+}
+
+func getCorrelationId(g *gin.Context) *string {
+	ch := g.Request.Header.Get(headerCorrelationId)
+	if len(ch) > 0 {
+		_, err := uuid.Parse(ch)
+		if err == nil {
+			return &ch
+		}
+	}
+	return nil
 }
 
 func ConfigureHttpServer(

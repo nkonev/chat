@@ -60,7 +60,7 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatCreate{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		Title:          ccd.Title,
 		ParticipantIds: ccd.ParticipantIds,
 		CanResend:      ccd.CanResend,
@@ -106,7 +106,7 @@ func (ch *ChatHandler) CreateTetAChat(g *gin.Context) {
 	tetATetChatName := fmt.Sprintf("tet_a_tet_%v_%v", userId, oppositeUserId)
 
 	cc := cqrs.ChatCreate{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		Title:          tetATetChatName,
 		ParticipantIds: []int64{oppositeUserId},
 		TetATet:        true,
@@ -149,7 +149,7 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatEdit{
-		AdditionalData:      cqrs.GenerateMessageAdditionalData(),
+		AdditionalData:      cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ChatId:              ccd.Id,
 		Title:               ccd.Title,
 		ParticipantIdsToAdd: ccd.ParticipantIds,
@@ -192,7 +192,7 @@ func (ch *ChatHandler) DeleteChat(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatDelete{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ChatId:         chatId,
 		BehalfUserId:   userId,
 	}
@@ -233,7 +233,7 @@ func (ch *ChatHandler) PinChat(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatPin{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ChatId:         chatId,
 		Pin:            pin,
 		ParticipantId:  userId,
@@ -275,7 +275,7 @@ func (ch *ChatHandler) PutUserChatNotificationSettings(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatNotificationSettingsSet{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ChatId:         chatId,
 		Set:            req.ConsiderMessagesOfThisChatAsUnread,
 		ParticipantId:  userId,

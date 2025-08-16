@@ -6,7 +6,8 @@ import (
 )
 
 type AdditionalData struct {
-	CreatedAt time.Time `json:"createdAt"`
+	CreatedAt     time.Time `json:"createdAt"`
+	CorrelationId *string   `json:"correlationId"`
 }
 
 type ChatCreated struct {
@@ -164,9 +165,10 @@ type MessageDeleted struct {
 	MessageId      int64           `json:"messageId"`
 }
 
-func GenerateMessageAdditionalData() *AdditionalData {
+func GenerateMessageAdditionalData(correlationId *string) *AdditionalData {
 	return &AdditionalData{
-		CreatedAt: time.Now().UTC(),
+		CreatedAt:     time.Now().UTC(),
+		CorrelationId: correlationId,
 	}
 }
 

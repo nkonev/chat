@@ -73,7 +73,7 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 	}
 
 	cc := cqrs.MessageCreate{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ChatId:         chatId,
 		Content:        mcd.Content,
 		OwnerId:        userId,
@@ -128,7 +128,7 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 	}
 
 	cc := cqrs.MessageEdit{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		MessageId:      ccd.Id,
 		ChatId:         chatId,
 		Content:        ccd.Content,
@@ -180,7 +180,7 @@ func (mc *MessageHandler) DeleteMessage(g *gin.Context) {
 	}
 
 	cc := cqrs.MessageDelete{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		MessageId:      messageId,
 		ChatId:         chatId,
 	}
@@ -222,7 +222,7 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 	}
 
 	mr := cqrs.MessageRead{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ChatId:         chatId,
 		MessageId:      messageId,
 		ParticipantId:  userId,
@@ -249,7 +249,7 @@ func (mc *MessageHandler) MarkAsReadAll(g *gin.Context) {
 	}
 
 	mr := cqrs.MessageRead{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ParticipantId:  userId,
 		ReadAll:        true,
 	}
@@ -290,7 +290,7 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 	}
 
 	mr := cqrs.MakeMessageBlogPost{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ChatId:         chatId,
 		MessageId:      messageId,
 		BlogPost:       true,

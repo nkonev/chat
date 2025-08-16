@@ -63,7 +63,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 	}
 
 	cc := cqrs.ParticipantAdd{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ParticipantIds: ccd.ParticipantIds,
 		ChatId:         chatId,
 		BehalfUserId:   userId,
@@ -110,7 +110,7 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 	}
 
 	cc := cqrs.ParticipantDelete{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ParticipantIds: ccd.ParticipantIds,
 		ChatId:         chatId,
 		BehalfUserId:   userId,
@@ -157,7 +157,7 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 	newAdmin := utils.GetBoolean(g.Query(dto.AdminParam))
 
 	cc := cqrs.ParticipantChange{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ParticipantId:  interestingUserId,
 		ChatId:         chatId,
 		BehalfUserId:   userId,

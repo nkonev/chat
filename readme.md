@@ -77,6 +77,10 @@ curl -Ss -X GET --url 'http://localhost:8080/api/blog/search' | jq
 curl -Ss -X GET --url 'http://localhost:8080/api/blog/1' | jq
 curl -Ss -X GET --url 'http://localhost:8080/api/blog/1/comment/search' | jq
 
+# with correlation id
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' -H 'X-CorrelationId: 9e49b4dd-4068-4c6a-ada0-da78f44bdeba' --url 'http://localhost:8080/api/chat' -d '{"title": "new chat"}'
+# then see kafka
+
 # reset offsets for consumer groups
 go run . reset
 ```
