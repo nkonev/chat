@@ -65,8 +65,8 @@ curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/chat/has-new-messa
 # read
 curl -i -X PUT -H 'X-UserId: 2' --url 'http://localhost:8080/chat/1/message/500/read'
 
-# ... or set cont to consider (contribute)
-curl -i -X PUT -H 'X-UserId: 2' --url 'http://localhost:8080/chat/2/notification' -d '{"considerMessagesOfThisChatAsUnread": false}'
+# ... or set to consider (contribute)
+curl -i -X PUT -H 'Content-Type: application/json' -H 'X-UserId: 2' --url 'http://localhost:8080/chat/2/notification' -d '{"considerMessagesOfThisChatAsUnread": false}'
 
 # make blog
 curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:8080/chat' -d '{"id": 1, "title": "new chat", "blog": true}'
