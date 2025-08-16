@@ -19,63 +19,63 @@ go run . serve
 # Play with
 ```bash
 # create a chat
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat' -d '{"title": "new chat"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat' -d '{"title": "new chat"}'
 
 # rename the chat
-curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:8080/chat' -d '{"id": 1, "title": "super new chat"}'
+curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:8080/api/chat' -d '{"id": 1, "title": "super new chat"}'
 
 # show chats
-curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/chat/search' | jq
+curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/search' | jq
 # show chats with pagination
-curl -Ss -X GET --url 'http://localhost:8080/chat/search?size=40&pinned=false&lastUpdateDateTime=2024-10-31T22:37:34.643937Z&id=477&reverse=true&includeStartingFrom=true' -H 'Accept: application/json' -H 'X-UserId: 1' | jq
-curl -Ss -X GET --url 'http://localhost:8080/chat/search?size=40reverse=false&includeStartingFrom=true' -H 'Accept: application/json' -H 'X-UserId: 1' | jq
+curl -Ss -X GET --url 'http://localhost:8080/api/chat/search?size=40&pinned=false&lastUpdateDateTime=2024-10-31T22:37:34.643937Z&id=477&reverse=true&includeStartingFrom=true' -H 'Accept: application/json' -H 'X-UserId: 1' | jq
+curl -Ss -X GET --url 'http://localhost:8080/api/chat/search?size=40reverse=false&includeStartingFrom=true' -H 'Accept: application/json' -H 'X-UserId: 1' | jq
 
 # pin chat
-curl -i -X PUT -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/pin?pin=true'
+curl -i -X PUT -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/pin?pin=true'
 
 # create a message
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message' -d '{"content": "new message"}'
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message' -d '{"content": "new message 2"}'
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message' -d '{"content": "new message 3"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message' -d '{"content": "new message"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message' -d '{"content": "new message 2"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message' -d '{"content": "new message 3"}'
 
 # show messages
-curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message/search' | jq
+curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message/search' | jq
 
 # read message
-curl -i -X PUT -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message/2/read'
+curl -i -X PUT -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message/2/read'
 
 # add participant into chat
-curl -i -X PUT -H 'X-UserId: 1' -H 'Content-Type: application/json' --url 'http://localhost:8080/chat/1/participant' -d '{"participantIds": [2, 3]}'
+curl -i -X PUT -H 'X-UserId: 1' -H 'Content-Type: application/json' --url 'http://localhost:8080/api/chat/1/participant' -d '{"participantIds": [2, 3]}'
 
 # remove participant from chat
-curl -i -X DELETE -H 'Content-Type: application/json' --url 'http://localhost:8080/chat/1/participant' -d '{"participantIds": [3]}'
+curl -i -X DELETE -H 'Content-Type: application/json' --url 'http://localhost:8080/api/chat/1/participant' -d '{"participantIds": [3]}'
 
 # show participants
-curl -Ss -X GET --url 'http://localhost:8080/chat/1/participants' | jq
+curl -Ss -X GET --url 'http://localhost:8080/api/chat/1/participants' | jq
 
 # get his chats - show unreads
-curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/chat/search' | jq
+curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/api/chat/search' | jq
 
 # remove message from chat
-curl -i -X DELETE  -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message/1'
+curl -i -X DELETE  -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message/1'
 
 # show has new messages (unreads)
-curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/chat/has-new-messages' | jq
+curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/api/chat/has-new-messages' | jq
 
 # read
-curl -i -X PUT -H 'X-UserId: 2' --url 'http://localhost:8080/chat/1/message/500/read'
+curl -i -X PUT -H 'X-UserId: 2' --url 'http://localhost:8080/api/chat/1/message/500/read'
 
 # ... or set to consider (contribute)
-curl -i -X PUT -H 'Content-Type: application/json' -H 'X-UserId: 2' --url 'http://localhost:8080/chat/2/notification' -d '{"considerMessagesOfThisChatAsUnread": false}'
+curl -i -X PUT -H 'Content-Type: application/json' -H 'X-UserId: 2' --url 'http://localhost:8080/api/chat/2/notification' -d '{"considerMessagesOfThisChatAsUnread": false}'
 
 # make blog
-curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:8080/chat' -d '{"id": 1, "title": "new chat", "blog": true}'
-curl -i -X PUT --url 'http://localhost:8080/chat/1/message/1/blog-post'
+curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:8080/api/chat' -d '{"id": 1, "title": "new chat", "blog": true}'
+curl -i -X PUT --url 'http://localhost:8080/api/chat/1/message/1/blog-post'
 
 # show blog
-curl -Ss -X GET --url 'http://localhost:8080/blog/search' | jq
-curl -Ss -X GET --url 'http://localhost:8080/blog/1' | jq
-curl -Ss -X GET --url 'http://localhost:8080/blog/1/comment/search' | jq
+curl -Ss -X GET --url 'http://localhost:8080/api/blog/search' | jq
+curl -Ss -X GET --url 'http://localhost:8080/api/blog/1' | jq
+curl -Ss -X GET --url 'http://localhost:8080/api/blog/1/comment/search' | jq
 
 # reset offsets for consumer groups
 go run . reset
@@ -106,48 +106,6 @@ docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstra
 docker rm -f postgresql
 docker volume rm go-cqrs-example_postgres_data
 docker compose up -d postgresql
-```
-
-# Testcases
-```bash
-# unreads
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat' -d '{"title": "new chat"}'
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message' -d '{"content": "new message"}'
-curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/chat/search' | jq
-curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:8080/chat/1/participant' -d '{"participantIds": [2, 3]}'
-curl -Ss -X GET --url 'http://localhost:8080/chat/1/participants' | jq
-curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/chat/search' | jq
-curl -Ss -X GET -H 'X-UserId: 3' --url 'http://localhost:8080/chat/search' | jq
-curl -i -X PUT -H 'X-UserId: 2' --url 'http://localhost:8080/chat/1/message/1/read'
-curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/chat/search' | jq
-curl -Ss -X GET -H 'X-UserId: 3' --url 'http://localhost:8080/chat/search' | jq
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message' -d '{"content": "new message 2"}'
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message' -d '{"content": "new message 3"}'
-curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/chat/search' | jq
-curl -Ss -X GET -H 'X-UserId: 3' --url 'http://localhost:8080/chat/search' | jq
-curl -i -X DELETE  -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message/3'
-curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/chat/search' | jq
-curl -Ss -X GET -H 'X-UserId: 3' --url 'http://localhost:8080/chat/search' | jq
-```
-
-```bash
-# exporting and importing
-go run . serve
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat' -d '{"title": "new chat"}'
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message' -d '{"content": "new message"}'
-Ctrl + C
-
-go run . export > /tmp/event.json
-
-docker compose down -v
-docker compose up -d
-
-cat /tmp/event.json | go run . import
-go run . serve
-
-curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/chat/search' | jq
-curl -Ss -X GET --url 'http://localhost:8080/chat/1/participants' | jq
-curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message/search' | jq
 ```
 
 ```sql

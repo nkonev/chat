@@ -86,7 +86,7 @@ func (rc *TestRestClient) CreateChat(ctx context.Context, behalfUserId int64, ch
 		}
 	}
 
-	resp, err := query[dto.ChatCreateDto, dto.IdResponse](ctx, &rc.restClient, behalfUserId, http.MethodPost, "/chat", "chat.Create", &req, nil)
+	resp, err := query[dto.ChatCreateDto, dto.IdResponse](ctx, &rc.restClient, behalfUserId, http.MethodPost, "/api/chat", "chat.Create", &req, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -94,7 +94,7 @@ func (rc *TestRestClient) CreateChat(ctx context.Context, behalfUserId int64, ch
 }
 
 func (rc *TestRestClient) CreateTetATetChat(ctx context.Context, behalfUserId int64, oppositeUserId int64) (int64, error) {
-	strUrl := fmt.Sprintf("/chat/tet-a-tet/%d", oppositeUserId)
+	strUrl := fmt.Sprintf("/api/chat/tet-a-tet/%d", oppositeUserId)
 
 	resp, err := query[any, dto.IdResponse](ctx, &rc.restClient, behalfUserId, http.MethodPut, strUrl, "chat.CreateTetATet", nil, nil)
 	if err != nil {
@@ -118,7 +118,7 @@ func (rc *TestRestClient) EditChat(ctx context.Context, behalfUserId int64, chat
 		Id:            chatId,
 		ChatCreateDto: ccd,
 	}
-	err := queryNoResponse[dto.ChatEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/chat", "chat.Edit", &req, nil)
+	err := queryNoResponse[dto.ChatEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat", "chat.Edit", &req, nil)
 	if err != nil {
 		return err
 	}
@@ -126,11 +126,11 @@ func (rc *TestRestClient) EditChat(ctx context.Context, behalfUserId int64, chat
 }
 
 func (rc *TestRestClient) PinChat(ctx context.Context, behalfUserId int64, chatId int64, pin bool) error {
-	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/chat/"+utils.ToString(chatId)+"/pin?pin="+utils.ToString(pin), "chat.Pin", nil, nil)
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/pin?pin="+utils.ToString(pin), "chat.Pin", nil, nil)
 }
 
 func (rc *TestRestClient) DeleteChat(ctx context.Context, behalfUserId int64, chatId int64) error {
-	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodDelete, "/chat/"+utils.ToString(chatId), "chat.Delete", nil, nil)
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodDelete, "/api/chat/"+utils.ToString(chatId), "chat.Delete", nil, nil)
 }
 
 type ChatGetOption interface {
@@ -209,11 +209,11 @@ func (rc *TestRestClient) GetChats(ctx context.Context, behalfUserId int64, chat
 		}
 	}
 
-	return query[any, []dto.ChatViewEnrichedDto](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/chat/search", "chat.Search", nil, queryParams)
+	return query[any, []dto.ChatViewEnrichedDto](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/search", "chat.Search", nil, queryParams)
 }
 
 func (rc *TestRestClient) GetHasUnreadMessages(ctx context.Context, behalfUserId int64) (bool, error) {
-	resp, err := query[any, dto.HasUnreadMessages](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/chat/has-new-messages", "chat.HasUnreadMessages", nil, nil)
+	resp, err := query[any, dto.HasUnreadMessages](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/has-new-messages", "chat.HasUnreadMessages", nil, nil)
 	if err != nil {
 		return false, err
 	}
@@ -224,11 +224,11 @@ func (rc *TestRestClient) PutUserChatNotificationSettings(ctx context.Context, b
 	req := dto.PutChatNotificationSettingsDto{
 		ConsiderMessagesOfThisChatAsUnread: consider,
 	}
-	return queryNoResponse[dto.PutChatNotificationSettingsDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/chat/"+utils.ToString(chatId)+"/notification", "chat.PutUserChatNotificationSettings", &req, nil)
+	return queryNoResponse[dto.PutChatNotificationSettingsDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/notification", "chat.PutUserChatNotificationSettings", &req, nil)
 }
 
 func (rc *TestRestClient) SearchBlogs(ctx context.Context) ([]dto.BlogViewDto, error) {
-	return query[any, []dto.BlogViewDto](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/blog/search", "blog.Search", nil, nil)
+	return query[any, []dto.BlogViewDto](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/blog/search", "blog.Search", nil, nil)
 }
 
 type MessageCreateOption interface {
@@ -283,7 +283,7 @@ func (rc *TestRestClient) CreateMessage(ctx context.Context, behalfUserId int64,
 		}
 	}
 
-	resp, err := query[dto.MessageCreateDto, dto.IdResponse](ctx, &rc.restClient, behalfUserId, http.MethodPost, "/chat/"+utils.ToString(chatId)+"/message", "message.Create", &req, nil)
+	resp, err := query[dto.MessageCreateDto, dto.IdResponse](ctx, &rc.restClient, behalfUserId, http.MethodPost, "/api/chat/"+utils.ToString(chatId)+"/message", "message.Create", &req, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -303,11 +303,11 @@ func (rc *TestRestClient) EditMessage(ctx context.Context, behalfUserId int64, c
 		}
 	}
 
-	return queryNoResponse[dto.MessageEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/chat/"+utils.ToString(chatId)+"/message", "message.Edit", &req, nil)
+	return queryNoResponse[dto.MessageEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message", "message.Edit", &req, nil)
 }
 
 func (rc *TestRestClient) DeleteMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
-	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodDelete, "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Delete", nil, nil)
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodDelete, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Delete", nil, nil)
 }
 
 type MessageGetOption interface {
@@ -354,15 +354,15 @@ func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, c
 		}
 	}
 
-	return query[any, []dto.MessageViewEnrichedDto](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/chat/"+utils.ToString(chatId)+"/message/search", "message.Search", nil, queryParams)
+	return query[any, []dto.MessageViewEnrichedDto](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/message/search", "message.Search", nil, queryParams)
 }
 
 func (rc *TestRestClient) MakeMessageBlogPost(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
-	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/blog-post", "message.MakeBlogPost", nil, nil)
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/blog-post", "message.MakeBlogPost", nil, nil)
 }
 
 func (rc *TestRestClient) SearchBlogComments(ctx context.Context, blogId int64) ([]dto.CommentViewDto, error) {
-	return query[any, []dto.CommentViewDto](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/blog/"+utils.ToString(blogId)+"/comment/search", "blog.SearchComments", nil, nil)
+	return query[any, []dto.CommentViewDto](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/blog/"+utils.ToString(blogId)+"/comment/search", "blog.SearchComments", nil, nil)
 }
 
 // You must await after this command, because it takes a time to apply "ParticipantAdd" event
@@ -370,29 +370,29 @@ func (rc *TestRestClient) AddChatParticipants(ctx context.Context, behalfUserId 
 	req := dto.ParticipantAddDto{
 		ParticipantIds: participantIds,
 	}
-	return queryNoResponse[dto.ParticipantAddDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/chat/"+utils.ToString(chatId)+"/participant", "participants.Add", &req, nil)
+	return queryNoResponse[dto.ParticipantAddDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/participant", "participants.Add", &req, nil)
 }
 
 func (rc *TestRestClient) DeleteChatParticipants(ctx context.Context, behalfUserId int64, chatId int64, participantIds []int64) error {
 	req := dto.ParticipantDeleteDto{
 		ParticipantIds: participantIds,
 	}
-	return queryNoResponse[dto.ParticipantDeleteDto](ctx, &rc.restClient, behalfUserId, http.MethodDelete, "/chat/"+utils.ToString(chatId)+"/participant", "participants.Delete", &req, nil)
+	return queryNoResponse[dto.ParticipantDeleteDto](ctx, &rc.restClient, behalfUserId, http.MethodDelete, "/api/chat/"+utils.ToString(chatId)+"/participant", "participants.Delete", &req, nil)
 }
 
 func (rc *TestRestClient) ChangeChatParticipant(ctx context.Context, behalfUserId int64, chatId int64, participantId int64, newAdmin bool) error {
 	query1 := url.Values{
 		dto.AdminParam: []string{utils.ToString(newAdmin)},
 	}
-	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/chat/"+utils.ToString(chatId)+"/participant/"+utils.ToString(participantId), "participants.Change", nil, &query1)
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/participant/"+utils.ToString(participantId), "participants.Change", nil, &query1)
 }
 
 func (rc *TestRestClient) GetChatParticipants(ctx context.Context, chatId int64) ([]dto.UserWithAdmin, error) {
-	return query[any, []dto.UserWithAdmin](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, nil)
+	return query[any, []dto.UserWithAdmin](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, nil)
 }
 
 func (rc *TestRestClient) ReadMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
-	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/read", "message.Read", nil, nil)
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/read", "message.Read", nil, nil)
 }
 
 func (rc *TestRestClient) HealthCheck(ctx context.Context) error {
