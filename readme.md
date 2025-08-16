@@ -39,7 +39,7 @@ curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http
 curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message' -d '{"content": "new message 3"}'
 
 # show messages
-curl -Ss -X GET --url 'http://localhost:8080/chat/1/message/search' | jq
+curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message/search' | jq
 
 # read message
 curl -i -X PUT -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message/2/read'
