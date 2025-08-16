@@ -244,11 +244,17 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in setting contribute into has new messages")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
+		// this message should not contribute into user 2's new messages because user 2 disabled them for chat 1
+		messageId4, err := testRestClient.CreateMessage(ctx, user1, chat1Id, "msg 4")
+		require.NoError(t, err, "error in creating message")
+		assert.True(t, messageId4 > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
 		user2ChatsNew41, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 1, len(user2ChatsNew41))
 		chat1OfUser241 := user2ChatsNew41[0]
-		assert.Equal(t, int64(1), chat1OfUser241.UnreadMessages)
+		assert.Equal(t, int64(2), chat1OfUser241.UnreadMessages)
 		assert.Equal(t, false, chat1OfUser241.ConsiderMessagesAsUnread)
 
 		user2HasUnreadMessagesNew41, err := testRestClient.GetHasUnreadMessages(ctx, user2)
@@ -263,13 +269,15 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 1, len(user2ChatsNew42))
 		chat1OfUser242 := user2ChatsNew42[0]
-		assert.Equal(t, int64(1), chat1OfUser242.UnreadMessages)
+		assert.Equal(t, int64(2), chat1OfUser242.UnreadMessages)
 		assert.Equal(t, true, chat1OfUser242.ConsiderMessagesAsUnread)
 
 		user2HasUnreadMessagesNew42, err := testRestClient.GetHasUnreadMessages(ctx, user2)
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user2HasUnreadMessagesNew42)
 
+		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, messageId4)
+		require.NoError(t, err, "error in delete message")
 		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, messageId2)
 		require.NoError(t, err, "error in delete message")
 		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, message1Id)

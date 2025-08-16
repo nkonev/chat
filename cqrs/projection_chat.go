@@ -271,11 +271,21 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
 
+				// upsert only for sake using CTE
 				_, err = tx.ExecContext(ctx, `
-					UPDATE has_unread_messages
-					SET has = true
-					WHERE user_id = any($1)
-				`, participantIdsWithoutOwner)
+					with input_data as (
+						SELECT 
+							ch.user_id as user_id, 
+							true as has
+						FROM chat_user_view ch 
+						WHERE ch.id = $2 AND ch.user_id = any($1) and ch.consider_messages_as_unread
+					)	
+					insert into has_unread_messages(user_id, has)
+					select idt.user_id, idt.has
+					from input_data idt
+					on conflict (user_id) do update set
+					has = excluded.has
+				`, participantIdsWithoutOwner, event.ChatId)
 				if err != nil {
 					return fmt.Errorf("error during setting has unread messages: %w", err)
 				}
