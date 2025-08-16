@@ -270,10 +270,10 @@ func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, part
 			(any_value(uv.unread_messages) filter (where uv.unread_messages > 0 and ch.consider_messages_as_unread)) != 0 as has 
 		from unread_messages_user_view uv
 		join chat_user_view ch on (uv.user_id, uv.chat_id) = (ch.user_id, ch.id)
-		where uv.user_id = any(array[$1])
+		where uv.user_id = any($1)
 		group by (uv.user_id)
 	),
-	normalized_users_hases as (
+	input_data as (
 		select 
 			nu.user_id,
 			coalesce(uh.has, false) as has
@@ -281,7 +281,7 @@ func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, part
 		left join users_hases uh on nu.user_id = uh.user_id
 	)
 	insert into has_unread_messages(user_id, has)
-	select user_id, has from normalized_users_hases
+	select user_id, has from input_data
 	on conflict (user_id) do update
 	set has = excluded.has
 	`, participantIds)
