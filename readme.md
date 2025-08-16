@@ -45,7 +45,7 @@ curl -Ss -X GET --url 'http://localhost:8080/chat/1/message/search' | jq
 curl -i -X PUT -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message/2/read'
 
 # add participant into chat
-curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:8080/chat/1/participant' -d '{"participantIds": [2, 3]}'
+curl -i -X PUT -H 'X-UserId: 1' -H 'Content-Type: application/json' --url 'http://localhost:8080/chat/1/participant' -d '{"participantIds": [2, 3]}'
 
 # remove participant from chat
 curl -i -X DELETE -H 'Content-Type: application/json' --url 'http://localhost:8080/chat/1/participant' -d '{"participantIds": [3]}'
@@ -58,6 +58,15 @@ curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/chat/search' | jq
 
 # remove message from chat
 curl -i -X DELETE  -H 'X-UserId: 1' --url 'http://localhost:8080/chat/1/message/1'
+
+# show has new messages (unreads)
+curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/chat/has-new-messages' | jq
+
+# read
+curl -i -X PUT -H 'X-UserId: 2' --url 'http://localhost:8080/chat/1/message/500/read'
+
+# ... or set cont to consider (contribute)
+curl -i -X PUT -H 'X-UserId: 2' --url 'http://localhost:8080/chat/2/notification' -d '{"considerMessagesOfThisChatAsUnread": false}'
 
 # make blog
 curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:8080/chat' -d '{"id": 1, "title": "new chat", "blog": true}'
