@@ -22,6 +22,15 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 			return nil
 		}
 
+		participant, err := m.IsParticipant(ctx, tx, event.OwnerId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !participant {
+			m.lgr.InfoContext(ctx, "Skipping MessageCreated because participant isn't participant", "user_id", event.OwnerId, "chat_id", event.ChatId)
+			return nil
+		}
+
 		_, err = tx.ExecContext(ctx, `
 		insert into message(id, chat_id, owner_id, content, embed_message_id, embed_chat_id, embed_owner_id, embed_message_type, create_date_time, update_date_time) 
 			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -294,6 +303,15 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 	// so message read event has a self-healing effect
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		if event.ReadMessagesAction == ReadMessagesActionOneMessage {
+			participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
+			if err != nil {
+				return err
+			}
+			if !participant {
+				m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
+				return nil
+			}
+
 			return m.setUnreadMessages(ctx, tx, []int64{event.ParticipantId}, event.ChatId, event.MessageId, false, false)
 		} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
 			_, err := tx.ExecContext(ctx, `
@@ -310,6 +328,11 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 	if errOuter != nil {
 		return fmt.Errorf("error during read messages: %w", errOuter)
 	}
+	return nil
+}
+
+func (m *CommonProjection) OnMessageReacted(ctx context.Context, event *MessageReacted) error {
+	// TODO
 	return nil
 }
 

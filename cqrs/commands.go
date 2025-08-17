@@ -213,6 +213,14 @@ type MakeMessageBlogPost struct {
 	BehalfUserId   int64
 }
 
+type ReactOnMessage struct {
+	AdditionalData *AdditionalData
+	ChatId         int64
+	MessageId      int64
+	BehalfUserId   int64
+	Reaction       string
+}
+
 func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy) (int64, error) {
 	var copyCommand *ChatCreate
 	err := reprint.FromTo(&sp, &copyCommand)
@@ -563,6 +571,15 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		return 0, err
 	}
 
+	participant, err := commonProjection.IsParticipant(ctx, dba, sp.OwnerId, sp.ChatId)
+	if err != nil {
+		return 0, err
+	}
+
+	if !participant {
+		return 0, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", sp.OwnerId, sp.ChatId))
+	}
+
 	trimmedAndSanitized, err := TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
 	if err != nil {
 		return 0, err
@@ -589,9 +606,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		return 0, err
 	}
 
-	messageId, err := db.TransactWithResult(ctx, dba, func(tx *db.Tx) (int64, error) {
-		return commonProjection.GetNextMessageId(ctx, tx, copyCommand.ChatId)
-	})
+	messageId, err := commonProjection.GetNextMessageId(ctx, dba, copyCommand.ChatId)
 	if err != nil {
 		return 0, err
 	}
@@ -632,7 +647,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 	return messageId, nil
 }
 
-func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, commonProjection *CommonProjection) error {
+func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, commonProjection *CommonProjection, dba *db.DB) error {
 	if s.ReadAll {
 		cp := &MessageReaded{
 			AdditionalData:     s.AdditionalData,
@@ -644,6 +659,15 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 			return err
 		}
 	} else {
+		participant, err := commonProjection.IsParticipant(ctx, dba, s.ParticipantId, s.ChatId)
+		if err != nil {
+			return err
+		}
+
+		if !participant {
+			return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.ParticipantId, s.ChatId))
+		}
+
 		lastMessageReadedId, lastMessgeReadedExists, maxMessageId, err := commonProjection.GetLastMessageReaded(ctx, s.ChatId, s.ParticipantId)
 		if err != nil {
 			return err
@@ -793,6 +817,32 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 			return errOuter
 		}
 	}
+	return nil
+}
+
+func (s *ReactOnMessage) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	participant, err := commonProjection.IsParticipant(ctx, dba, s.BehalfUserId, s.ChatId)
+	if err != nil {
+		return err
+	}
+
+	if !participant {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.BehalfUserId, s.ChatId))
+	}
+
+	cp := &MessageReacted{
+		AdditionalData: s.AdditionalData,
+		ChatId:         s.ChatId,
+		MessageId:      s.MessageId,
+		BehalfUserId:   s.BehalfUserId,
+		Reaction:       s.Reaction,
+	}
+
+	err = eventBus.Publish(ctx, cp)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

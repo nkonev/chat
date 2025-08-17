@@ -229,7 +229,7 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 		ReadAll:        false,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection)
+	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection, mc.dbWrapper)
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageRead command", "err", err)
 		g.Status(http.StatusInternalServerError)
@@ -254,9 +254,61 @@ func (mc *MessageHandler) MarkAsReadAll(g *gin.Context) {
 		ReadAll:        true,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection)
+	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection, mc.dbWrapper)
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageRead command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.Status(http.StatusOK)
+}
+
+func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mid := g.Param(dto.MessageIdParam)
+
+	messageId, err := utils.ParseInt64(mid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	ccd := new(dto.ReactionPutDto)
+
+	err = g.Bind(ccd)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding ReactionPutDto", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mr := cqrs.ReactOnMessage{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		ChatId:         chatId,
+		MessageId:      messageId,
+		BehalfUserId:   userId,
+		Reaction:       ccd.Reaction,
+	}
+
+	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending ReactOnMessage command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -358,17 +410,21 @@ func translateMessageError(g *gin.Context, err error) bool {
 	var mediaOverflowError *cqrs.MediaOverflowErr
 	var validationError *cqrs.ValidationError
 	var chatStillNotExistsError *cqrs.ChatStillNotExistsError
+	var unauthError *cqrs.UnauthorizedError
 	if errors.As(err, &mediaError) {
 		g.JSON(http.StatusBadRequest, &utils.H{"message": mediaError.Error(), "businessErrorCode": badMediaUrl})
 		return true
 	} else if errors.As(err, &mediaOverflowError) {
-		g.JSON(http.StatusBadRequest, &utils.H{"message": mediaOverflowError.Error()})
+		g.JSON(http.StatusBadRequest, &dto.ErrorMessageDto{mediaOverflowError.Error()})
 		return true
 	} else if errors.As(err, &validationError) {
-		g.JSON(http.StatusBadRequest, &utils.H{"message": validationError.Error()})
+		g.JSON(http.StatusBadRequest, &dto.ErrorMessageDto{validationError.Error()})
 		return true
 	} else if errors.As(err, &chatStillNotExistsError) {
 		g.Status(http.StatusTeapot)
+		return true
+	} else if errors.As(err, &unauthError) {
+		g.JSON(http.StatusUnauthorized, &dto.ErrorMessageDto{unauthError.Error()})
 		return true
 	}
 	return false

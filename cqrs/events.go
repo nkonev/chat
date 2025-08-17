@@ -165,6 +165,14 @@ type MessageDeleted struct {
 	MessageId      int64           `json:"messageId"`
 }
 
+type MessageReacted struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ChatId         int64           `json:"chatId"`
+	MessageId      int64           `json:"messageId"`
+	BehalfUserId   int64           `json:"behalfUserId"`
+	Reaction       string          `json:"reaction"`
+}
+
 func GenerateMessageAdditionalData(correlationId *string) *AdditionalData {
 	return &AdditionalData{
 		CreatedAt:     time.Now().UTC(),
@@ -228,6 +236,10 @@ func (s *MessageDeleted) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
+func (s *MessageReacted) GetPartitionKey() string {
+	return utils.ToString(s.ChatId)
+}
+
 func (s *ChatCreated) Name() string {
 	return "chatCreated"
 }
@@ -282,4 +294,8 @@ func (s *MessageBlogPostMade) Name() string {
 
 func (s *MessageDeleted) Name() string {
 	return "messageDeleted"
+}
+
+func (s *MessageReacted) Name() string {
+	return "messageReacted"
 }

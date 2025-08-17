@@ -250,6 +250,7 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(commonProjection.OnUnreadMessageReaded),
 		cqrs.NewGroupEventHandler(commonProjection.OnMessageBlogPostMade),
 		cqrs.NewGroupEventHandler(commonProjection.OnMessageRemoved),
+		cqrs.NewGroupEventHandler(commonProjection.OnMessageReacted),
 	)
 	if err != nil {
 		return nil, err

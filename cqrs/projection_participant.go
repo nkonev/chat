@@ -238,3 +238,12 @@ func (m *CommonProjection) IsChatAdmin(ctx context.Context, co db.CommonOperatio
 	}
 	return admin, nil
 }
+
+func (m *CommonProjection) IsParticipant(ctx context.Context, co db.CommonOperations, userId, chatId int64) (bool, error) {
+	var participant bool
+	err := sqlscan.Get(ctx, co, &participant, "SELECT exists(SELECT * FROM chat_participant WHERE user_id = $1 AND chat_id = $2 LIMIT 1)", userId, chatId)
+	if err != nil {
+		return false, err
+	}
+	return participant, nil
+}

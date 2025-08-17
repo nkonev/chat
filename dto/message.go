@@ -49,3 +49,7 @@ type MessageBasic struct {
 	OwnerId int64  `db:"owner_id"`
 	Content string `db:"content"`
 }
+
+type ReactionPutDto struct {
+	Reaction string `json:"reaction"`
+}

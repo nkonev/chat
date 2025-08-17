@@ -78,9 +78,9 @@ func (m *CommonProjection) InitializeChatIdSequenceIfNeed(ctx context.Context, t
 
 const ChatStillNotExists = -1
 
-func (m *CommonProjection) GetNextMessageId(ctx context.Context, tx *db.Tx, chatId int64) (int64, error) {
+func (m *CommonProjection) GetNextMessageId(ctx context.Context, co db.CommonOperations, chatId int64) (int64, error) {
 	var messageId int64
-	err := sqlscan.Get(ctx, tx, &messageId, "UPDATE chat_common SET last_generated_message_id = last_generated_message_id + 1 WHERE id = $1 RETURNING last_generated_message_id;", chatId)
+	err := sqlscan.Get(ctx, co, &messageId, "UPDATE chat_common SET last_generated_message_id = last_generated_message_id + 1 WHERE id = $1 RETURNING last_generated_message_id;", chatId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// there were no rows, but otherwise no error occurred

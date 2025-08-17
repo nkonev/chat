@@ -384,10 +384,10 @@ func translateChatError(g *gin.Context, err error) bool {
 	var unauthError *cqrs.UnauthorizedError
 	var chatStillNotExistsError *cqrs.ChatStillNotExistsError
 	if errors.As(err, &validationError) {
-		g.JSON(http.StatusBadRequest, &utils.H{"message": validationError.Error()})
+		g.JSON(http.StatusBadRequest, &dto.ErrorMessageDto{validationError.Error()})
 		return true
 	} else if errors.As(err, &unauthError) {
-		g.JSON(http.StatusUnauthorized, dto.ErrorMessageDto{unauthError.Error()})
+		g.JSON(http.StatusUnauthorized, &dto.ErrorMessageDto{unauthError.Error()})
 		return true
 	} else if errors.As(err, &chatStillNotExistsError) {
 		g.Status(http.StatusTeapot)
