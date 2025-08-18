@@ -290,6 +290,14 @@ func (rc *TestRestClient) CreateMessage(ctx context.Context, behalfUserId int64,
 	return resp.Id, nil
 }
 
+func (rc *TestRestClient) Reaction(ctx context.Context, behalfUserId int64, chatId, messageId int64, reaction string) error {
+	req := dto.ReactionPutDto{
+		Reaction: reaction,
+	}
+
+	return queryNoResponse[dto.ReactionPutDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/reaction", "message.Reaction", &req, nil)
+}
+
 func (rc *TestRestClient) EditMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64, text string, messageCreateOptions ...MessageCreateOption) error {
 	req := dto.MessageEditDto{
 		Id: messageId,

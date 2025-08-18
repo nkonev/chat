@@ -405,6 +405,86 @@ func TestReadAll(t *testing.T) {
 	})
 }
 
+func TestReaction(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
+		require.NoError(t, err, "error in adding participants")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		const message11Text = "new message 11"
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message11Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		assert.True(t, message1Id > 0)
+
+		const reaction = "😀"
+
+		err = testRestClient.Reaction(ctx, user1, chat1Id, message1Id, reaction)
+		require.NoError(t, err, "error in reacting on message")
+		err = testRestClient.Reaction(ctx, user2, chat1Id, message1Id, reaction)
+		require.NoError(t, err, "error in reacting on message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		chat1Messages, err := testRestClient.GetMessages(ctx, user1, chat1Id)
+		require.NoError(t, err, "error in getting messages")
+		require.Equal(t, 1, len(chat1Messages))
+		message := chat1Messages[0]
+		assert.Equal(t, message11Text, message.Content)
+		assert.Equal(t, 1, len(message.Reactions))
+		assert.Equal(t, int64(2), message.Reactions[0].Count)
+		assert.Equal(t, reaction, message.Reactions[0].Reaction)
+		assert.Equal(t, 2, len(message.Reactions[0].Users))
+		assert.Equal(t, user2, message.Reactions[0].Users[0].Id)
+		assert.Equal(t, user1, message.Reactions[0].Users[1].Id)
+	})
+}
+
 func TestCreateTetATetChat(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
