@@ -187,6 +187,10 @@ func (mc *MessageHandler) DeleteMessage(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, userId)
 	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageDelete command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -231,6 +235,10 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection, mc.dbWrapper)
 	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageRead command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -256,6 +264,10 @@ func (mc *MessageHandler) MarkAsReadAll(g *gin.Context) {
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection, mc.dbWrapper)
 	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageRead command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -308,6 +320,10 @@ func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
 	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending ReactOnMessage command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -351,6 +367,10 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus)
 	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MakeMessageBlogPost command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return

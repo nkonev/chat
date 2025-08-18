@@ -241,6 +241,10 @@ func (ch *ChatHandler) PinChat(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus)
 	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
 		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ChatPin command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
@@ -283,6 +287,10 @@ func (ch *ChatHandler) PutUserChatNotificationSettings(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus)
 	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
 		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ChatPin command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
