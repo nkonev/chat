@@ -485,6 +485,8 @@ func TestReaction(t *testing.T) {
 	})
 }
 
+// TODO reaction flip
+
 func TestCreateTetATetChat(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
