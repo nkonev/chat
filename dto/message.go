@@ -41,7 +41,8 @@ type MessageViewEnrichedDto struct {
 	CreateDateTime time.Time             `json:"createDateTime"`
 	UpdateDateTime *time.Time            `json:"editDateTime"` // for sake compatibility
 
-	Owner *User `json:"owner"`
+	Owner     *User             `json:"owner"`
+	Reactions []ReactionViewDto `json:"reactions"`
 }
 
 type MessageBasic struct {
@@ -52,4 +53,16 @@ type MessageBasic struct {
 
 type ReactionPutDto struct {
 	Reaction string `json:"reaction"`
+}
+
+type ReactionDto struct {
+	MessageId int64  `db:"message_id"`
+	UserId    int64  `db:"user_id"`
+	Reaction  string `db:"reaction"`
+}
+
+type ReactionViewDto struct {
+	Count    int64   `json:"count"`
+	Users    []*User `json:"users"`
+	Reaction string  `json:"reaction"`
 }

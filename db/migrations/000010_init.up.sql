@@ -40,6 +40,19 @@ create table message(
 );
 SELECT create_distributed_table('message', 'chat_id');
 
+CREATE TABLE message_reaction(
+    chat_id BIGINT,
+    user_id BIGINT NOT NULL,
+    reaction VARCHAR(4) NOT NULL,
+    message_id BIGINT NOT NULL,
+    create_date_time timestamp not null,
+    PRIMARY KEY (chat_id, message_id, user_id, reaction),
+    FOREIGN KEY (message_id, chat_id) REFERENCES message(id, chat_id) ON DELETE CASCADE
+);
+
+-- https://docs.citusdata.com/en/v11.1/develop/api_udf.html#example
+SELECT create_distributed_table('message_reaction', 'chat_id', colocate_with => 'message');
+
 create table chat_user_view(
     id bigint not null,
     pinned boolean not null default false,

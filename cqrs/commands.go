@@ -62,6 +62,18 @@ func NewChatStillNotExistsError(info string) *ChatStillNotExistsError {
 	return &ChatStillNotExistsError{info: info}
 }
 
+type MessageStillNotExistsError struct {
+	info string
+}
+
+func (u *MessageStillNotExistsError) Error() string {
+	return u.info
+}
+
+func NewMessageStillNotExistsError(info string) *MessageStillNotExistsError {
+	return &MessageStillNotExistsError{info: info}
+}
+
 type ChatCreate struct {
 	AdditionalData *AdditionalData
 	Title          string
@@ -828,6 +840,10 @@ func (s *ReactOnMessage) Handle(ctx context.Context, eventBus EventBusInterface,
 
 	if !participant {
 		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.BehalfUserId, s.ChatId))
+	}
+
+	if len(s.Reaction) > 4 || len(s.Reaction) < 1 {
+		return NewValidationError("Wrong length of reaction")
 	}
 
 	cp := &MessageReacted{

@@ -134,9 +134,10 @@ func (lc *LoggerConfig) GetLevel() slog.Leveler {
 }
 
 type MessageConfig struct {
-	AllowedMediaUrls  string // comma-separated
-	AllowedIframeUrls string // comma-separated
-	MaxMedias         int
+	AllowedMediaUrls            string // comma-separated
+	AllowedIframeUrls           string // comma-separated
+	MaxMedias                   int
+	MaxDisplayableReactionUsers int
 }
 
 type AppConfig struct {

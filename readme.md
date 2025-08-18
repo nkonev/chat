@@ -41,6 +41,9 @@ curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http
 # show messages
 curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message/search' | jq
 
+# add a reaction
+curl -i -X PUT -H 'X-UserId: 1' -H 'Content-Type: application/json' --url 'http://localhost:8080/api/chat/1/message/1/reaction' -d '{"reaction": "😀"}'
+
 # read message
 curl -i -X PUT -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message/2/read'
 

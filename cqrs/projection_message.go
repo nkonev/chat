@@ -332,8 +332,28 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 }
 
 func (m *CommonProjection) OnMessageReacted(ctx context.Context, event *MessageReacted) error {
-	// TODO
-	return nil
+	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		messageExists, errInner := m.checkMessageExists(ctx, tx, event.ChatId, event.MessageId)
+		if errInner != nil {
+			return errInner
+		}
+
+		if !messageExists {
+			m.lgr.InfoContext(ctx, "Skipping MessageReacted because there is no message", "chat_id", event.ChatId, "message_id", event.MessageId)
+			return nil
+		}
+
+		_, errInner = tx.ExecContext(ctx, `
+			insert into message_reaction(chat_id, message_id, user_id, reaction, create_date_time)
+			values ($1, $2, $3, $4, $5)
+			on conflict (chat_id, message_id, user_id, reaction) do nothing
+		`, event.ChatId, event.MessageId, event.BehalfUserId, event.Reaction, event.AdditionalData.CreatedAt)
+		if errInner != nil {
+			return errInner
+		}
+		return nil
+	})
+	return errOuter
 }
 
 func (m *CommonProjection) checkMessageExists(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
@@ -401,10 +421,15 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			return nil, err
 		}
 
+		reactions, err := getReactions(ctx, tx, chatId, messages)
+		if err != nil {
+			return nil, fmt.Errorf("Got error during enriching messages with reactions: %v", err)
+		}
+
 		var usersSet = map[int64]bool{}
 		var chatsPreSet = map[int64]bool{}
 		for _, message := range messages {
-			populateSets(&message, usersSet, chatsPreSet, chatId)
+			populateSets(&message, usersSet, chatsPreSet, chatId, m.messageConfig.MaxDisplayableReactionUsers, reactions)
 		}
 		chats, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserId)
 		if err != nil {
@@ -417,15 +442,44 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			m.lgr.WarnContext(ctx, "unable to get users")
 		}
 
-		messagesEnriched := enrichMessages(messages, utils.ToMap(users), chats)
+		messagesEnriched := enrichMessages(messages, utils.ToMap(users), chats, reactions)
 		return messagesEnriched, nil
 	})
-
 }
 
-func populateSets(message *dto.MessageViewDto, ownersSet map[int64]bool, chatsPreSet map[int64]bool, chatId int64) {
+func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, list []dto.MessageViewDto) (map[int64][]dto.ReactionDto, error) {
+	messageIds := make([]int64, 0)
+	for _, message := range list {
+		messageIds = append(messageIds, message.Id)
+	}
+
+	reactions := []dto.ReactionDto{}
+
+	ret := map[int64][]dto.ReactionDto{} // messageId:reactionList
+
+	err := sqlscan.Select(ctx, co, &reactions, `
+		SELECT user_id, message_id, reaction 
+		FROM message_reaction 
+		WHERE chat_id = $2 AND message_id = ANY ($1)
+		order by create_date_time desc
+		`, messageIds, chatId)
+	if err != nil {
+		return ret, fmt.Errorf("error during interacting with db: %w", err)
+	}
+
+	for _, reaction := range reactions {
+		if _, found := ret[reaction.MessageId]; !found {
+			ret[reaction.MessageId] = []dto.ReactionDto{}
+		}
+
+		ret[reaction.MessageId] = append(ret[reaction.MessageId], reaction)
+	}
+	return ret, nil
+}
+
+func populateSets(message *dto.MessageViewDto, ownersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, maxDisplayableReactionUsers int, reactions map[int64][]dto.ReactionDto) {
 	ownersSet[message.OwnerId] = true
-	chatsPreSet[chatId] = true
+	chatsPreSet[currentChatId] = true
 	if message.ResponseEmbeddedMessageReplyOwnerId != nil {
 		var embeddedMessageReplyOwnerId = *message.ResponseEmbeddedMessageReplyOwnerId
 		ownersSet[embeddedMessageReplyOwnerId] = true
@@ -436,10 +490,28 @@ func populateSets(message *dto.MessageViewDto, ownersSet map[int64]bool, chatsPr
 		chatsPreSet[embeddedMessageResendChatId] = true
 	}
 
-	// TODO take into account reactions
+	takeOnAccountReactions(message.Id, ownersSet, maxDisplayableReactionUsers, reactions)
 }
 
-func enrichMessages(messages []dto.MessageViewDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) []dto.MessageViewEnrichedDto {
+func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, maxDisplayableReactionUsers int, messageReactions map[int64][]dto.ReactionDto) {
+	var currDisplayableUsers = 0
+
+	rl, ok := messageReactions[messageId]
+	if ok {
+		for _, r := range rl {
+			if !ownersSet[r.UserId] {
+				ownersSet[r.UserId] = true
+				currDisplayableUsers++
+			}
+
+			if currDisplayableUsers >= maxDisplayableReactionUsers {
+				break
+			}
+		}
+	}
+}
+
+func enrichMessages(messages []dto.MessageViewDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto) []dto.MessageViewEnrichedDto {
 	res := make([]dto.MessageViewEnrichedDto, 0, len(messages))
 	for _, m := range messages {
 		me := dto.MessageViewEnrichedDto{
@@ -453,9 +525,57 @@ func enrichMessages(messages []dto.MessageViewDto, users map[int64]*dto.User, ch
 		}
 		setEmbed(m, &me, users, chats)
 
+		rl := reactions[m.Id]
+		setReactions(&me, users, rl)
+
 		res = append(res, me)
 	}
 	return res
+}
+
+func setReactions(dst *dto.MessageViewEnrichedDto, users map[int64]*dto.User, reactionsList []dto.ReactionDto) {
+	var convertedReactionsOfMessageToReturn = make([]dto.ReactionViewDto, 0)
+
+	for _, dbReaction := range reactionsList {
+		user := users[dbReaction.UserId]
+		wasSummed := false
+		for j, existingReaction := range convertedReactionsOfMessageToReturn {
+			if dbReaction.Reaction == existingReaction.Reaction {
+				convertedReactionsOfMessageToReturn[j].Count = existingReaction.Count + 1
+
+				usersOfThisReaction := convertedReactionsOfMessageToReturn[j].Users
+				if user != nil {
+					usersOfThisReaction = append(usersOfThisReaction, user)
+				} else {
+					usersOfThisReaction = append(usersOfThisReaction, getDeletedUser(dbReaction.UserId))
+				}
+
+				convertedReactionsOfMessageToReturn[j].Users = usersOfThisReaction
+
+				wasSummed = true
+			}
+		}
+		if !wasSummed {
+			usersOfThisReaction := []*dto.User{}
+			if user != nil {
+				usersOfThisReaction = append(usersOfThisReaction, user)
+			} else {
+				usersOfThisReaction = append(usersOfThisReaction, getDeletedUser(dbReaction.UserId))
+			}
+
+			convertedReactionsOfMessageToReturn = append(convertedReactionsOfMessageToReturn, dto.ReactionViewDto{
+				Count:    1,
+				Reaction: dbReaction.Reaction,
+				Users:    usersOfThisReaction,
+			})
+		}
+	}
+
+	dst.Reactions = convertedReactionsOfMessageToReturn
+}
+
+func getDeletedUser(id int64) *dto.User {
+	return &dto.User{Login: fmt.Sprintf("deleted_user_%v", id), Id: id}
 }
 
 func setEmbed(srcDbMessage dto.MessageViewDto, dstRet *dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) {

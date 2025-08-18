@@ -23,6 +23,7 @@ type EnrichingProjection struct {
 	cp            *CommonProjection
 	lgr           *logger.LoggerWrapper
 	aaaRestClient client.AaaRestClient
+	messageConfig config.MessageConfig
 }
 
 func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppConfig) *CommonProjection {
@@ -34,11 +35,12 @@ func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppCo
 	}
 }
 
-func NewEnrichingProjection(cp *CommonProjection, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient) *EnrichingProjection {
+func NewEnrichingProjection(cp *CommonProjection, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient, cfg *config.AppConfig) *EnrichingProjection {
 	return &EnrichingProjection{
 		cp:            cp,
 		lgr:           lgr,
 		aaaRestClient: aaaRestClient,
+		messageConfig: cfg.Message,
 	}
 }
 
