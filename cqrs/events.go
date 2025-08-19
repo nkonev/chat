@@ -165,7 +165,7 @@ type MessageDeleted struct {
 	MessageId      int64           `json:"messageId"`
 }
 
-type MessageReacted struct {
+type MessageReactionFlipped struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
@@ -236,7 +236,7 @@ func (s *MessageDeleted) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
-func (s *MessageReacted) GetPartitionKey() string {
+func (s *MessageReactionFlipped) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
@@ -296,6 +296,6 @@ func (s *MessageDeleted) Name() string {
 	return "messageDeleted"
 }
 
-func (s *MessageReacted) Name() string {
-	return "messageReacted"
+func (s *MessageReactionFlipped) Name() string {
+	return "messageReactionFlipped"
 }

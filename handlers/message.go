@@ -310,7 +310,7 @@ func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
 		return
 	}
 
-	mr := cqrs.ReactOnMessage{
+	mr := cqrs.MessageReactionFlip{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		ChatId:         chatId,
 		MessageId:      messageId,
@@ -324,7 +324,7 @@ func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
 			return
 		}
 
-		mc.lgr.ErrorContext(g.Request.Context(), "Error sending ReactOnMessage command", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageReactionFlip command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}

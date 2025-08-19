@@ -465,6 +465,7 @@ func TestReaction(t *testing.T) {
 
 		const reaction = "😀"
 
+		// both users add the reaction
 		err = testRestClient.Reaction(ctx, user1, chat1Id, message1Id, reaction)
 		require.NoError(t, err, "error in reacting on message")
 		err = testRestClient.Reaction(ctx, user2, chat1Id, message1Id, reaction)
@@ -482,10 +483,24 @@ func TestReaction(t *testing.T) {
 		assert.Equal(t, 2, len(message.Reactions[0].Users))
 		assert.Equal(t, user2, message.Reactions[0].Users[0].Id)
 		assert.Equal(t, user1, message.Reactions[0].Users[1].Id)
+
+		// user 2 flips - removes the reaction
+		err = testRestClient.Reaction(ctx, user2, chat1Id, message1Id, reaction)
+		require.NoError(t, err, "error in reacting on message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		chat1MessagesNew, err := testRestClient.GetMessages(ctx, user1, chat1Id)
+		require.NoError(t, err, "error in getting messages")
+		require.Equal(t, 1, len(chat1MessagesNew))
+		messageNew := chat1MessagesNew[0]
+		assert.Equal(t, message11Text, messageNew.Content)
+		assert.Equal(t, 1, len(messageNew.Reactions))
+		assert.Equal(t, int64(1), messageNew.Reactions[0].Count)
+		assert.Equal(t, reaction, messageNew.Reactions[0].Reaction)
+		assert.Equal(t, 1, len(messageNew.Reactions[0].Users))
+		assert.Equal(t, user1, messageNew.Reactions[0].Users[0].Id)
 	})
 }
-
-// TODO reaction flip
 
 func TestCreateTetATetChat(t *testing.T) {
 	startAppFull(t, func(

@@ -225,7 +225,7 @@ type MakeMessageBlogPost struct {
 	BehalfUserId   int64
 }
 
-type ReactOnMessage struct {
+type MessageReactionFlip struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	MessageId      int64
@@ -832,7 +832,7 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 	return nil
 }
 
-func (s *ReactOnMessage) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
 	participant, err := commonProjection.IsParticipant(ctx, dba, s.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
@@ -846,7 +846,7 @@ func (s *ReactOnMessage) Handle(ctx context.Context, eventBus EventBusInterface,
 		return NewValidationError("Wrong length of reaction")
 	}
 
-	cp := &MessageReacted{
+	cp := &MessageReactionFlipped{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
 		MessageId:      s.MessageId,

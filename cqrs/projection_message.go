@@ -331,7 +331,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 	return nil
 }
 
-func (m *CommonProjection) OnMessageReacted(ctx context.Context, event *MessageReacted) error {
+func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		messageExists, errInner := m.checkMessageExists(ctx, tx, event.ChatId, event.MessageId)
 		if errInner != nil {
@@ -339,17 +339,30 @@ func (m *CommonProjection) OnMessageReacted(ctx context.Context, event *MessageR
 		}
 
 		if !messageExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageReacted because there is no message", "chat_id", event.ChatId, "message_id", event.MessageId)
+			m.lgr.InfoContext(ctx, "Skipping MessageReactionFlipped because there is no message", "chat_id", event.ChatId, "message_id", event.MessageId)
 			return nil
 		}
 
-		_, errInner = tx.ExecContext(ctx, `
+		var exists bool
+		errInner = sqlscan.Get(ctx, tx, &exists, "SELECT EXISTS(SELECT 1 FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4)", event.ChatId, event.MessageId, event.BehalfUserId, event.Reaction)
+		if errInner != nil {
+			return errInner
+		}
+
+		if !exists {
+			_, errInner = tx.ExecContext(ctx, `
 			insert into message_reaction(chat_id, message_id, user_id, reaction, create_date_time)
 			values ($1, $2, $3, $4, $5)
 			on conflict (chat_id, message_id, user_id, reaction) do nothing
 		`, event.ChatId, event.MessageId, event.BehalfUserId, event.Reaction, event.AdditionalData.CreatedAt)
-		if errInner != nil {
-			return errInner
+			if errInner != nil {
+				return errInner
+			}
+		} else {
+			_, errInner = tx.ExecContext(ctx, "DELETE FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4", event.ChatId, event.MessageId, event.BehalfUserId, event.Reaction)
+			if errInner != nil {
+				return errInner
+			}
 		}
 		return nil
 	})
