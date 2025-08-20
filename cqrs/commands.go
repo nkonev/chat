@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	validation "github.com/go-ozzo/ozzo-validation/v4"
-	"github.com/qdm12/reprint"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -16,6 +13,10 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/PuerkitoBio/goquery"
+	validation "github.com/go-ozzo/ozzo-validation/v4"
+	"github.com/qdm12/reprint"
 )
 
 const ReservedPublicallyAvailableForSearchChats = "__AVAILABLE_FOR_SEARCH"
@@ -722,6 +723,14 @@ func (s *MakeMessageBlogPost) Handle(ctx context.Context, eventBus EventBusInter
 }
 
 func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, userId int64) error {
+	participant, err := commonProjection.IsParticipant(ctx, dba, userId, s.ChatId)
+	if err != nil {
+		return err
+	}
+	if !participant {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", userId, s.ChatId))
+	}
+
 	ownerId, err := commonProjection.GetMessageOwner(ctx, s.ChatId, s.MessageId)
 	if err != nil {
 		return err
@@ -766,6 +775,14 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
 		return err
+	}
+
+	participant, err := commonProjection.IsParticipant(ctx, dba, userId, sp.ChatId)
+	if err != nil {
+		return err
+	}
+	if !participant {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", userId, sp.ChatId))
 	}
 
 	ownerId, err := commonProjection.GetMessageOwner(ctx, copyCommand.ChatId, copyCommand.MessageId)
