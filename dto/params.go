@@ -10,6 +10,7 @@ const IncludeStartingFromParam = "includeStartingFrom"
 const StartingFromItemId = "startingFromItemId"
 const PinParam = "pin"
 const AdminParam = "admin"
+const SearchStringParam = "searchString"
 
 // path
 const ChatIdParam = "id"

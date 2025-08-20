@@ -10,6 +10,7 @@ import (
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/services"
 )
 
 type CommonProjection struct {
@@ -24,6 +25,7 @@ type EnrichingProjection struct {
 	lgr           *logger.LoggerWrapper
 	aaaRestClient client.AaaRestClient
 	messageConfig config.MessageConfig
+	policy        *services.SanitizerPolicy
 }
 
 func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppConfig) *CommonProjection {
@@ -35,12 +37,13 @@ func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppCo
 	}
 }
 
-func NewEnrichingProjection(cp *CommonProjection, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient, cfg *config.AppConfig) *EnrichingProjection {
+func NewEnrichingProjection(cp *CommonProjection, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient, cfg *config.AppConfig, policy *services.SanitizerPolicy) *EnrichingProjection {
 	return &EnrichingProjection{
 		cp:            cp,
 		lgr:           lgr,
 		aaaRestClient: aaaRestClient,
 		messageConfig: cfg.Message,
+		policy:        policy,
 	}
 }
 

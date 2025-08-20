@@ -19,8 +19,6 @@ import (
 	"github.com/qdm12/reprint"
 )
 
-const ReservedPublicallyAvailableForSearchChats = "__AVAILABLE_FOR_SEARCH"
-
 const minChatNameLen = 1
 const maxChatNameLen = 256
 
@@ -104,7 +102,7 @@ func (cc *ChatEdit) IsValidatabale() bool {
 
 func (a *ChatEdit) Validate() error {
 	return validation.ValidateStruct(a,
-		validation.Field(&a.Title, validation.Required, validation.Length(minChatNameLen, maxChatNameLen), validation.NotIn(ReservedPublicallyAvailableForSearchChats)),
+		validation.Field(&a.Title, validation.Required, validation.Length(minChatNameLen, maxChatNameLen), validation.NotIn(dto.ReservedPublicallyAvailableForSearchChats)),
 		validation.Field(&a.ChatId, validation.Required),
 	)
 }
@@ -115,7 +113,7 @@ func (cc *ChatCreate) IsValidatabale() bool {
 
 func (a *ChatCreate) Validate() error {
 	return validation.ValidateStruct(a,
-		validation.Field(&a.Title, validation.Required, validation.Length(minChatNameLen, maxChatNameLen), validation.NotIn(ReservedPublicallyAvailableForSearchChats)),
+		validation.Field(&a.Title, validation.Required, validation.Length(minChatNameLen, maxChatNameLen), validation.NotIn(dto.ReservedPublicallyAvailableForSearchChats)),
 	)
 }
 
@@ -939,6 +937,10 @@ func Trim(str string) string {
 
 func SanitizeMessage(policy *services.SanitizerPolicy, input string) string {
 	return policy.Sanitize(input)
+}
+
+func TrimAmdSanitize(policy *services.SanitizerPolicy, input string) string {
+	return Trim(SanitizeMessage(policy, input))
 }
 
 func TrimAmdSanitizeMessage(ctx context.Context, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *services.SanitizerPolicy, input string) (string, error) {

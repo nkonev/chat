@@ -69,6 +69,7 @@ aaa:
   url:
     base: "http://localhost:8060"
     getUsers: "/internal/user/list"
+    searchUsers: "/internal/user/search"
 
 frontendUrl: "http://localhost:8081"
 

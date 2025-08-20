@@ -11,6 +11,7 @@ create table chat_common(
     create_date_time timestamp not null,
     can_resend boolean not null default false,
     tet_a_tet boolean not null default false,
+    available_to_search boolean not null default false,
     avatar text,
     avatar_big text
 );

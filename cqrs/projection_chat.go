@@ -366,8 +366,12 @@ func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOper
 	return chatExists, nil
 }
 
-func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfUserId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool) ([]dto.ChatViewEnrichedDto, error) {
-	chats, err := m.cp.GetChats(ctx, behalfUserId, size, startingFromItemId, includeStartingFrom, reverse)
+func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfUserId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string) ([]dto.ChatViewEnrichedDto, error) {
+	searchString = TrimAmdSanitize(m.policy, searchString)
+
+	additionalFoundUserIds := m.searchForUsers(ctx, searchString)
+
+	chats, err := m.cp.GetChats(ctx, behalfUserId, size, startingFromItemId, includeStartingFrom, reverse, searchString, additionalFoundUserIds)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting chats", "err", err)
 		return nil, err
@@ -380,6 +384,21 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfUserId
 	}
 	chatsEnriched := enrichChats(behalfUserId, chats, utils.ToMap(users))
 	return chatsEnriched, nil
+}
+
+func (m *EnrichingProjection) searchForUsers(ctx context.Context, searchString string) []int64 {
+	var additionalFoundUserIds = []int64{}
+
+	if searchString != "" && searchString != dto.ReservedPublicallyAvailableForSearchChats {
+		users, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, []int64{}, 0, 0)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error get users from aaa", "err", err)
+		}
+		for _, u := range users {
+			additionalFoundUserIds = append(additionalFoundUserIds, u.Id)
+		}
+	}
+	return additionalFoundUserIds
 }
 
 func getUserIdsFromChats(chats []dto.ChatViewDto) []int64 {
@@ -451,7 +470,7 @@ func makeParticipantsWithAdmin(participants []ParticipantWithAdmin, users map[in
 	return res
 }
 
-func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool) ([]dto.ChatViewDto, error) {
+func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, additionalFoundUserIds []int64) ([]dto.ChatViewDto, error) {
 	type chatDto struct {
 		Id                       int64            `db:"id"`
 		Title                    string           `db:"title"`
@@ -496,10 +515,24 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		queryArgs = append(queryArgs, startingFromItemId.Pinned, startingFromItemId.LastUpdateDateTime, startingFromItemId.Id)
 	}
 
+	var searchClause = ""
+	if len(searchString) > 0 {
+		var additionalUserIdsClause = ""
+		if len(additionalFoundUserIds) > 0 {
+			queryArgs = append(queryArgs, additionalFoundUserIds)
+			additionalUserIdsClause = fmt.Sprintf(" ( cc.tet_a_tet IS true AND cc.id IN ( SELECT chat_id FROM chat_participant WHERE user_id = any($%d) ) ) or ", len(queryArgs))
+		}
+		// TODO available_to_search
+		searchClause = fmt.Sprintf("and ( ( %s cc.title ILIKE $%d ) OR ( (cc.available_to_search = TRUE OR b.id is not null) AND $%d = '%s' ) )", additionalUserIdsClause, len(queryArgs)+1, len(queryArgs)+2, dto.ReservedPublicallyAvailableForSearchChats)
+		searchStringPercents := "%" + searchString + "%"
+		queryArgs = append(queryArgs, searchStringPercents)
+		queryArgs = append(queryArgs, searchString)
+	}
+
 	// it is optimized (all order by in the same table)
 	// so querying a page (using keyset) from a large amount of chats is fast
 	// it's the root cause why we use cqrs
-	err := sqlscan.Select(ctx, m.db, &list, fmt.Sprintf(`
+	q := fmt.Sprintf(`
 		select 
 		    ch.id,
 		    cc.title,
@@ -521,11 +554,12 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		left join blog b on ch.id = b.id
 		join chat_common cc on cc.id = ch.id
 		where ch.user_id = $1 %s
+		%s
 		order by (ch.pinned, ch.update_date_time, ch.id) %s
 		limit $2 
 		%s
-		`, paginationKeyset, order, offset),
-		queryArgs...)
+		`, paginationKeyset, searchClause, order, offset)
+	err := sqlscan.Select(ctx, m.db, &list, q, queryArgs...)
 	if err != nil {
 		return res, err
 	}

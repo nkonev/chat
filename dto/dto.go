@@ -24,6 +24,8 @@ type ChatEditDto struct {
 	ChatCreateDto
 }
 
+const ReservedPublicallyAvailableForSearchChats = "__AVAILABLE_FOR_SEARCH"
+
 const EmbedMessageTypeResend = "resend"
 const EmbedMessageTypeReply = "reply"
 

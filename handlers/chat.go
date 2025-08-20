@@ -362,7 +362,9 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 
 	includeStartingFrom := utils.GetBoolean(g.Query(dto.IncludeStartingFromParam))
 
-	chats, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), userId, size, startingFromItemId, includeStartingFrom, reverse)
+	searchString := g.Query(dto.SearchStringParam)
+
+	chats, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), userId, size, startingFromItemId, includeStartingFrom, reverse, searchString)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting chats", "err", err)
 		g.Status(http.StatusInternalServerError)
