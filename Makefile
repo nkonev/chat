@@ -24,6 +24,9 @@ infra:
 	./scripts/wait-for-it.sh -t 30 127.0.0.1:9092 -- echo 'kafka is up'
 	./scripts/wait-for-it.sh -t 30 127.0.0.1:16686 -- echo 'jaeger web ui is up'
 
+run: package-go infra
+	./$(EXECUTABLE) serve
+
 .PHONY: test
 test: export CHAT_LOGGER.LEVEL = warn
 test: export CHAT_POSTGRESQL.PRETTYLOG = false

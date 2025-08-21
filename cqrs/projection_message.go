@@ -426,9 +426,11 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 	return maxMessageId, nil
 }
 
-func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserId, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool) ([]dto.MessageViewEnrichedDto, error) {
+func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserId, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string) ([]dto.MessageViewEnrichedDto, error) {
 	return db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) ([]dto.MessageViewEnrichedDto, error) {
-		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse)
+		searchString = TrimAmdSanitize(m.policy, searchString)
+
+		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting messages", "err", err)
 			return nil, err
@@ -627,7 +629,7 @@ func setEmbed(srcDbMessage dto.MessageViewDto, dstRet *dto.MessageViewEnrichedDt
 	}
 }
 
-func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool) ([]dto.MessageViewDto, error) {
+func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string) ([]dto.MessageViewDto, error) {
 	ma := []dto.MessageViewDto{}
 
 	queryArgs := []any{chatId, size}
@@ -656,6 +658,13 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		queryArgs = append(queryArgs, *startingFromItemId)
 	}
 
+	var searchClause string
+	if len(searchString) > 0 {
+		searchStringPercents := "%" + searchString + "%"
+		queryArgs = append(queryArgs, searchStringPercents)
+		searchClause = fmt.Sprintf(" AND strip_tags(m.content) ILIKE $%d ", len(queryArgs))
+	}
+
 	err := sqlscan.Select(ctx, co, &ma, fmt.Sprintf(`
 			select 
 			    m.id,
@@ -674,10 +683,11 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 			from message m
 			left join message me 
 			on (m.chat_id = me.chat_id and m.embed_message_id = me.id and m.embed_message_type = '%v')
-			where m.chat_id = $1 %s
+			where m.chat_id = $1 %s 
+			%s
 			order by m.id %s 
 			limit $2
-		`, dto.EmbedMessageTypeReply, paginationKeyset, order),
+		`, dto.EmbedMessageTypeReply, paginationKeyset, searchClause, order),
 		queryArgs...)
 
 	if err != nil {
