@@ -1603,7 +1603,7 @@ func TestChatPaginate(t *testing.T) {
 		assert.Equal(t, "generated_chat921", resp2[39].Title)
 
 		// get second page with search
-		searchString := "generated_chat96"
+		const searchString = "generated_chat96"
 		resp2Search, err := testRestClient.GetChats(ctx, user1, client.NewChatGetOptionWithSize(40), client.NewChatGetOptionWithStartsFromChatPinned(lastPinned), client.NewChatGetOptionWithStartsFromChatLastUpdateDateTime(lastLastUpdateDateTime), client.NewChatGetOptionWithStartsFromChatId(lastId), client.NewChatGetOptionWithSearch(searchString))
 		require.NoError(t, err)
 		assert.Equal(t, 2, len(resp2Search))
@@ -1670,7 +1670,7 @@ func TestMessagePaginate(t *testing.T) {
 		assert.Equal(t, int64(11), resp2[1].Id)
 		assert.Equal(t, int64(12), resp2[2].Id)
 
-		searchString := "generated_message10"
+		const searchString = "generated_message10"
 		// get second page with search
 		resp2Search, err := testRestClient.GetMessages(ctx, user1, chat1Id, client.NewMessageGetOptionWithSize(3), client.NewMessageGetOptionWithStartsFromItemId(lastId), client.NewMessageGetOptionWithSearch(searchString))
 		require.NoError(t, err)
