@@ -516,11 +516,17 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 	}
 
 	var searchClause = ""
+	var searchCte = ""
 	if len(searchString) > 0 {
 		var additionalUserIdsClause = ""
 		if len(additionalFoundUserIds) > 0 {
 			queryArgs = append(queryArgs, additionalFoundUserIds)
-			additionalUserIdsClause = fmt.Sprintf(" ( cc.tet_a_tet IS true AND cc.id IN ( SELECT chat_id FROM chat_participant WHERE user_id = any($%d) ) ) or ", len(queryArgs))
+			searchCte = fmt.Sprintf(`
+			with participant_chats_ids as (
+				SELECT distinct (chat_id) FROM chat_participant WHERE user_id = any($%d)
+			)
+			`, len(queryArgs))
+			additionalUserIdsClause = fmt.Sprintf(" ( cc.tet_a_tet IS true AND cc.id IN ( SELECT chat_id FROM participant_chats_ids ) ) or ")
 		}
 		// TODO available_to_search
 		searchClause = fmt.Sprintf("and ( ( %s cc.title ILIKE $%d ) OR ( (cc.available_to_search = TRUE OR b.id is not null) AND $%d = '%s' ) )", additionalUserIdsClause, len(queryArgs)+1, len(queryArgs)+2, dto.ReservedPublicallyAvailableForSearchChats)
@@ -533,6 +539,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 	// so querying a page (using keyset) from a large amount of chats is fast
 	// it's the root cause why we use cqrs
 	q := fmt.Sprintf(`
+		%s
 		select 
 		    ch.id,
 		    cc.title,
@@ -558,7 +565,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		order by (ch.pinned, ch.update_date_time, ch.id) %s
 		limit $2 
 		%s
-		`, paginationKeyset, searchClause, order, offset)
+		`, searchCte, paginationKeyset, searchClause, order, offset)
 	err := sqlscan.Select(ctx, m.db, &list, q, queryArgs...)
 	if err != nil {
 		return res, err
