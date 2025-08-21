@@ -489,63 +489,61 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		ConsiderMessagesAsUnread bool             `db:"consider_messages_as_unread"`
 	}
 
-	return db.TransactWithResult(ctx, m.db, func(tx *db.Tx) ([]dto.ChatViewDto, error) {
-		res := []dto.ChatViewDto{}
+	list := []chatDto{}
+	res := []dto.ChatViewDto{}
 
-		list := []chatDto{}
-		queryArgs := []any{participantId, size}
+	queryArgs := []any{participantId, size}
 
-		order := "desc"
-		offset := " offset 1" // to make behaviour the same as in users, messages (there is > or <)
-		if reverse {
-			order = "asc"
-		}
-		// see also getSafeDefaultUserId() in aaa
-		if includeStartingFrom || startingFromItemId == nil {
-			offset = ""
-		}
+	order := "desc"
+	offset := " offset 1" // to make behaviour the same as in users, messages (there is > or <)
+	if reverse {
+		order = "asc"
+	}
+	// see also getSafeDefaultUserId() in aaa
+	if includeStartingFrom || startingFromItemId == nil {
+		offset = ""
+	}
 
-		nonEquality := "<="
-		if reverse {
-			nonEquality = ">="
-		}
+	nonEquality := "<="
+	if reverse {
+		nonEquality = ">="
+	}
 
-		paginationKeyset := ""
-		if startingFromItemId != nil {
-			paginationKeyset = fmt.Sprintf(` and (ch.pinned, ch.update_date_time, ch.id) %s ($%d, $%d, $%d)`, nonEquality, len(queryArgs)+1, len(queryArgs)+2, len(queryArgs)+3)
-			queryArgs = append(queryArgs, startingFromItemId.Pinned, startingFromItemId.LastUpdateDateTime, startingFromItemId.Id)
-		}
+	paginationKeyset := ""
+	if startingFromItemId != nil {
+		paginationKeyset = fmt.Sprintf(` and (ch.pinned, ch.update_date_time, ch.id) %s ($%d, $%d, $%d)`, nonEquality, len(queryArgs)+1, len(queryArgs)+2, len(queryArgs)+3)
+		queryArgs = append(queryArgs, startingFromItemId.Pinned, startingFromItemId.LastUpdateDateTime, startingFromItemId.Id)
+	}
 
-		var searchClause = ""
-		if len(searchString) > 0 {
-			var additionalUserIdsClause = ""
-			if len(additionalFoundUserIds) > 0 {
-				var tetATetChatIds []int64
-				err := sqlscan.Select(ctx, tx, &tetATetChatIds, `
-				SELECT distinct (cp.chat_id) FROM 
-				chat_common cc join
-				chat_participant cp
+	var searchClause = ""
+	var searchCte = ""
+	if len(searchString) > 0 {
+		var additionalUserIdsClause = ""
+		if len(additionalFoundUserIds) > 0 {
+			queryArgs = append(queryArgs, additionalFoundUserIds)
+			searchCte = fmt.Sprintf(`
+			with tet_a_tet_chats_ids as materialized (
+				SELECT distinct (cp.chat_id) as chat_id
+				FROM chat_common cc 
+				join chat_participant cp
 				on cc.id = cp.chat_id
-				WHERE cc.tet_a_tet IS true AND cp.user_id = any($1)
-			`, additionalFoundUserIds)
-				if err != nil {
-					return res, err
-				}
-
-				queryArgs = append(queryArgs, tetATetChatIds)
-				additionalUserIdsClause = fmt.Sprintf(" cc.id = any ( $%d ) or ", len(queryArgs))
-			}
-			// TODO available_to_search
-			searchClause = fmt.Sprintf("and ( ( %s cc.title ILIKE $%d ) OR ( (cc.available_to_search = TRUE OR b.id is not null) AND $%d = '%s' ) )", additionalUserIdsClause, len(queryArgs)+1, len(queryArgs)+2, dto.ReservedPublicallyAvailableForSearchChats)
-			searchStringPercents := "%" + searchString + "%"
-			queryArgs = append(queryArgs, searchStringPercents)
-			queryArgs = append(queryArgs, searchString)
+				WHERE cc.tet_a_tet IS true AND cp.user_id = any($%d)
+			)
+			`, len(queryArgs))
+			additionalUserIdsClause = fmt.Sprintf(" ( cc.id = any(array(SELECT chat_id FROM tet_a_tet_chats_ids)) ) or ")
 		}
+		// TODO available_to_search
+		searchClause = fmt.Sprintf("and ( ( %s cc.title ILIKE $%d ) OR ( (cc.available_to_search = TRUE OR b.id is not null) AND $%d = '%s' ) )", additionalUserIdsClause, len(queryArgs)+1, len(queryArgs)+2, dto.ReservedPublicallyAvailableForSearchChats)
+		searchStringPercents := "%" + searchString + "%"
+		queryArgs = append(queryArgs, searchStringPercents)
+		queryArgs = append(queryArgs, searchString)
+	}
 
-		// it is optimized (all order by in the same table)
-		// so querying a page (using keyset) from a large amount of chats is fast
-		// it's the root cause why we use cqrs
-		q := fmt.Sprintf(`
+	// it is optimized (all order by in the same table)
+	// so querying a page (using keyset) from a large amount of chats is fast
+	// it's the root cause why we use cqrs
+	q := fmt.Sprintf(`
+		%s
 		select 
 		    ch.id,
 		    cc.title,
@@ -571,39 +569,38 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		order by (ch.pinned, ch.update_date_time, ch.id) %s
 		limit $2 
 		%s
-		`, paginationKeyset, searchClause, order, offset)
-		err := sqlscan.Select(ctx, tx, &list, q, queryArgs...)
+		`, searchCte, paginationKeyset, searchClause, order, offset)
+	err := sqlscan.Select(ctx, m.db, &list, q, queryArgs...)
+	if err != nil {
+		return res, err
+	}
+
+	for i, de := range list {
+		mapped := dto.ChatViewDto{
+			Id:                       de.Id,
+			Title:                    de.Title,
+			Pinned:                   de.Pinned,
+			UnreadMessages:           de.UnreadMessages,
+			LastMessageId:            de.LastMessageId,
+			LastMessageOwnerId:       de.LastMessageOwnerId,
+			LastMessageContent:       de.LastMessageContent,
+			ParticipantsCount:        de.ParticipantsCount,
+			Blog:                     de.Blog,
+			UpdateDateTime:           de.UpdateDateTime,
+			TetATet:                  de.TetATet,
+			Avatar:                   de.Avatar,
+			AvatarBig:                de.AvatarBig,
+			ConsiderMessagesAsUnread: de.ConsiderMessagesAsUnread,
+		}
+		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {
-			return res, err
+			return res, fmt.Errorf("error during mapping on index %d: %w", i, err)
 		}
 
-		for i, de := range list {
-			mapped := dto.ChatViewDto{
-				Id:                       de.Id,
-				Title:                    de.Title,
-				Pinned:                   de.Pinned,
-				UnreadMessages:           de.UnreadMessages,
-				LastMessageId:            de.LastMessageId,
-				LastMessageOwnerId:       de.LastMessageOwnerId,
-				LastMessageContent:       de.LastMessageContent,
-				ParticipantsCount:        de.ParticipantsCount,
-				Blog:                     de.Blog,
-				UpdateDateTime:           de.UpdateDateTime,
-				TetATet:                  de.TetATet,
-				Avatar:                   de.Avatar,
-				AvatarBig:                de.AvatarBig,
-				ConsiderMessagesAsUnread: de.ConsiderMessagesAsUnread,
-			}
-			err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
-			if err != nil {
-				return res, fmt.Errorf("error during mapping on index %d: %w", i, err)
-			}
+		res = append(res, mapped)
+	}
 
-			res = append(res, mapped)
-		}
-
-		return res, nil
-	})
+	return res, nil
 }
 
 func (m *CommonProjection) GetHasUnreadMessages(ctx context.Context, userId int64) (*dto.HasUnreadMessages, error) {
