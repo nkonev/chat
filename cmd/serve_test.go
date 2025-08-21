@@ -1649,7 +1649,6 @@ func TestMessagePaginate(t *testing.T) {
 		// get first page
 		resp1, err := testRestClient.GetMessages(ctx, user1, chat1Id, client.NewMessageGetOptionWithSize(3), client.NewMessageGetOptionWithStartsFromItemId(6))
 		require.NoError(t, err)
-
 		assert.Equal(t, 3, len(resp1))
 		assert.True(t, strings.HasPrefix(resp1[0].Content, "generated_message7")) // different from chat because of different way of generating test data
 		assert.True(t, strings.HasPrefix(resp1[1].Content, "generated_message8"))
@@ -1663,7 +1662,6 @@ func TestMessagePaginate(t *testing.T) {
 		// get second page
 		resp2, err := testRestClient.GetMessages(ctx, user1, chat1Id, client.NewMessageGetOptionWithSize(3), client.NewMessageGetOptionWithStartsFromItemId(lastId))
 		require.NoError(t, err)
-
 		assert.Equal(t, 3, len(resp2))
 		assert.True(t, strings.HasPrefix(resp2[0].Content, "generated_message10"))
 		assert.True(t, strings.HasPrefix(resp2[1].Content, "generated_message11"))
@@ -1671,5 +1669,14 @@ func TestMessagePaginate(t *testing.T) {
 		assert.Equal(t, int64(10), resp2[0].Id)
 		assert.Equal(t, int64(11), resp2[1].Id)
 		assert.Equal(t, int64(12), resp2[2].Id)
+
+		searchString := "generated_message10"
+		// get second page with search
+		resp2Search, err := testRestClient.GetMessages(ctx, user1, chat1Id, client.NewMessageGetOptionWithSize(3), client.NewMessageGetOptionWithStartsFromItemId(lastId), client.NewMessageGetOptionWithSearch(searchString))
+		require.NoError(t, err)
+		assert.Equal(t, 3, len(resp2Search))
+		assert.True(t, strings.HasPrefix(resp2Search[0].Content, "generated_message10"))
+		assert.True(t, strings.HasPrefix(resp2Search[1].Content, "generated_message100"))
+		assert.True(t, strings.HasPrefix(resp2Search[2].Content, "generated_message101"))
 	})
 }

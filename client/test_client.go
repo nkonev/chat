@@ -370,6 +370,22 @@ func (r *MessageGetOptionWithStartsFromItemId) Apply(queryParams *url.Values) *u
 	return queryParams
 }
 
+type MessageGetOptionWithSearch struct {
+	s string
+}
+
+func NewMessageGetOptionWithSearch(s string) *MessageGetOptionWithSearch {
+	return &MessageGetOptionWithSearch{s: s}
+}
+
+func (r *MessageGetOptionWithSearch) Apply(queryParams *url.Values) *url.Values {
+	if queryParams == nil {
+		queryParams = &url.Values{}
+	}
+	queryParams.Add(dto.SearchStringParam, r.s)
+	return queryParams
+}
+
 func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, chatId int64, messageGetOptions ...MessageGetOption) ([]dto.MessageViewEnrichedDto, error) {
 	var queryParams *url.Values
 	for _, opt := range messageGetOptions {
