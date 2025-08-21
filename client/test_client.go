@@ -201,6 +201,22 @@ func (r *ChatGetOptionWithStartsFromChatLastUpdateDateTime) Apply(queryParams *u
 	return queryParams
 }
 
+type ChatGetOptionWithSearch struct {
+	s string
+}
+
+func NewChatGetOptionWithSearch(s string) *ChatGetOptionWithSearch {
+	return &ChatGetOptionWithSearch{s: s}
+}
+
+func (r *ChatGetOptionWithSearch) Apply(queryParams *url.Values) *url.Values {
+	if queryParams == nil {
+		queryParams = &url.Values{}
+	}
+	queryParams.Add(dto.SearchStringParam, r.s)
+	return queryParams
+}
+
 func (rc *TestRestClient) GetChats(ctx context.Context, behalfUserId int64, chatGetOptions ...ChatGetOption) ([]dto.ChatViewEnrichedDto, error) {
 	var queryParams *url.Values
 	for _, opt := range chatGetOptions {

@@ -541,6 +541,7 @@ func TestCreateTetATetChat(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().SearchGetUsers(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*dto.User{&mockUser2}, 1, nil)
 
 		ctx := context.Background()
 
@@ -559,6 +560,14 @@ func TestCreateTetATetChat(t *testing.T) {
 		assert.Equal(t, []int64{2, 1}, chat1OfUser1.ParticipantIds)
 		assert.Equal(t, user2Login, chat1OfUser1.Participants[0].Login)
 		assert.Equal(t, user1Login, chat1OfUser1.Participants[1].Login)
+
+		searchString := user2Login
+		resp2Search, err := testRestClient.GetChats(ctx, user1, client.NewChatGetOptionWithSearch(searchString))
+		require.NoError(t, err)
+		require.Equal(t, 1, len(resp2Search))
+		chat1OfUser1New := resp2Search[0]
+		assert.Equal(t, user2Login, chat1OfUser1New.Title)
+		assert.Equal(t, avatar2, *chat1OfUser1New.Avatar)
 	})
 }
 
@@ -1553,6 +1562,7 @@ func TestChatPaginate(t *testing.T) {
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{}, nil)
+		mockAaaClient.EXPECT().SearchGetUsers(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*dto.User{}, 0, nil)
 
 		const user1 int64 = 1
 		const num = 1000
@@ -1591,6 +1601,14 @@ func TestChatPaginate(t *testing.T) {
 		assert.Equal(t, "generated_chat959", resp2[1].Title)
 		assert.Equal(t, "generated_chat958", resp2[2].Title)
 		assert.Equal(t, "generated_chat921", resp2[39].Title)
+
+		// get second page with search
+		searchString := "generated_chat96"
+		resp2Search, err := testRestClient.GetChats(ctx, user1, client.NewChatGetOptionWithSize(40), client.NewChatGetOptionWithStartsFromChatPinned(lastPinned), client.NewChatGetOptionWithStartsFromChatLastUpdateDateTime(lastLastUpdateDateTime), client.NewChatGetOptionWithStartsFromChatId(lastId), client.NewChatGetOptionWithSearch(searchString))
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(resp2Search))
+		assert.Equal(t, "generated_chat960", resp2Search[0].Title)
+		assert.Equal(t, "generated_chat96", resp2Search[1].Title)
 	})
 }
 

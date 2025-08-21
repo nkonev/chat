@@ -60,3 +60,16 @@ type HasUnreadMessages struct {
 type PutChatNotificationSettingsDto struct {
 	ConsiderMessagesOfThisChatAsUnread bool `json:"considerMessagesOfThisChatAsUnread"`
 }
+
+type SearchUsersRequestDto struct {
+	Page         int     `json:"page"`
+	Size         int     `json:"size"`
+	UserIds      []int64 `json:"userIds"`
+	SearchString string  `json:"searchString"`
+	Including    bool    `json:"including"`
+}
+
+type SearchUsersResponseDto struct {
+	Users []*User `json:"users"`
+	Count int     `json:"count"`
+}

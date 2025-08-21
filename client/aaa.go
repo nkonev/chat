@@ -52,21 +52,8 @@ func (rc *aaaRestClient) GetUsers(ctx context.Context, userIds []int64) ([]*dto.
 	return resp, nil
 }
 
-type searchUsersRequestDto struct {
-	Page         int     `json:"page"`
-	Size         int     `json:"size"`
-	UserIds      []int64 `json:"userIds"`
-	SearchString string  `json:"searchString"`
-	Including    bool    `json:"including"`
-}
-
-type searchUsersResponseDto struct {
-	Users []*dto.User `json:"users"`
-	Count int         `json:"count"`
-}
-
 func (rc *aaaRestClient) SearchGetUsers(ctx context.Context, searchString string, including bool, ids []int64, page, size int) ([]*dto.User, int, error) {
-	req := searchUsersRequestDto{
+	req := dto.SearchUsersRequestDto{
 		UserIds:      ids,
 		SearchString: searchString,
 		Including:    including,
@@ -74,7 +61,7 @@ func (rc *aaaRestClient) SearchGetUsers(ctx context.Context, searchString string
 		Size:         size,
 	}
 
-	respDto, err := query[searchUsersRequestDto, searchUsersResponseDto](ctx, &rc.restClient, dto.NonExistentUser, http.MethodPost, rc.cfg.Aaa.Url.SearchUsers, "user.Search", &req, nil)
+	respDto, err := query[dto.SearchUsersRequestDto, dto.SearchUsersResponseDto](ctx, &rc.restClient, dto.NonExistentUser, http.MethodPost, rc.cfg.Aaa.Url.SearchUsers, "user.Search", &req, nil)
 	if err != nil {
 		return nil, 0, err
 	}
