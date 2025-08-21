@@ -56,6 +56,7 @@ func RunServe(args []string) {
 			handlers.NewParticipantHandler,
 			handlers.NewMessageHandler,
 			handlers.NewBlogHandler,
+			handlers.CreateHttpRouter,
 			handlers.ConfigureHttpServer,
 			kafka.ConfigureSaramaClient,
 			client.NewAAARestClient,

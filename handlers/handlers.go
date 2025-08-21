@@ -22,13 +22,25 @@ const headerTraceId = "trace-id"
 const headerUserId = "X-UserId"
 const headerCorrelationId = "X-CorrelationId"
 
-func bindHttpHandlers(
-	ginRouter *gin.Engine,
+func CreateHttpRouter(
+	cfg *config.AppConfig,
+	lgr *logger.LoggerWrapper,
 	chatHandler *ChatHandler,
 	participantHandler *ParticipantHandler,
 	messageHandler *MessageHandler,
 	blogHandler *BlogHandler,
-) {
+) *gin.Engine {
+	// https://gin-gonic.com/en/docs/examples/graceful-restart-or-stop/
+	gin.SetMode(gin.ReleaseMode)
+	ginRouter := gin.New()
+	ginRouter.Use(otelgin.Middleware(app.TRACE_RESOURCE))
+	ginRouter.Use(StructuredLogMiddleware(lgr))
+	ginRouter.Use(WriteTraceToHeaderMiddleware())
+	if cfg.Server.Dump {
+		ginRouter.Use(DumpMiddleware(lgr, cfg))
+	}
+	ginRouter.Use(gin.Recovery())
+
 	ginRouter.POST("/api/chat", chatHandler.CreateChat)
 	ginRouter.PUT("/api/chat/tet-a-tet/:participantId", chatHandler.CreateTetAChat)
 	ginRouter.PUT("/api/chat", chatHandler.EditChat)
@@ -61,6 +73,8 @@ func bindHttpHandlers(
 	ginRouter.GET("/internal/health", func(g *gin.Context) {
 		g.Status(http.StatusOK)
 	})
+
+	return ginRouter
 }
 
 func getUserId(g *gin.Context) (int64, error) {
@@ -83,24 +97,8 @@ func ConfigureHttpServer(
 	cfg *config.AppConfig,
 	lgr *logger.LoggerWrapper,
 	lc fx.Lifecycle,
-	chatHandler *ChatHandler,
-	participantHandler *ParticipantHandler,
-	messageHandler *MessageHandler,
-	blogHandler *BlogHandler,
+	ginRouter *gin.Engine,
 ) *http.Server {
-	// https://gin-gonic.com/en/docs/examples/graceful-restart-or-stop/
-	gin.SetMode(gin.ReleaseMode)
-	ginRouter := gin.New()
-	ginRouter.Use(otelgin.Middleware(app.TRACE_RESOURCE))
-	ginRouter.Use(StructuredLogMiddleware(lgr))
-	ginRouter.Use(WriteTraceToHeaderMiddleware())
-	if cfg.Server.Dump {
-		ginRouter.Use(DumpMiddleware(lgr, cfg))
-	}
-	ginRouter.Use(gin.Recovery())
-
-	bindHttpHandlers(ginRouter, chatHandler, participantHandler, messageHandler, blogHandler)
-
 	httpServer := &http.Server{
 		Addr:           cfg.Server.Address,
 		ReadTimeout:    cfg.Server.ReadTimeout,
