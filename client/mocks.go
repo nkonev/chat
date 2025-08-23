@@ -108,33 +108,33 @@ func (_c *MockAaaRestClient_GetUsers_Call) RunAndReturn(run func(ctx context.Con
 }
 
 // SearchGetUsers provides a mock function for the type MockAaaRestClient
-func (_mock *MockAaaRestClient) SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int, error) {
-	ret := _mock.Called(c, searchString, including, ids, page, size)
+func (_mock *MockAaaRestClient) SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int64, size int32, reverse bool) ([]*dto.User, int64, error) {
+	ret := _mock.Called(c, searchString, including, ids, page, size, reverse)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SearchGetUsers")
 	}
 
 	var r0 []*dto.User
-	var r1 int
+	var r1 int64
 	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32) ([]*dto.User, int, error)); ok {
-		return returnFunc(c, searchString, including, ids, page, size)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32, bool) ([]*dto.User, int64, error)); ok {
+		return returnFunc(c, searchString, including, ids, page, size, reverse)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32) []*dto.User); ok {
-		r0 = returnFunc(c, searchString, including, ids, page, size)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32, bool) []*dto.User); ok {
+		r0 = returnFunc(c, searchString, including, ids, page, size, reverse)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*dto.User)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, bool, []int64, int64, int32) int); ok {
-		r1 = returnFunc(c, searchString, including, ids, page, size)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, bool, []int64, int64, int32, bool) int64); ok {
+		r1 = returnFunc(c, searchString, including, ids, page, size, reverse)
 	} else {
-		r1 = ret.Get(1).(int)
+		r1 = ret.Get(1).(int64)
 	}
-	if returnFunc, ok := ret.Get(2).(func(context.Context, string, bool, []int64, int64, int32) error); ok {
-		r2 = returnFunc(c, searchString, including, ids, page, size)
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, bool, []int64, int64, int32, bool) error); ok {
+		r2 = returnFunc(c, searchString, including, ids, page, size, reverse)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -153,11 +153,12 @@ type MockAaaRestClient_SearchGetUsers_Call struct {
 //   - ids []int64
 //   - page int64
 //   - size int32
-func (_e *MockAaaRestClient_Expecter) SearchGetUsers(c interface{}, searchString interface{}, including interface{}, ids interface{}, page interface{}, size interface{}) *MockAaaRestClient_SearchGetUsers_Call {
-	return &MockAaaRestClient_SearchGetUsers_Call{Call: _e.mock.On("SearchGetUsers", c, searchString, including, ids, page, size)}
+//   - reverse bool
+func (_e *MockAaaRestClient_Expecter) SearchGetUsers(c interface{}, searchString interface{}, including interface{}, ids interface{}, page interface{}, size interface{}, reverse interface{}) *MockAaaRestClient_SearchGetUsers_Call {
+	return &MockAaaRestClient_SearchGetUsers_Call{Call: _e.mock.On("SearchGetUsers", c, searchString, including, ids, page, size, reverse)}
 }
 
-func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32)) *MockAaaRestClient_SearchGetUsers_Call {
+func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32, reverse bool)) *MockAaaRestClient_SearchGetUsers_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -183,6 +184,10 @@ func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context,
 		if args[5] != nil {
 			arg5 = args[5].(int32)
 		}
+		var arg6 bool
+		if args[6] != nil {
+			arg6 = args[6].(bool)
+		}
 		run(
 			arg0,
 			arg1,
@@ -190,17 +195,18 @@ func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context,
 			arg3,
 			arg4,
 			arg5,
+			arg6,
 		)
 	})
 	return _c
 }
 
-func (_c *MockAaaRestClient_SearchGetUsers_Call) Return(users []*dto.User, n int, err error) *MockAaaRestClient_SearchGetUsers_Call {
+func (_c *MockAaaRestClient_SearchGetUsers_Call) Return(users []*dto.User, n int64, err error) *MockAaaRestClient_SearchGetUsers_Call {
 	_c.Call.Return(users, n, err)
 	return _c
 }
 
-func (_c *MockAaaRestClient_SearchGetUsers_Call) RunAndReturn(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int, error)) *MockAaaRestClient_SearchGetUsers_Call {
+func (_c *MockAaaRestClient_SearchGetUsers_Call) RunAndReturn(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32, reverse bool) ([]*dto.User, int64, error)) *MockAaaRestClient_SearchGetUsers_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -495,6 +501,86 @@ func (_c *MockMessageGetOption_Apply_Call) Return(values *url.Values) *MockMessa
 }
 
 func (_c *MockMessageGetOption_Apply_Call) RunAndReturn(run func(queryParams *url.Values) *url.Values) *MockMessageGetOption_Apply_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// NewMockParticipantGetOption creates a new instance of MockParticipantGetOption. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
+// The first argument is typically a *testing.T value.
+func NewMockParticipantGetOption(t interface {
+	mock.TestingT
+	Cleanup(func())
+}) *MockParticipantGetOption {
+	mock := &MockParticipantGetOption{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
+}
+
+// MockParticipantGetOption is an autogenerated mock type for the ParticipantGetOption type
+type MockParticipantGetOption struct {
+	mock.Mock
+}
+
+type MockParticipantGetOption_Expecter struct {
+	mock *mock.Mock
+}
+
+func (_m *MockParticipantGetOption) EXPECT() *MockParticipantGetOption_Expecter {
+	return &MockParticipantGetOption_Expecter{mock: &_m.Mock}
+}
+
+// Apply provides a mock function for the type MockParticipantGetOption
+func (_mock *MockParticipantGetOption) Apply(queryParams *url.Values) *url.Values {
+	ret := _mock.Called(queryParams)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Apply")
+	}
+
+	var r0 *url.Values
+	if returnFunc, ok := ret.Get(0).(func(*url.Values) *url.Values); ok {
+		r0 = returnFunc(queryParams)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*url.Values)
+		}
+	}
+	return r0
+}
+
+// MockParticipantGetOption_Apply_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Apply'
+type MockParticipantGetOption_Apply_Call struct {
+	*mock.Call
+}
+
+// Apply is a helper method to define mock.On call
+//   - queryParams *url.Values
+func (_e *MockParticipantGetOption_Expecter) Apply(queryParams interface{}) *MockParticipantGetOption_Apply_Call {
+	return &MockParticipantGetOption_Apply_Call{Call: _e.mock.On("Apply", queryParams)}
+}
+
+func (_c *MockParticipantGetOption_Apply_Call) Run(run func(queryParams *url.Values)) *MockParticipantGetOption_Apply_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *url.Values
+		if args[0] != nil {
+			arg0 = args[0].(*url.Values)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockParticipantGetOption_Apply_Call) Return(values *url.Values) *MockParticipantGetOption_Apply_Call {
+	_c.Call.Return(values)
+	return _c
+}
+
+func (_c *MockParticipantGetOption_Apply_Call) RunAndReturn(run func(queryParams *url.Values) *url.Values) *MockParticipantGetOption_Apply_Call {
 	_c.Call.Return(run)
 	return _c
 }

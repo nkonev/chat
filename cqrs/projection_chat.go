@@ -390,7 +390,7 @@ func (m *EnrichingProjection) searchForUsers(ctx context.Context, searchString s
 	var additionalFoundUserIds = []int64{}
 
 	if searchString != "" && searchString != dto.ReservedPublicallyAvailableForSearchChats {
-		users, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, []int64{}, 0, 0)
+		users, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, []int64{}, 0, 0, false)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error get users from aaa", "err", err)
 		}
@@ -438,35 +438,6 @@ func enrichChats(behalfUserId int64, chats []dto.ChatViewDto, users map[int64]*d
 		}
 		res = append(res, che)
 	}
-	return res
-}
-
-func makeParticipants(participantIds []int64, users map[int64]*dto.User) []dto.User {
-	res := make([]dto.User, 0, len(participantIds))
-
-	for _, p := range participantIds {
-		u := users[p]
-		if u != nil {
-			res = append(res, *u)
-		}
-	}
-
-	return res
-}
-
-func makeParticipantsWithAdmin(participants []*ParticipantWithAdmin, users map[int64]*dto.User) []*dto.UserWithAdmin {
-	res := make([]*dto.UserWithAdmin, 0, len(participants))
-
-	for _, p := range participants {
-		u := users[p.ParticipantId]
-		if u != nil {
-			res = append(res, &dto.UserWithAdmin{
-				User:      *u,
-				ChatAdmin: p.ChatAdmin,
-			})
-		}
-	}
-
 	return res
 }
 
@@ -619,76 +590,6 @@ func (m *CommonProjection) GetChatByUserIdAndChatId(ctx context.Context, userId,
 		return "", err
 	}
 	return t, nil
-}
-
-type ParticipantWithAdmin struct {
-	ParticipantId int64 `json:"participantId" db:"user_id"`
-	ChatAdmin     bool  `json:"chatAdmin" db:"chat_admin"`
-}
-
-func (u *ParticipantWithAdmin) GetId() int64 {
-	if u != nil {
-		return u.ParticipantId
-	} else {
-		return dto.NoId
-	}
-}
-
-func GetParticipantIds(participants []ParticipantWithAdmin) []int64 {
-	res := make([]int64, 0, len(participants))
-	for _, pa := range participants {
-		res = append(res, pa.ParticipantId)
-	}
-	return res
-}
-
-func GetParticipantIdsP(participants []*ParticipantWithAdmin) []int64 {
-	res := make([]int64, 0, len(participants))
-	for _, pa := range participants {
-		res = append(res, pa.ParticipantId)
-	}
-	return res
-}
-
-func getParticipantChatAdmins(participants []ParticipantWithAdmin) []bool {
-	res := make([]bool, 0, len(participants))
-	for _, pa := range participants {
-		res = append(res, pa.ChatAdmin)
-	}
-	return res
-}
-
-func getParticipantsCommon(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]*ParticipantWithAdmin, error) {
-	list := make([]*ParticipantWithAdmin, 0)
-
-	var err error
-
-	order := "asc"
-	if reverseOrder {
-		order = "desc"
-	}
-
-	sqlArgs := []any{chatId, participantsSize, participantsOffset}
-	condition := ""
-	if len(excluding) > 0 {
-		condition = "AND user_id NOT IN (select * from unnest(cast ($4 as bigint[])))"
-		sqlArgs = append(sqlArgs, excluding)
-	}
-	sqlQuery := fmt.Sprintf(`
-		SELECT 
-		    user_id,
-		    chat_admin 
-		FROM chat_participant
-		WHERE chat_id = $1
-			%s
-		ORDER BY create_date_time %s
-		LIMIT $2 OFFSET $3
-	`, condition, order)
-	err = sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
-	if err != nil {
-		return nil, fmt.Errorf("error during interacting with db: %w", err)
-	}
-	return list, nil
 }
 
 func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperations, chatId int64) (*dto.ChatBasic, error) {

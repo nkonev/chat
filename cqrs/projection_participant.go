@@ -2,6 +2,7 @@ package cqrs
 
 import (
 	"context"
+	"fmt"
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -183,16 +184,17 @@ func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *Part
 
 func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, chatId int64, size int32, offset int64, searchString string) ([]*dto.UserWithAdmin, error) {
 	searchString = TrimAmdSanitize(m.policy, searchString)
+	const reverse = true
 
 	if len(searchString) > 0 {
-		usersWithAdmin, _, err := m.searchUsersContaining(ctx, m.cp.db, searchString, chatId, size, offset)
+		usersWithAdmin, _, err := m.searchUsersContaining(ctx, m.cp.db, searchString, chatId, size, offset, reverse)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
 			return nil, err
 		}
 		return usersWithAdmin, nil
 	} else {
-		participants, err := getParticipantsCommon(ctx, m.cp.db, chatId, nil, size, offset, true)
+		participants, err := getParticipantsCommon(ctx, m.cp.db, chatId, nil, size, offset, reverse)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
 
@@ -211,16 +213,17 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, chatI
 	}
 }
 
-func (m *EnrichingProjection) searchUsersContaining(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, pageSize int32, requestOffset int64) ([]*dto.UserWithAdmin, int64, error) {
+func (m *EnrichingProjection) searchUsersContaining(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, pageSize int32, requestOffset int64, reverse bool) ([]*dto.UserWithAdmin, int64, error) {
 	var resUsers = make([]*dto.UserWithAdmin, 0)
 	shouldContinue := true
 	processedItems := int64(0)
-	totalCountInChat := int64(0)
+	totalCountInChat := int64(0) // total count is for pagination in ParticipantsModal - should react on search
 
+	// iterate over all chat participants
 	for page := int64(0); shouldContinue; page++ {
 		offset := utils.GetOffset(page, pageSize)
-		participants, err := getParticipantsCommon(ctx, co, chatId, nil, utils.DefaultSize, offset, false)
-		if int32(len(participants)) < pageSize {
+		participantsPortion, err := getParticipantsCommon(ctx, co, chatId, nil, utils.DefaultSize, offset, reverse)
+		if int32(len(participantsPortion)) < pageSize {
 			shouldContinue = false
 		}
 		if err != nil {
@@ -228,18 +231,21 @@ func (m *EnrichingProjection) searchUsersContaining(ctx context.Context, co db.C
 			break
 		}
 
-		participantsWithAdminMap := utils.ToMap(participants)
+		participantIds := GetParticipantIdsP(participantsPortion)
 
-		participantIds := GetParticipantIdsP(participants)
-		usersPortion, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, participantIds, 0, pageSize)
+		// we don't send offset to SearchGetUsers(), because it's enriching, the base are participantsPortion from getParticipantsCommon()
+		usersPortion, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, participantIds, 0, pageSize, reverse)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error get resUsers from aaa", "err", err)
 			break
 		}
+
+		participantsWithAdminPortionMap := utils.ToMap(participantsPortion)
+
 		for _, u := range usersPortion {
 			if int32(len(resUsers)) < pageSize {
-				if processedItems >= requestOffset {
-					participantWithAdmin, ok := participantsWithAdminMap[u.Id]
+				if processedItems >= requestOffset { // skip those whose offset is lower than requested
+					participantWithAdmin, ok := participantsWithAdminPortionMap[u.Id]
 					if ok {
 						resUsers = append(resUsers, &dto.UserWithAdmin{
 							User:      *u,
@@ -249,7 +255,7 @@ func (m *EnrichingProjection) searchUsersContaining(ctx context.Context, co db.C
 				}
 				processedItems++
 			}
-			totalCountInChat++
+			totalCountInChat++ // users portion is a subset of participantsPortion, so here we have the actual counter
 		}
 	}
 
@@ -302,4 +308,103 @@ func (m *CommonProjection) IsParticipant(ctx context.Context, co db.CommonOperat
 		return false, err
 	}
 	return participant, nil
+}
+
+type ParticipantWithAdmin struct {
+	ParticipantId int64 `json:"participantId" db:"user_id"`
+	ChatAdmin     bool  `json:"chatAdmin" db:"chat_admin"`
+}
+
+func (u *ParticipantWithAdmin) GetId() int64 {
+	if u != nil {
+		return u.ParticipantId
+	} else {
+		return dto.NoId
+	}
+}
+
+func GetParticipantIds(participants []ParticipantWithAdmin) []int64 {
+	res := make([]int64, 0, len(participants))
+	for _, pa := range participants {
+		res = append(res, pa.ParticipantId)
+	}
+	return res
+}
+
+func GetParticipantIdsP(participants []*ParticipantWithAdmin) []int64 {
+	res := make([]int64, 0, len(participants))
+	for _, pa := range participants {
+		res = append(res, pa.ParticipantId)
+	}
+	return res
+}
+
+func getParticipantChatAdmins(participants []ParticipantWithAdmin) []bool {
+	res := make([]bool, 0, len(participants))
+	for _, pa := range participants {
+		res = append(res, pa.ChatAdmin)
+	}
+	return res
+}
+
+func getParticipantsCommon(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]*ParticipantWithAdmin, error) {
+	list := make([]*ParticipantWithAdmin, 0)
+
+	var err error
+
+	order := "asc"
+	if reverseOrder {
+		order = "desc"
+	}
+
+	sqlArgs := []any{chatId, participantsSize, participantsOffset}
+	condition := ""
+	if len(excluding) > 0 {
+		condition = "AND user_id NOT IN (select * from unnest(cast ($4 as bigint[])))"
+		sqlArgs = append(sqlArgs, excluding)
+	}
+	sqlQuery := fmt.Sprintf(`
+		SELECT 
+		    user_id,
+		    chat_admin 
+		FROM chat_participant
+		WHERE chat_id = $1
+			%s
+		ORDER BY create_date_time %s
+		LIMIT $2 OFFSET $3
+	`, condition, order)
+	err = sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("error during interacting with db: %w", err)
+	}
+	return list, nil
+}
+
+func makeParticipants(participantIds []int64, users map[int64]*dto.User) []dto.User {
+	res := make([]dto.User, 0, len(participantIds))
+
+	for _, p := range participantIds {
+		u := users[p]
+		if u != nil {
+			res = append(res, *u)
+		}
+	}
+
+	return res
+}
+
+func makeParticipantsWithAdmin(participants []*ParticipantWithAdmin, users map[int64]*dto.User) []*dto.UserWithAdmin {
+	res := make([]*dto.UserWithAdmin, 0, len(participants))
+
+	for _, p := range participants {
+		u := users[p.ParticipantId]
+		if u != nil {
+			res = append(res, &dto.UserWithAdmin{
+				User:      *u,
+				ChatAdmin: p.ChatAdmin,
+			})
+		}
+	}
+
+	return res
 }

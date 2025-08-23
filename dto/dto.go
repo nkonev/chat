@@ -67,9 +67,10 @@ type SearchUsersRequestDto struct {
 	UserIds      []int64 `json:"userIds"`
 	SearchString string  `json:"searchString"`
 	Including    bool    `json:"including"`
+	Reverse      bool    `json:"reverse"`
 }
 
 type SearchUsersResponseDto struct {
 	Users []*User `json:"users"`
-	Count int     `json:"count"`
+	Count int64   `json:"count"`
 }

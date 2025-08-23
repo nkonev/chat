@@ -541,7 +541,7 @@ func TestCreateTetATetChat(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
-		mockAaaClient.EXPECT().SearchGetUsers(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*dto.User{&mockUser2}, 1, nil)
+		mockAaaClient.EXPECT().SearchGetUsers(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*dto.User{&mockUser2}, 1, nil)
 
 		ctx := context.Background()
 
@@ -1063,6 +1063,7 @@ func TestAddParticipant(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().SearchGetUsers(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*dto.User{&mockUser2}, 2, nil)
 
 		ctx := context.Background()
 
@@ -1110,6 +1111,12 @@ func TestAddParticipant(t *testing.T) {
 		require.Equal(t, 2, len(chat1Participants))
 		assert.Equal(t, user2, chat1Participants[0].Id)
 		assert.Equal(t, user1, chat1Participants[1].Id)
+
+		const searchString2 = user2Login
+		chat1ParticipantsSearch2, err := testRestClient.GetChatParticipants(ctx, chat1Id, client.NewParticipantGetOptionWithSearch(searchString2))
+		require.NoError(t, err, "error in chat participants")
+		require.Equal(t, 1, len(chat1ParticipantsSearch2))
+		assert.Equal(t, user2, chat1ParticipantsSearch2[0].Id)
 
 		user2ChatsNew, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
@@ -1562,7 +1569,7 @@ func TestChatPaginate(t *testing.T) {
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{}, nil)
-		mockAaaClient.EXPECT().SearchGetUsers(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*dto.User{}, 0, nil)
+		mockAaaClient.EXPECT().SearchGetUsers(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*dto.User{}, 0, nil)
 
 		const user1 int64 = 1
 		const num = 1000
