@@ -62,8 +62,8 @@ type PutChatNotificationSettingsDto struct {
 }
 
 type SearchUsersRequestDto struct {
-	Page         int     `json:"page"`
-	Size         int     `json:"size"`
+	Page         int64   `json:"page"`
+	Size         int32   `json:"size"`
 	UserIds      []int64 `json:"userIds"`
 	SearchString string  `json:"searchString"`
 	Including    bool    `json:"including"`

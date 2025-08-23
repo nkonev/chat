@@ -54,7 +54,7 @@ func CreateHttpRouter(
 
 	ginRouter.PUT("/api/chat/:id/participant", participantHandler.AddParticipant)
 	ginRouter.DELETE("/api/chat/:id/participant", participantHandler.DeleteParticipant)
-	ginRouter.GET("/api/chat/:id/participants", participantHandler.GetParticipants)
+	ginRouter.GET("/api/chat/:id/participants", participantHandler.SearchParticipants)
 	ginRouter.PUT("/api/chat/:id/participant/:participantId", participantHandler.ChangeParticipant)
 
 	ginRouter.POST("/api/chat/:id/message", messageHandler.CreateMessage)

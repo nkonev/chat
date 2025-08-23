@@ -19,7 +19,7 @@ type aaaRestClient struct {
 
 type AaaRestClient interface {
 	GetUsers(ctx context.Context, userIds []int64) ([]*dto.User, error)
-	SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page, size int) ([]*dto.User, int, error)
+	SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int, error)
 }
 
 func NewAAARestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) AaaRestClient {
@@ -52,7 +52,7 @@ func (rc *aaaRestClient) GetUsers(ctx context.Context, userIds []int64) ([]*dto.
 	return resp, nil
 }
 
-func (rc *aaaRestClient) SearchGetUsers(ctx context.Context, searchString string, including bool, ids []int64, page, size int) ([]*dto.User, int, error) {
+func (rc *aaaRestClient) SearchGetUsers(ctx context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int, error) {
 	req := dto.SearchUsersRequestDto{
 		UserIds:      ids,
 		SearchString: searchString,

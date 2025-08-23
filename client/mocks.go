@@ -108,7 +108,7 @@ func (_c *MockAaaRestClient_GetUsers_Call) RunAndReturn(run func(ctx context.Con
 }
 
 // SearchGetUsers provides a mock function for the type MockAaaRestClient
-func (_mock *MockAaaRestClient) SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int, size int) ([]*dto.User, int, error) {
+func (_mock *MockAaaRestClient) SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int, error) {
 	ret := _mock.Called(c, searchString, including, ids, page, size)
 
 	if len(ret) == 0 {
@@ -118,22 +118,22 @@ func (_mock *MockAaaRestClient) SearchGetUsers(c context.Context, searchString s
 	var r0 []*dto.User
 	var r1 int
 	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int, int) ([]*dto.User, int, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32) ([]*dto.User, int, error)); ok {
 		return returnFunc(c, searchString, including, ids, page, size)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int, int) []*dto.User); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32) []*dto.User); ok {
 		r0 = returnFunc(c, searchString, including, ids, page, size)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*dto.User)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, bool, []int64, int, int) int); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, bool, []int64, int64, int32) int); ok {
 		r1 = returnFunc(c, searchString, including, ids, page, size)
 	} else {
 		r1 = ret.Get(1).(int)
 	}
-	if returnFunc, ok := ret.Get(2).(func(context.Context, string, bool, []int64, int, int) error); ok {
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, bool, []int64, int64, int32) error); ok {
 		r2 = returnFunc(c, searchString, including, ids, page, size)
 	} else {
 		r2 = ret.Error(2)
@@ -151,13 +151,13 @@ type MockAaaRestClient_SearchGetUsers_Call struct {
 //   - searchString string
 //   - including bool
 //   - ids []int64
-//   - page int
-//   - size int
+//   - page int64
+//   - size int32
 func (_e *MockAaaRestClient_Expecter) SearchGetUsers(c interface{}, searchString interface{}, including interface{}, ids interface{}, page interface{}, size interface{}) *MockAaaRestClient_SearchGetUsers_Call {
 	return &MockAaaRestClient_SearchGetUsers_Call{Call: _e.mock.On("SearchGetUsers", c, searchString, including, ids, page, size)}
 }
 
-func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context, searchString string, including bool, ids []int64, page int, size int)) *MockAaaRestClient_SearchGetUsers_Call {
+func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32)) *MockAaaRestClient_SearchGetUsers_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -175,13 +175,13 @@ func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context,
 		if args[3] != nil {
 			arg3 = args[3].([]int64)
 		}
-		var arg4 int
+		var arg4 int64
 		if args[4] != nil {
-			arg4 = args[4].(int)
+			arg4 = args[4].(int64)
 		}
-		var arg5 int
+		var arg5 int32
 		if args[5] != nil {
-			arg5 = args[5].(int)
+			arg5 = args[5].(int32)
 		}
 		run(
 			arg0,
@@ -200,7 +200,7 @@ func (_c *MockAaaRestClient_SearchGetUsers_Call) Return(users []*dto.User, n int
 	return _c
 }
 
-func (_c *MockAaaRestClient_SearchGetUsers_Call) RunAndReturn(run func(c context.Context, searchString string, including bool, ids []int64, page int, size int) ([]*dto.User, int, error)) *MockAaaRestClient_SearchGetUsers_Call {
+func (_c *MockAaaRestClient_SearchGetUsers_Call) RunAndReturn(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int, error)) *MockAaaRestClient_SearchGetUsers_Call {
 	_c.Call.Return(run)
 	return _c
 }

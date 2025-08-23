@@ -178,7 +178,7 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
-func (ch *ParticipantHandler) GetParticipants(g *gin.Context) {
+func (ch *ParticipantHandler) SearchParticipants(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 
 	chatId, err := utils.ParseInt64(cid)
@@ -191,9 +191,9 @@ func (ch *ParticipantHandler) GetParticipants(g *gin.Context) {
 	participantsPage := utils.FixPageString(g.Query(dto.PageParam))
 	participantsSize := utils.FixSizeString(g.Query(dto.SizeParam))
 	participantsOffset := utils.GetOffset(participantsPage, participantsSize)
-	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), true)
+	searchString := g.Query(dto.SearchStringParam)
 
-	participants, err := ch.enrichingProjection.GetParticipantsEnriched(g.Request.Context(), chatId, participantsSize, participantsOffset, reverse)
+	participants, err := ch.enrichingProjection.GetParticipantsEnriched(g.Request.Context(), chatId, participantsSize, participantsOffset, searchString)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participants", "err", err)
 		g.Status(http.StatusInternalServerError)

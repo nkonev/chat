@@ -454,13 +454,13 @@ func makeParticipants(participantIds []int64, users map[int64]*dto.User) []dto.U
 	return res
 }
 
-func makeParticipantsWithAdmin(participants []ParticipantWithAdmin, users map[int64]*dto.User) []dto.UserWithAdmin {
-	res := make([]dto.UserWithAdmin, 0, len(participants))
+func makeParticipantsWithAdmin(participants []*ParticipantWithAdmin, users map[int64]*dto.User) []*dto.UserWithAdmin {
+	res := make([]*dto.UserWithAdmin, 0, len(participants))
 
 	for _, p := range participants {
 		u := users[p.ParticipantId]
 		if u != nil {
-			res = append(res, dto.UserWithAdmin{
+			res = append(res, &dto.UserWithAdmin{
 				User:      *u,
 				ChatAdmin: p.ChatAdmin,
 			})
@@ -626,7 +626,23 @@ type ParticipantWithAdmin struct {
 	ChatAdmin     bool  `json:"chatAdmin" db:"chat_admin"`
 }
 
+func (u *ParticipantWithAdmin) GetId() int64 {
+	if u != nil {
+		return u.ParticipantId
+	} else {
+		return dto.NoId
+	}
+}
+
 func GetParticipantIds(participants []ParticipantWithAdmin) []int64 {
+	res := make([]int64, 0, len(participants))
+	for _, pa := range participants {
+		res = append(res, pa.ParticipantId)
+	}
+	return res
+}
+
+func GetParticipantIdsP(participants []*ParticipantWithAdmin) []int64 {
 	res := make([]int64, 0, len(participants))
 	for _, pa := range participants {
 		res = append(res, pa.ParticipantId)
@@ -642,8 +658,8 @@ func getParticipantChatAdmins(participants []ParticipantWithAdmin) []bool {
 	return res
 }
 
-func getParticipantIdsCommon(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]ParticipantWithAdmin, error) {
-	list := make([]ParticipantWithAdmin, 0)
+func getParticipantsCommon(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]*ParticipantWithAdmin, error) {
+	list := make([]*ParticipantWithAdmin, 0)
 
 	var err error
 

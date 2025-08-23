@@ -181,23 +181,79 @@ func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *Part
 	})
 }
 
-func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, chatId int64, size int32, offset int64, reverse bool) ([]dto.UserWithAdmin, error) {
-	participants, err := getParticipantIdsCommon(ctx, m.cp.db, chatId, nil, size, offset, reverse)
-	if err != nil {
-		m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
+func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, chatId int64, size int32, offset int64, searchString string) ([]*dto.UserWithAdmin, error) {
+	searchString = TrimAmdSanitize(m.policy, searchString)
 
-		return nil, err
+	if len(searchString) > 0 {
+		usersWithAdmin, _, err := m.searchUsersContaining(ctx, m.cp.db, searchString, chatId, size, offset)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
+			return nil, err
+		}
+		return usersWithAdmin, nil
+	} else {
+		participants, err := getParticipantsCommon(ctx, m.cp.db, chatId, nil, size, offset, true)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
+
+			return nil, err
+		}
+		participantIds := GetParticipantIdsP(participants)
+
+		users, err := m.aaaRestClient.GetUsers(ctx, participantIds)
+		if err != nil {
+			m.lgr.WarnContext(ctx, "unable to get users")
+		}
+
+		orderedEnrichedParticipants := makeParticipantsWithAdmin(participants, utils.ToMap(users))
+
+		return orderedEnrichedParticipants, nil
 	}
-	participantIds := GetParticipantIds(participants)
+}
 
-	users, err := m.aaaRestClient.GetUsers(ctx, participantIds)
-	if err != nil {
-		m.lgr.WarnContext(ctx, "unable to get users")
+func (m *EnrichingProjection) searchUsersContaining(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, pageSize int32, requestOffset int64) ([]*dto.UserWithAdmin, int64, error) {
+	var resUsers = make([]*dto.UserWithAdmin, 0)
+	shouldContinue := true
+	processedItems := int64(0)
+	totalCountInChat := int64(0)
+
+	for page := int64(0); shouldContinue; page++ {
+		offset := utils.GetOffset(page, pageSize)
+		participants, err := getParticipantsCommon(ctx, co, chatId, nil, utils.DefaultSize, offset, false)
+		if int32(len(participants)) < pageSize {
+			shouldContinue = false
+		}
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			break
+		}
+
+		participantsWithAdminMap := utils.ToMap(participants)
+
+		participantIds := GetParticipantIdsP(participants)
+		usersPortion, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, participantIds, 0, pageSize)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error get resUsers from aaa", "err", err)
+			break
+		}
+		for _, u := range usersPortion {
+			if int32(len(resUsers)) < pageSize {
+				if processedItems >= requestOffset {
+					participantWithAdmin, ok := participantsWithAdminMap[u.Id]
+					if ok {
+						resUsers = append(resUsers, &dto.UserWithAdmin{
+							User:      *u,
+							ChatAdmin: participantWithAdmin.ChatAdmin,
+						})
+					}
+				}
+				processedItems++
+			}
+			totalCountInChat++
+		}
 	}
 
-	orderedEnrichedParticipants := makeParticipantsWithAdmin(participants, utils.ToMap(users))
-
-	return orderedEnrichedParticipants, nil
+	return resUsers, totalCountInChat, nil
 }
 
 func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, consumer func(participantIdsPortion []int64) error) error {
@@ -205,7 +261,7 @@ func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co
 	var lastError error
 	for page := int64(0); shouldContinue; page++ {
 		offset := utils.GetOffset(page, utils.DefaultSize)
-		participants, err := getParticipantIdsCommon(ctx, co, chatId, excluding, utils.DefaultSize, offset, false)
+		participants, err := getParticipantsCommon(ctx, co, chatId, excluding, utils.DefaultSize, offset, false)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
 			lastError = err
@@ -218,7 +274,7 @@ func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co
 			shouldContinue = false
 		}
 
-		participantIds := GetParticipantIds(participants)
+		participantIds := GetParticipantIdsP(participants)
 
 		err = consumer(participantIds)
 		if err != nil {
