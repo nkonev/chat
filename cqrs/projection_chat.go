@@ -390,7 +390,7 @@ func (m *EnrichingProjection) searchForUsers(ctx context.Context, searchString s
 	var additionalFoundUserIds = []int64{}
 
 	if searchString != "" && searchString != dto.ReservedPublicallyAvailableForSearchChats {
-		users, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, []int64{}, 0, 0, false)
+		users, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, []int64{}, 0, 0)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error get users from aaa", "err", err)
 		}

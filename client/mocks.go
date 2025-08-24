@@ -108,8 +108,8 @@ func (_c *MockAaaRestClient_GetUsers_Call) RunAndReturn(run func(ctx context.Con
 }
 
 // SearchGetUsers provides a mock function for the type MockAaaRestClient
-func (_mock *MockAaaRestClient) SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int64, size int32, reverse bool) ([]*dto.User, int64, error) {
-	ret := _mock.Called(c, searchString, including, ids, page, size, reverse)
+func (_mock *MockAaaRestClient) SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int64, error) {
+	ret := _mock.Called(c, searchString, including, ids, page, size)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SearchGetUsers")
@@ -118,23 +118,23 @@ func (_mock *MockAaaRestClient) SearchGetUsers(c context.Context, searchString s
 	var r0 []*dto.User
 	var r1 int64
 	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32, bool) ([]*dto.User, int64, error)); ok {
-		return returnFunc(c, searchString, including, ids, page, size, reverse)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32) ([]*dto.User, int64, error)); ok {
+		return returnFunc(c, searchString, including, ids, page, size)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32, bool) []*dto.User); ok {
-		r0 = returnFunc(c, searchString, including, ids, page, size, reverse)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32) []*dto.User); ok {
+		r0 = returnFunc(c, searchString, including, ids, page, size)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*dto.User)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, bool, []int64, int64, int32, bool) int64); ok {
-		r1 = returnFunc(c, searchString, including, ids, page, size, reverse)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, bool, []int64, int64, int32) int64); ok {
+		r1 = returnFunc(c, searchString, including, ids, page, size)
 	} else {
 		r1 = ret.Get(1).(int64)
 	}
-	if returnFunc, ok := ret.Get(2).(func(context.Context, string, bool, []int64, int64, int32, bool) error); ok {
-		r2 = returnFunc(c, searchString, including, ids, page, size, reverse)
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, bool, []int64, int64, int32) error); ok {
+		r2 = returnFunc(c, searchString, including, ids, page, size)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -153,12 +153,11 @@ type MockAaaRestClient_SearchGetUsers_Call struct {
 //   - ids []int64
 //   - page int64
 //   - size int32
-//   - reverse bool
-func (_e *MockAaaRestClient_Expecter) SearchGetUsers(c interface{}, searchString interface{}, including interface{}, ids interface{}, page interface{}, size interface{}, reverse interface{}) *MockAaaRestClient_SearchGetUsers_Call {
-	return &MockAaaRestClient_SearchGetUsers_Call{Call: _e.mock.On("SearchGetUsers", c, searchString, including, ids, page, size, reverse)}
+func (_e *MockAaaRestClient_Expecter) SearchGetUsers(c interface{}, searchString interface{}, including interface{}, ids interface{}, page interface{}, size interface{}) *MockAaaRestClient_SearchGetUsers_Call {
+	return &MockAaaRestClient_SearchGetUsers_Call{Call: _e.mock.On("SearchGetUsers", c, searchString, including, ids, page, size)}
 }
 
-func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32, reverse bool)) *MockAaaRestClient_SearchGetUsers_Call {
+func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32)) *MockAaaRestClient_SearchGetUsers_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -184,10 +183,6 @@ func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context,
 		if args[5] != nil {
 			arg5 = args[5].(int32)
 		}
-		var arg6 bool
-		if args[6] != nil {
-			arg6 = args[6].(bool)
-		}
 		run(
 			arg0,
 			arg1,
@@ -195,7 +190,6 @@ func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context,
 			arg3,
 			arg4,
 			arg5,
-			arg6,
 		)
 	})
 	return _c
@@ -206,7 +200,7 @@ func (_c *MockAaaRestClient_SearchGetUsers_Call) Return(users []*dto.User, n int
 	return _c
 }
 
-func (_c *MockAaaRestClient_SearchGetUsers_Call) RunAndReturn(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32, reverse bool) ([]*dto.User, int64, error)) *MockAaaRestClient_SearchGetUsers_Call {
+func (_c *MockAaaRestClient_SearchGetUsers_Call) RunAndReturn(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int64, error)) *MockAaaRestClient_SearchGetUsers_Call {
 	_c.Call.Return(run)
 	return _c
 }

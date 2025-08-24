@@ -67,7 +67,6 @@ type SearchUsersRequestDto struct {
 	UserIds      []int64 `json:"userIds"`
 	SearchString string  `json:"searchString"`
 	Including    bool    `json:"including"`
-	Reverse      bool    `json:"reverse"`
 }
 
 type SearchUsersResponseDto struct {

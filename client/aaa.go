@@ -19,7 +19,7 @@ type aaaRestClient struct {
 
 type AaaRestClient interface {
 	GetUsers(ctx context.Context, userIds []int64) ([]*dto.User, error)
-	SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int64, size int32, reverse bool) ([]*dto.User, int64, error)
+	SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int64, error)
 }
 
 func NewAAARestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) AaaRestClient {
@@ -52,14 +52,13 @@ func (rc *aaaRestClient) GetUsers(ctx context.Context, userIds []int64) ([]*dto.
 	return resp, nil
 }
 
-func (rc *aaaRestClient) SearchGetUsers(ctx context.Context, searchString string, including bool, ids []int64, page int64, size int32, reverse bool) ([]*dto.User, int64, error) {
+func (rc *aaaRestClient) SearchGetUsers(ctx context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int64, error) {
 	req := dto.SearchUsersRequestDto{
 		UserIds:      ids,
 		SearchString: searchString,
 		Including:    including,
 		Page:         page,
 		Size:         size,
-		Reverse:      reverse,
 	}
 
 	respDto, err := query[dto.SearchUsersRequestDto, dto.SearchUsersResponseDto](ctx, &rc.restClient, dto.NonExistentUser, http.MethodPost, rc.cfg.Aaa.Url.SearchUsers, "user.Search", &req, nil)

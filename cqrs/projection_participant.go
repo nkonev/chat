@@ -234,15 +234,27 @@ func (m *EnrichingProjection) searchUsersContaining(ctx context.Context, co db.C
 		participantIds := GetParticipantIdsP(participantsPortion)
 
 		// we don't send offset to SearchGetUsers(), because it's enriching, the base are participantsPortion from getParticipantsCommon()
-		usersPortion, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, participantIds, 0, pageSize, reverse)
+		// page 0 because it's portion by ids
+		usersPortion, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, participantIds, 0, pageSize)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error get resUsers from aaa", "err", err)
 			break
 		}
 
 		participantsWithAdminPortionMap := utils.ToMap(participantsPortion)
+		usersPortionMap := utils.ToMap(usersPortion)
 
-		for _, u := range usersPortion {
+		// order aaa's users in accordance with participantsPortion
+		foundUsersPortionOrderedSlice := make([]*dto.User, 0)
+		for _, p := range participantsPortion {
+			u, ok := usersPortionMap[p.ParticipantId]
+			if ok {
+				foundUsersPortionOrderedSlice = append(foundUsersPortionOrderedSlice, u)
+			}
+		}
+
+		// here we make the intersection of participantsPortion and usersPortion and preserving initial order of participantsPortion
+		for _, u := range foundUsersPortionOrderedSlice {
 			if int32(len(resUsers)) < pageSize {
 				if processedItems >= requestOffset { // skip those whose offset is lower than requested
 					participantWithAdmin, ok := participantsWithAdminPortionMap[u.Id]
