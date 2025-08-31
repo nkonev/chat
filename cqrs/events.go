@@ -47,6 +47,17 @@ type ParticipantsAdded struct {
 	SkipChatAdminCheck bool                   `json:"skipChatAdminCheck"`
 }
 
+func (p *ParticipantsAdded) GetParticipantIds() []int64 {
+	res := []int64{}
+	if p == nil {
+		return res
+	}
+	for _, pa := range p.Participants {
+		res = append(res, pa.ParticipantId)
+	}
+	return res
+}
+
 type ParticipantDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ParticipantIds []int64         `json:"participantIds"`

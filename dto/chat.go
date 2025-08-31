@@ -5,9 +5,11 @@ import (
 )
 
 const NoChatTitle = ""
+const NoSearchString = ""
 
 type ChatViewDto struct {
 	Id                       int64      `json:"id"`
+	UserId                   int64      `json:"-"`
 	Title                    string     `json:"title"`
 	Pinned                   bool       `json:"pinned"`
 	UnreadMessages           int64      `json:"unreadMessages"`

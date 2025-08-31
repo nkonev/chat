@@ -366,24 +366,51 @@ func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOper
 	return chatExists, nil
 }
 
-func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfUserId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string) ([]dto.ChatViewEnrichedDto, error) {
+// returns [userId]isAdmin
+func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatIds []int64) (map[int64]bool, error) {
+	type ParticipantAdmin struct {
+		UserId int64 `db:"user_id"`
+		ChatId int64 `db:"chat_id"`
+	}
+}
+
+// contract either multiple chats
+// or one chatId != nil
+func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfParticipantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, chatId *int64) ([]dto.ChatViewEnrichedDto, error) {
 	searchString = TrimAmdSanitize(m.policy, searchString)
 
 	additionalFoundUserIds := m.searchForUsers(ctx, searchString)
 
-	chats, err := m.cp.GetChats(ctx, behalfUserId, size, startingFromItemId, includeStartingFrom, reverse, searchString, additionalFoundUserIds)
-	if err != nil {
-		m.lgr.ErrorContext(ctx, "Error getting chats", "err", err)
-		return nil, err
-	}
+	return db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) ([]dto.ChatViewEnrichedDto, error) {
+		chats, err := m.cp.GetChats(ctx, tx, behalfParticipantIds, size, startingFromItemId, includeStartingFrom, reverse, searchString, additionalFoundUserIds, chatId)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error getting chats", "err", err)
+			return nil, err
+		}
 
-	userIds := getUserIdsFromChats(chats)
-	users, err := m.aaaRestClient.GetUsers(ctx, userIds)
-	if err != nil {
-		m.lgr.WarnContext(ctx, "unable to get users")
-	}
-	chatsEnriched := enrichChats(behalfUserId, chats, utils.ToMap(users))
-	return chatsEnriched, nil
+		userIds := getUserIdsFromChats(chats)
+		users, err := m.aaaRestClient.GetUsers(ctx, userIds)
+		if err != nil {
+			m.lgr.WarnContext(ctx, "unable to get users")
+		}
+
+		usersMap := utils.ToMap(users)
+
+		chatIds := getChatIdsFromChats(chats)
+
+		areAdmins, err := m.cp.getAreAdminsOfUserIds(ctx, tx, behalfParticipantIds, chatIds)
+		if err != nil {
+			return nil, err
+		}
+
+		chatsEnriched := make([]dto.ChatViewEnrichedDto, 0, len(chats))
+		for _, ch := range chats {
+			che := enrichChat(ch.UserId, ch, usersMap, areAdmins)
+			chatsEnriched = append(chatsEnriched, che)
+		}
+
+		return chatsEnriched, nil
+	})
 }
 
 func (m *EnrichingProjection) searchForUsers(ctx context.Context, searchString string) []int64 {
@@ -418,32 +445,71 @@ func getUserIdsFromChats(chats []dto.ChatViewDto) []int64 {
 	return r
 }
 
-func enrichChats(behalfUserId int64, chats []dto.ChatViewDto, users map[int64]*dto.User) []dto.ChatViewEnrichedDto {
-	res := make([]dto.ChatViewEnrichedDto, 0, len(chats))
+func getChatIdsFromChats(chats []dto.ChatViewDto) []int64 {
+	m := map[int64]struct{}{}
+
 	for _, ch := range chats {
-		che := dto.ChatViewEnrichedDto{
-			ChatViewDto:  ch,
-			Participants: makeParticipants(ch.ParticipantIds, users),
-		}
-		if che.TetATet {
-			oppa := utils.GetSliceWithout(behalfUserId, che.ParticipantIds)
-			if len(oppa) == 1 {
-				oppositeUserId := oppa[0]
-				oppositeUser := users[oppositeUserId]
-				if oppositeUser != nil {
-					che.Title = oppositeUser.Login
-					che.Avatar = oppositeUser.Avatar
-				}
-			}
-		}
-		res = append(res, che)
+		m[ch.Id] = struct{}{}
 	}
-	return res
+
+	r := []int64{}
+
+	for k, _ := range m {
+		r = append(r, k)
+	}
+	return r
 }
 
-func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, additionalFoundUserIds []int64) ([]dto.ChatViewDto, error) {
+func enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.User, areAdminsMap map[int64]bool) dto.ChatViewEnrichedDto {
+	che := dto.ChatViewEnrichedDto{
+		ChatViewDto:  ch,
+		Participants: makeParticipants(ch.ParticipantIds, users),
+	}
+	if che.TetATet {
+		oppa := utils.GetSliceWithout(behalfUserId, che.ParticipantIds)
+		if len(oppa) == 1 {
+			oppositeUserId := oppa[0]
+			oppositeUser := users[oppositeUserId]
+			if oppositeUser != nil {
+				che.Title = oppositeUser.Login
+				che.Avatar = oppositeUser.Avatar
+				// TODO set last seen
+			}
+		}
+	}
+	SetPersonalizedFields(&che, areAdminsMap[behalfUserId], true)
+
+	return che
+}
+
+func SetPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, participant bool) {
+	canEdit := admin && !copied.TetATet
+	copied.CanEdit = &canEdit
+	canDelete := admin
+	copied.CanDelete = &canDelete
+	canLeave := !admin && !copied.TetATet && participant
+	copied.CanLeave = &canLeave
+	copied.CanVideoKick = admin
+	copied.CanAudioMute = admin
+	copied.CanChangeChatAdmins = admin && !copied.TetATet
+	copied.CanBroadcast = admin
+
+	if !participant {
+		isResultFromSearch := true
+		copied.IsResultFromSearch = &isResultFromSearch
+	}
+
+	copied.CanWriteMessage = true
+	// see also handlers PostMessage, EditMessage, DeleteMessage
+	if !copied.RegularParticipantCanWriteMessage && !admin {
+		copied.CanWriteMessage = false
+	}
+}
+
+func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations, participantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, additionalFoundUserIds []int64, chatId *int64) ([]dto.ChatViewDto, error) {
 	type chatDto struct {
 		Id                       int64            `db:"id"`
+		UserId                   int64            `db:"user_id"`
 		Title                    string           `db:"title"`
 		Pinned                   bool             `db:"pinned"`
 		UnreadMessages           int64            `db:"unread_messages"`
@@ -463,7 +529,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 	list := []chatDto{}
 	res := []dto.ChatViewDto{}
 
-	queryArgs := []any{participantId, size}
+	queryArgs := []any{participantIds, size}
 
 	order := "desc"
 	offset := " offset 1" // to make behaviour the same as in users, messages (there is > or <)
@@ -480,10 +546,17 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		nonEquality = ">="
 	}
 
-	paginationKeyset := ""
+	conditionClause := ""
+
+	if startingFromItemId != nil && chatId != nil {
+		return nil, fmt.Errorf("wrong invariant: both startingFromItemId and chatId provided")
+	}
+
 	if startingFromItemId != nil {
-		paginationKeyset = fmt.Sprintf(` and (ch.pinned, ch.update_date_time, ch.id) %s ($%d, $%d, $%d)`, nonEquality, len(queryArgs)+1, len(queryArgs)+2, len(queryArgs)+3)
+		paginationKeyset := fmt.Sprintf(` and (ch.pinned, ch.update_date_time, ch.id) %s ($%d, $%d, $%d)`, nonEquality, len(queryArgs)+1, len(queryArgs)+2, len(queryArgs)+3)
 		queryArgs = append(queryArgs, startingFromItemId.Pinned, startingFromItemId.LastUpdateDateTime, startingFromItemId.Id)
+
+		conditionClause = paginationKeyset
 	}
 
 	var searchClause = ""
@@ -510,6 +583,14 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		queryArgs = append(queryArgs, searchString)
 	}
 
+	if chatId != nil {
+		chatIdV := *chatId
+		queryArgs = append(queryArgs, chatIdV)
+		chatIdClause := fmt.Sprintf("and ch.id = $%d", len(queryArgs))
+
+		conditionClause = chatIdClause
+	}
+
 	// it is optimized (all order by in the same table)
 	// so querying a page (using keyset) from a large amount of chats is fast
 	// it's the root cause why we use cqrs
@@ -517,6 +598,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		%s
 		select 
 		    ch.id,
+			ch.user_id,
 		    cc.title,
 		    ch.pinned,
 		    coalesce(m.unread_messages, 0) as unread_messages,
@@ -532,16 +614,16 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 			cc.avatar_big,
 			coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread
 		from chat_user_view ch
-		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = $1)
+		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = any($1))
 		left join blog b on ch.id = b.id
 		join chat_common cc on cc.id = ch.id
-		where ch.user_id = $1 %s
+		where ch.user_id = any($1) %s
 		%s
 		order by (ch.pinned, ch.update_date_time, ch.id) %s
 		limit $2 
 		%s
-		`, searchCte, paginationKeyset, searchClause, order, offset)
-	err := sqlscan.Select(ctx, m.db, &list, q, queryArgs...)
+		`, searchCte, conditionClause, searchClause, order, offset)
+	err := sqlscan.Select(ctx, co, &list, q, queryArgs...)
 	if err != nil {
 		return res, err
 	}
@@ -549,6 +631,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 	for i, de := range list {
 		mapped := dto.ChatViewDto{
 			Id:                       de.Id,
+			UserId:                   de.UserId,
 			Title:                    de.Title,
 			Pinned:                   de.Pinned,
 			UnreadMessages:           de.UnreadMessages,

@@ -11,44 +11,55 @@ import (
 
 type EventHandler struct {
 	commonProjection       *CommonProjection
+	enrichingProjection    *EnrichingProjection
 	rabbitmqEventPublisher *producer.RabbitEventsPublisher
 	db                     *db.DB
 }
 
-func NewEventHandler(commonProjection *CommonProjection, rabbitmqEventPublisher *producer.RabbitEventsPublisher, db *db.DB) *EventHandler {
+func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *EnrichingProjection, rabbitmqEventPublisher *producer.RabbitEventsPublisher, db *db.DB) *EventHandler {
 	return &EventHandler{
 		commonProjection:       commonProjection,
+		enrichingProjection:    enrichingProjection,
 		rabbitmqEventPublisher: rabbitmqEventPublisher,
 		db:                     db,
 	}
 }
 
-func (m *EventHandler) OnChatCreated(ctx context.Context, event *ChatCreated) error {
-	err := m.commonProjection.OnChatCreated(ctx, event)
-	if err != nil {
-		return err
+func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) error {
+	errp := m.commonProjection.OnParticipantAdded(ctx, event)
+	if errp != nil {
+		return errp
 	}
 
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		// TODO взять персональный chat_user_view
-		//  и поверх обогатить инфой canDelete, canEdit...
-		chatDto, err := ch.getChatWithoutPersonalization(ctx, tx, event.ChatId, 0, 0)
+		chatViews, err := m.enrichingProjection.GetChatsEnriched(ctx, event.GetParticipantIds(), int32(len(event.Participants)), nil, true, false, dto.NoSearchString, &event.ChatId)
 		if err != nil {
 			return err
 		}
 
-		err = tx.IterateOverChatParticipantIds(ctx, event.ChatId, func(participantIds []int64) error {
-			areAdmins, err := getAreAdminsOfUserIds(ctx, tx, participantIds, event.ChatId)
-			if err != nil {
-				return err
-			}
-
-			m.NotifyAboutNewChat(ctx, chatDto, participantIds, len(chatDto.ParticipantIds) == 1, true, tx, areAdmins)
-			return nil
-		})
-		if err != nil {
-			return err
-		}
+		// TODO просто сконвертить chatViews в эвенты
+		//for _, participantsChatView := range chatViews {
+		//
+		//}
+		//
+		////  и поверх обогатить инфой canDelete, canEdit...
+		//chatDto, err := ch.getChatWithoutPersonalization(ctx, tx, event.ChatId, 0, 0)
+		//if err != nil {
+		//	return err
+		//}
+		//
+		//err = tx.IterateOverChatParticipantIds(ctx, event.ChatId, func(participantIds []int64) error {
+		//	areAdmins, err := getAreAdminsOfUserIds(ctx, tx, participantIds, event.ChatId)
+		//	if err != nil {
+		//		return err
+		//	}
+		//
+		//	m.NotifyAboutNewChat(ctx, chatDto, participantIds, len(chatDto.ParticipantIds) == 1, true, tx, areAdmins)
+		//	return nil
+		//})
+		//if err != nil {
+		//	return err
+		//}
 		return nil
 	})
 	return errOuter

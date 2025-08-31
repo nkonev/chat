@@ -197,6 +197,7 @@ func ConfigureEventProcessor(
 	kafkaMarshaler kafka.MarshalerUnmarshaler,
 	cqrsMarshaler *CqrsMarshalerDecorator,
 	commonProjection *CommonProjection,
+	cqrsEventHandler *EventHandler,
 ) (*cqrs.EventGroupProcessor, error) {
 	kafkaConsumerConfig := sarama.NewConfig()
 	kafkaConsumerConfig.Consumer.Return.Errors = cfg.Kafka.Consumer.ReturnErrors
@@ -239,7 +240,7 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(commonProjection.OnChatCreated),
 		cqrs.NewGroupEventHandler(commonProjection.OnChatEdited),
 		cqrs.NewGroupEventHandler(commonProjection.OnChatRemoved),
-		cqrs.NewGroupEventHandler(commonProjection.OnParticipantAdded),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantAdded),
 		cqrs.NewGroupEventHandler(commonProjection.OnParticipantRemoved),
 		cqrs.NewGroupEventHandler(commonProjection.OnParticipantChanged),
 		cqrs.NewGroupEventHandler(commonProjection.OnChatPinned),
