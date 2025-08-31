@@ -14,6 +14,12 @@ See [It's Okay To Store Data In Kafka](https://www.confluent.io/blog/okay-store-
 ```bash
 docker compose up -d
 go run . serve
+
+# or
+make package
+./chat serve --server.address=:8080
+./chat serve --server.address=:8082
+./chat serve --server.address=:8083
 ```
 
 # Play with
