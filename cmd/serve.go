@@ -9,6 +9,8 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
+	"go-cqrs-chat-example/producer"
+	"go-cqrs-chat-example/rabbitmq"
 	"go-cqrs-chat-example/services"
 	"log/slog"
 	"os"
@@ -62,6 +64,9 @@ func RunServe(args []string) {
 			client.NewAAARestClient,
 			services.CreateSanitizer,
 			services.CreateStripTags,
+			producer.NewRabbitEventsPublisher,
+			rabbitmq.CreateRabbitMqConnection,
+			cqrs.NewEventHandler,
 		),
 		fx.Invoke(
 			db.RunMigrations,

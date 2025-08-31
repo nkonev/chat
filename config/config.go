@@ -141,6 +141,11 @@ type MessageConfig struct {
 	MaxDisplayableReactionUsers int
 }
 
+type RabbitMQConfig struct {
+	Url   string
+	Debug bool
+}
+
 type AppConfig struct {
 	Kafka       KafkaConfig
 	Otlp        OtlpConfig
@@ -153,6 +158,7 @@ type AppConfig struct {
 	Aaa         AaaConfig
 	Message     MessageConfig
 	FrontendUrl string
+	RabbitMQ    RabbitMQConfig
 }
 
 //go:embed config

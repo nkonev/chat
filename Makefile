@@ -23,6 +23,7 @@ infra:
 	./scripts/wait-for-it.sh -t 30 127.0.0.1:5432 -- echo 'postgresql-citus-coordinator-1 is up'
 	./scripts/wait-for-it.sh -t 30 127.0.0.1:9092 -- echo 'kafka is up'
 	./scripts/wait-for-it.sh -t 30 127.0.0.1:16686 -- echo 'jaeger web ui is up'
+	./scripts/wait-for-it.sh -t 30 127.0.0.1:15672 -- echo 'rabbitmq web ui is up'
 
 run: package-go infra
 	./$(EXECUTABLE) serve

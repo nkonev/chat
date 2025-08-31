@@ -82,3 +82,6 @@ message:
   # should be aligned with viewList.maxSize in storage
   maxMedias: 100 # image, video, audio, iframe
   maxDisplayableReactionUsers: 10
+
+rabbitmq:
+  url: "amqp://videoChat:videoChatPazZw0rd@127.0.0.1:36672"

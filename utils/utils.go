@@ -180,3 +180,8 @@ func ToMap[T WithId](sliceInput []T) map[int64]T {
 	}
 	return m
 }
+
+func GetType(aDto interface{}) string {
+	strName := fmt.Sprintf("%T", aDto)
+	return strName
+}

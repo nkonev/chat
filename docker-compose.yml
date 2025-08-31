@@ -77,6 +77,25 @@ services:
         max-size: "50m"
         max-file: "1"
 
+  rabbitmq:
+    image: rabbitmq:4.0.9-management-alpine
+    hostname: rabbitmq
+    restart: unless-stopped
+    ports:
+      - 15672:15672
+      - 5672:5672
+    environment:
+      - RABBITMQ_DEFAULT_USER=chat
+      - RABBITMQ_DEFAULT_PASS=chatPazZw0rd
+    volumes:
+      - rabbitmq_data_dir:/var/lib/rabbitmq/mnesia:z
+      - ./docker/rabbitmq/additional.conf:/etc/rabbitmq/conf.d/additional.conf:ro,z
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "1"
+
   jaeger:
     image: jaegertracing/all-in-one:1.58.1
     hostname: jaeger
@@ -101,3 +120,4 @@ volumes:
   postgres_chat_citus_coordinator_1_data:
   postgres_chat_citus_worker_1_data:
   postgres_chat_citus_worker_2_data:
+  rabbitmq_data_dir:
