@@ -531,11 +531,15 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 
 	queryArgs := []any{participantIds, size}
 
+	orderClause := ""
+
 	order := "desc"
 	offset := " offset 1" // to make behaviour the same as in users, messages (there is > or <)
 	if reverse {
 		order = "asc"
 	}
+
+	orderClause := fmt.Sprintf("order by (ch.pinned, ch.update_date_time, ch.id) %s", order)
 	// see also getSafeDefaultUserId() in aaa
 	if includeStartingFrom || startingFromItemId == nil {
 		offset = ""
@@ -589,6 +593,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		chatIdClause := fmt.Sprintf("and ch.id = $%d", len(queryArgs))
 
 		conditionClause = chatIdClause
+		orderClause = ""
 	}
 
 	// it is optimized (all order by in the same table)
@@ -619,10 +624,10 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		join chat_common cc on cc.id = ch.id
 		where ch.user_id = any($1) %s
 		%s
-		order by (ch.pinned, ch.update_date_time, ch.id) %s
+		%s
 		limit $2 
 		%s
-		`, searchCte, conditionClause, searchClause, order, offset)
+		`, searchCte, conditionClause, searchClause, orderClause, offset)
 	err := sqlscan.Select(ctx, co, &list, q, queryArgs...)
 	if err != nil {
 		return res, err
