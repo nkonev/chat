@@ -239,6 +239,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus E
 		return 0, err
 	}
 
+	// TODO make config with max participant ids per one business command
 	if !slices.Contains(copyCommand.ParticipantIds, behalfUserId) {
 		copyCommand.ParticipantIds = append(copyCommand.ParticipantIds, behalfUserId)
 	}
