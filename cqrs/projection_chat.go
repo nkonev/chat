@@ -395,7 +395,7 @@ func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.Comm
 	return res, nil
 }
 
-// contract either multiple chats
+// contract: either multiple chats
 // or one chatId != nil
 func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfParticipantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, chatId *int64) ([]dto.ChatViewEnrichedDto, error) {
 	searchString = TrimAmdSanitize(m.policy, searchString)

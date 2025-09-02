@@ -33,6 +33,10 @@ type ChatId struct {
 	Id                 int64
 }
 
+type ChatDeletedDto struct {
+	Id int64 `json:"id"`
+}
+
 type ChatViewEnrichedDto struct {
 	ChatViewDto
 	Participants        []User `json:"participants"`
