@@ -371,7 +371,28 @@ func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.Comm
 	type ParticipantAdmin struct {
 		UserId int64 `db:"user_id"`
 		ChatId int64 `db:"chat_id"`
+		Admin  bool  `db:"chat_admin"`
 	}
+	list := []ParticipantAdmin{}
+	err := sqlscan.Select(ctx, co, &list, `
+		select 
+			user_id,
+			chat_id,
+			chat_admin
+		from chat_participant
+		where user_id = any($1) and chat_id = any($2)
+		order by create_date_time
+	`, participantIds, chatIds)
+	if err != nil {
+		return nil, err
+	}
+
+	res := map[int64]bool{}
+	for _, pa := range list {
+		res[pa.UserId] = pa.Admin
+	}
+
+	return res, nil
 }
 
 // contract either multiple chats
@@ -504,34 +525,34 @@ func SetPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, particip
 	if !copied.RegularParticipantCanWriteMessage && !admin {
 		copied.CanWriteMessage = false
 	}
+	// TODO pinned
 }
 
 func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations, participantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, additionalFoundUserIds []int64, chatId *int64) ([]dto.ChatViewDto, error) {
 	type chatDto struct {
-		Id                       int64            `db:"id"`
-		UserId                   int64            `db:"user_id"`
-		Title                    string           `db:"title"`
-		Pinned                   bool             `db:"pinned"`
-		UnreadMessages           int64            `db:"unread_messages"`
-		LastMessageId            *int64           `db:"last_message_id"`
-		LastMessageOwnerId       *int64           `db:"last_message_owner_id"`
-		LastMessageContent       *string          `db:"last_message_content"`
-		ParticipantsCount        int64            `db:"participants_count"`
-		ParticipantIds           pgtype.Int8Array `db:"participant_ids"` // ids of last N participants
-		Blog                     bool             `db:"blog"`
-		UpdateDateTime           *time.Time       `db:"update_date_time"`
-		TetATet                  bool             `db:"tet_a_tet"`
-		Avatar                   *string          `db:"avatar"`
-		AvatarBig                *string          `db:"avatar_big"`
-		ConsiderMessagesAsUnread bool             `db:"consider_messages_as_unread"`
+		Id                                int64            `db:"id"`
+		UserId                            int64            `db:"user_id"`
+		Title                             string           `db:"title"`
+		Pinned                            bool             `db:"pinned"`
+		UnreadMessages                    int64            `db:"unread_messages"`
+		LastMessageId                     *int64           `db:"last_message_id"`
+		LastMessageOwnerId                *int64           `db:"last_message_owner_id"`
+		LastMessageContent                *string          `db:"last_message_content"`
+		ParticipantsCount                 int64            `db:"participants_count"`
+		ParticipantIds                    pgtype.Int8Array `db:"participant_ids"` // ids of last N participants
+		Blog                              bool             `db:"blog"`
+		UpdateDateTime                    *time.Time       `db:"update_date_time"`
+		TetATet                           bool             `db:"tet_a_tet"`
+		Avatar                            *string          `db:"avatar"`
+		AvatarBig                         *string          `db:"avatar_big"`
+		ConsiderMessagesAsUnread          bool             `db:"consider_messages_as_unread"`
+		RegularParticipantCanWriteMessage bool             `db:"regular_participant_can_write_message"`
 	}
 
 	list := []chatDto{}
 	res := []dto.ChatViewDto{}
 
 	queryArgs := []any{participantIds, size}
-
-	orderClause := ""
 
 	order := "desc"
 	offset := " offset 1" // to make behaviour the same as in users, messages (there is > or <)
@@ -635,21 +656,22 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 
 	for i, de := range list {
 		mapped := dto.ChatViewDto{
-			Id:                       de.Id,
-			UserId:                   de.UserId,
-			Title:                    de.Title,
-			Pinned:                   de.Pinned,
-			UnreadMessages:           de.UnreadMessages,
-			LastMessageId:            de.LastMessageId,
-			LastMessageOwnerId:       de.LastMessageOwnerId,
-			LastMessageContent:       de.LastMessageContent,
-			ParticipantsCount:        de.ParticipantsCount,
-			Blog:                     de.Blog,
-			UpdateDateTime:           de.UpdateDateTime,
-			TetATet:                  de.TetATet,
-			Avatar:                   de.Avatar,
-			AvatarBig:                de.AvatarBig,
-			ConsiderMessagesAsUnread: de.ConsiderMessagesAsUnread,
+			Id:                                de.Id,
+			UserId:                            de.UserId,
+			Title:                             de.Title,
+			Pinned:                            de.Pinned,
+			UnreadMessages:                    de.UnreadMessages,
+			LastMessageId:                     de.LastMessageId,
+			LastMessageOwnerId:                de.LastMessageOwnerId,
+			LastMessageContent:                de.LastMessageContent,
+			ParticipantsCount:                 de.ParticipantsCount,
+			Blog:                              de.Blog,
+			UpdateDateTime:                    de.UpdateDateTime,
+			TetATet:                           de.TetATet,
+			Avatar:                            de.Avatar,
+			AvatarBig:                         de.AvatarBig,
+			ConsiderMessagesAsUnread:          de.ConsiderMessagesAsUnread,
+			RegularParticipantCanWriteMessage: de.RegularParticipantCanWriteMessage,
 		}
 		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {

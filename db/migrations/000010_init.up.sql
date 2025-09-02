@@ -13,7 +13,8 @@ create table chat_common(
     tet_a_tet boolean not null default false,
     available_to_search boolean not null default false,
     avatar text,
-    avatar_big text
+    avatar_big text,
+    regular_participant_can_write_message BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 create table chat_participant(

@@ -8,22 +8,23 @@ const NoChatTitle = ""
 const NoSearchString = ""
 
 type ChatViewDto struct {
-	Id                       int64      `json:"id"`
-	UserId                   int64      `json:"-"`
-	Title                    string     `json:"title"`
-	Pinned                   bool       `json:"pinned"`
-	UnreadMessages           int64      `json:"unreadMessages"`
-	LastMessageId            *int64     `json:"lastMessageId"`
-	LastMessageOwnerId       *int64     `json:"lastMessageOwnerId"`
-	LastMessageContent       *string    `json:"lastMessageContent"`
-	ParticipantsCount        int64      `json:"participantsCount"`
-	ParticipantIds           []int64    `json:"participantIds"` // ids of last N participants
-	Blog                     bool       `json:"blog"`
-	UpdateDateTime           *time.Time `json:"lastUpdateDateTime"` // for sake compatibility
-	TetATet                  bool       `json:"tetATet"`
-	Avatar                   *string    `json:"avatar"`
-	AvatarBig                *string    `json:"avatarBig"`
-	ConsiderMessagesAsUnread bool       `json:"considerMessagesAsUnread"`
+	Id                                int64      `json:"id"`
+	UserId                            int64      `json:"-"`
+	Title                             string     `json:"title"`
+	Pinned                            bool       `json:"pinned"`
+	UnreadMessages                    int64      `json:"unreadMessages"`
+	LastMessageId                     *int64     `json:"lastMessageId"`
+	LastMessageOwnerId                *int64     `json:"lastMessageOwnerId"`
+	LastMessageContent                *string    `json:"lastMessageContent"`
+	ParticipantsCount                 int64      `json:"participantsCount"`
+	ParticipantIds                    []int64    `json:"participantIds"` // ids of last N participants
+	Blog                              bool       `json:"blog"`
+	UpdateDateTime                    *time.Time `json:"lastUpdateDateTime"` // for sake compatibility
+	TetATet                           bool       `json:"tetATet"`
+	Avatar                            *string    `json:"avatar"`
+	AvatarBig                         *string    `json:"avatarBig"`
+	ConsiderMessagesAsUnread          bool       `json:"considerMessagesAsUnread"`
+	RegularParticipantCanWriteMessage bool       `json:"regularParticipantCanWriteMessage"`
 }
 
 type ChatId struct {
@@ -34,7 +35,16 @@ type ChatId struct {
 
 type ChatViewEnrichedDto struct {
 	ChatViewDto
-	Participants []User `json:"participants"`
+	Participants        []User `json:"participants"`
+	CanEdit             *bool  `json:"canEdit"`
+	CanDelete           *bool  `json:"canDelete"`
+	CanLeave            *bool  `json:"canLeave"`
+	CanBroadcast        bool   `json:"canBroadcast"`
+	CanVideoKick        bool   `json:"canVideoKick"`
+	CanAudioMute        bool   `json:"canAudioMute"`
+	CanChangeChatAdmins bool   `json:"canChangeChatAdmins"`
+	IsResultFromSearch  *bool  `json:"isResultFromSearch"`
+	CanWriteMessage     bool   `json:"canWriteMessage"`
 }
 
 type ChatBasic struct {
