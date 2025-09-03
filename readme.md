@@ -105,7 +105,7 @@ docker compose logs -f kafka
 docker compose logs -f postgresql
 
 # show projections
-docker compose exec -it postgresql psql -U postgres
+docker exec -it chat-postgresql-citus-coordinator-1-1  psql -U postgres -d chat
 
 docker compose exec -it kafka bash
 docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --list
@@ -123,6 +123,8 @@ docker compose up -d postgresql
 ```
 
 ```sql
+select citus_version();
+-- SELECT * FROM citus_nodes;
 SELECT * FROM citus_shards;
 SELECT * from pg_dist_shard;
 SELECT * from citus_get_active_worker_nodes();
