@@ -204,15 +204,15 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 			from (
 				select
 					(case
-						when exists(select * from unread_messages_user_view uw where uw.chat_id = $2 and uw.user_id = w.user_id and uw.last_message_id > 0)
+						when exists(select * from chat_user_view uw where uw.id = $2 and uw.user_id = w.user_id and uw.last_read_message_id > 0)
 						then coalesce(
-							(select m.id as last_message_id from chat_messages m where m.id = w.last_message_id),
-							(select max from max_message where $5 = true)
+							(select m.id as last_message_id from chat_messages m where m.id = w.last_read_message_id),
+							(select max from max_message where $5 = true) -- allow taking max_message only in case $5 = true
 						)
 					end) as last_message_id,
 					w.user_id
-				from unread_messages_user_view w 
-				where w.chat_id = $2 and w.user_id = any($1)
+				from chat_user_view w 
+				where w.id = $2 and w.user_id = any($1)
 			) ww
 			right join normalized_user nu on ww.user_id = nu.user_id
 		),
@@ -221,15 +221,15 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 				(select m.id from chat_messages m where m.id = $3),
 				(select max from max_message),
 				0
-			) as normalized_message_id
+			) as normalized_read_message_id
 		),
 		normalized_given_message as (
 			select 
 				n.user_id,
 				(case 
 					when $4 = true then (select l.last_message_id from last_message l where l.user_id = n.user_id)
-					else (select normalized_message_id from existing_message) 
-				end) as normalized_message_id
+					else (select normalized_read_message_id from existing_message) 
+				end) as normalized_read_message_id
 			from normalized_user n
 		),
 		input_data as (
@@ -237,22 +237,18 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 				ngm.user_id as user_id,
 				cast ($2 as bigint) as chat_id,
 				(
-					SELECT count(m.id) FILTER(WHERE m.id > (select normalized_message_id from normalized_given_message n where n.user_id = ngm.user_id))
+					SELECT count(m.id) FILTER(WHERE m.id > (select normalized_read_message_id from normalized_given_message n where n.user_id = ngm.user_id))
 					FROM chat_messages m
 				) as unread_messages,
-				ngm.normalized_message_id as last_message_id
+				ngm.normalized_read_message_id as last_read_message_id
 			from normalized_given_message ngm
 		)
-		insert into unread_messages_user_view(user_id, chat_id, unread_messages, last_message_id)
-		select 
-			idt.user_id,
-			idt.chat_id,
-			idt.unread_messages,
-			idt.last_message_id
-		from input_data idt
-		on conflict (user_id, chat_id) do update set 
-			unread_messages = excluded.unread_messages
-			, last_message_id = excluded.last_message_id
+		merge into chat_user_view cuv
+		using input_data idt
+		on (idt.chat_id, idt.user_id) = (cuv.id, cuv.user_id)
+		when matched then update set 
+		   unread_messages = idt.unread_messages
+		  ,last_read_message_id = idt.last_read_message_id
 	`, participantIds, chatId, messageId, needSet, needRefresh)
 	if err != nil {
 		return err
@@ -276,9 +272,8 @@ func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, part
 	users_hases as (
 		select 
 			uv.user_id, 
-			(any_value(uv.unread_messages) filter (where uv.unread_messages > 0 and ch.consider_messages_as_unread)) != 0 as has 
-		from unread_messages_user_view uv
-		join chat_user_view ch on (uv.user_id, uv.chat_id) = (ch.user_id, ch.id)
+			(any_value(uv.unread_messages) filter (where uv.unread_messages > 0 and uv.consider_messages_as_unread)) != 0 as has 
+		from chat_user_view uv
 		where uv.user_id = any($1)
 		group by (uv.user_id)
 	),
@@ -315,7 +310,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 			return m.setUnreadMessages(ctx, tx, []int64{event.ParticipantId}, event.ChatId, event.MessageId, false, false)
 		} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
 			_, err := tx.ExecContext(ctx, `
-				update unread_messages_user_view uv set unread_messages = 0, last_message_id = (select m.last_message_id from chat_user_view m where m.user_id = $1 and m.id = chat_id) where uv.user_id = $1
+				update chat_user_view uv set unread_messages = 0, last_read_message_id = last_message_id where uv.user_id = $1
 			`, event.ParticipantId)
 			if err != nil {
 				return err
@@ -402,11 +397,11 @@ func (m *CommonProjection) GetLastMessageReaded(ctx context.Context, chatId, use
 		select m.id from message m where m.chat_id = $2
 	)
 	select 
-	    um.last_message_id as last_readed_message_id, 
+	    um.last_read_message_id as last_readed_message_id, 
 	    exists(select * from chat_messages m where m.id = um.last_message_id) as has,
 	    (select max(m.id) from chat_messages m) as max_message_id
-	from unread_messages_user_view um 
-    where (um.user_id, um.chat_id) = ($1, $2)
+	from chat_user_view um 
+    where (um.user_id, um.id) = ($1, $2)
 	`, userId, chatId)
 	if err != nil {
 		return 0, false, 0, err

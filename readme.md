@@ -124,7 +124,7 @@ docker compose up -d postgresql
 
 ```sql
 select citus_version();
--- SELECT * FROM citus_nodes;
+SELECT * FROM citus_nodes;
 SELECT * FROM citus_shards;
 SELECT * from pg_dist_shard;
 SELECT * from citus_get_active_worker_nodes();

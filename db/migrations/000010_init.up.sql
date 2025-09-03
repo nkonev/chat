@@ -65,18 +65,11 @@ create table chat_user_view(
     participants_count bigint,
     participant_ids bigint[],
     consider_messages_as_unread BOOLEAN not null default true,
+    unread_messages bigint not null default 0,
+    last_read_message_id bigint not null default 0,
     primary key (user_id, id)
 );
 SELECT create_distributed_table('chat_user_view', 'user_id');
-
-create table unread_messages_user_view(
-    user_id bigint not null,
-    chat_id bigint not null,
-    unread_messages bigint not null default 0,
-    last_message_id bigint not null default 0,
-    primary key (user_id, chat_id)
-);
-SELECT create_distributed_table('unread_messages_user_view', 'user_id');
 
 create table has_unread_messages(user_id bigint primary key, has boolean not null default false);
 SELECT create_distributed_table('has_unread_messages', 'user_id');

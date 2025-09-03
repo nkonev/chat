@@ -263,9 +263,9 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 			// not owners
 			if len(participantIdsWithoutOwner) > 0 && event.IncreaseOn > 0 {
 				_, err := tx.ExecContext(ctx, `
-					UPDATE unread_messages_user_view 
+					UPDATE chat_user_view 
 					SET unread_messages = unread_messages + $3
-					WHERE user_id = any($1) and chat_id = $2;
+					WHERE user_id = any($1) and id = $2;
 				`, participantIdsWithoutOwner, event.ChatId, event.IncreaseOn)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
@@ -294,9 +294,9 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 			// owner
 			if ownerId != nil {
 				_, err := tx.ExecContext(ctx, `
-					UPDATE unread_messages_user_view 
-					SET last_message_id = (select max(id) from message where chat_id = $2)
-					WHERE (user_id, chat_id) = ($1, $2);
+					UPDATE chat_user_view 
+					SET last_read_message_id = (select max(id) from message where chat_id = $2)
+					WHERE (user_id, id) = ($1, $2);
 				`, *ownerId, event.ChatId)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
@@ -519,7 +519,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 		    ch.id,
 		    cc.title,
 		    ch.pinned,
-		    coalesce(m.unread_messages, 0) as unread_messages,
+		    ch.unread_messages,
 		    ch.last_message_id,
 		    ch.last_message_owner_id,
 		    ch.last_message_content,
@@ -532,7 +532,6 @@ func (m *CommonProjection) GetChats(ctx context.Context, participantId int64, si
 			cc.avatar_big,
 			coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread
 		from chat_user_view ch
-		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = $1)
 		left join blog b on ch.id = b.id
 		join chat_common cc on cc.id = ch.id
 		where ch.user_id = $1 %s
