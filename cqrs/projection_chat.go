@@ -640,7 +640,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			cc.avatar_big,
 			coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread
 		from chat_user_view ch
-		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = any($1))
+		join unread_messages_user_view m on (ch.id = m.chat_id and ch.user_id = m.user_id)
 		left join blog b on ch.id = b.id
 		join chat_common cc on cc.id = ch.id
 		where ch.user_id = any($1) %s
