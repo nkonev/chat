@@ -19,6 +19,9 @@ import (
 	"testing"
 )
 
+// TODO test create chat event with a dedicated test rabbitmq consumer
+// TODO test create chat with several (2-3) additional participants
+
 func TestUnreads(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
