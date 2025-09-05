@@ -11,6 +11,8 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
+	"go-cqrs-chat-example/producer"
+	"go-cqrs-chat-example/rabbitmq"
 	"go-cqrs-chat-example/services"
 	"log/slog"
 	"os"
@@ -110,6 +112,9 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 			aaaClientFactory(t),
 			services.CreateSanitizer,
 			services.CreateStripTags,
+			producer.NewRabbitEventsPublisher,
+			rabbitmq.CreateRabbitMqConnection,
+			cqrs.NewEventHandler,
 		),
 		fx.Invoke(
 			cqrs.RunCqrsRouter,

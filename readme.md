@@ -27,7 +27,7 @@ make package
 # create a chat
 curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat' -d '{"title": "new chat"}'
 
-# create a chat with extra participants TODO not working
+# create a chat with extra participants
 curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat' -d '{"title": "new chat", "participantIds":[2,3,4]}'
 
 # rename the chat
