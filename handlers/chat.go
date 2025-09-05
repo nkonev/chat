@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -22,6 +23,7 @@ type ChatHandler struct {
 	commonProjection    *cqrs.CommonProjection
 	stripTagsPolicy     *services.StripTagsPolicy
 	enrichingProjection *cqrs.EnrichingProjection
+	cfg                 *config.AppConfig
 }
 
 func NewChatHandler(
@@ -31,6 +33,7 @@ func NewChatHandler(
 	commonProjection *cqrs.CommonProjection,
 	stripTagsPolicy *services.StripTagsPolicy,
 	enrichingProjection *cqrs.EnrichingProjection,
+	cfg *config.AppConfig,
 ) *ChatHandler {
 	return &ChatHandler{
 		lgr:                 lgr,
@@ -39,6 +42,7 @@ func NewChatHandler(
 		commonProjection:    commonProjection,
 		stripTagsPolicy:     stripTagsPolicy,
 		enrichingProjection: enrichingProjection,
+		cfg:                 cfg,
 	}
 }
 
@@ -69,7 +73,7 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		AvatarBig:      ccd.AvatarBig,
 	}
 
-	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy)
+	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
 	if err != nil {
 		if translateChatError(g, err) {
 			return
@@ -112,7 +116,7 @@ func (ch *ChatHandler) CreateTetAChat(g *gin.Context) {
 		TetATet:        true,
 	}
 
-	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy)
+	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
 	if err != nil {
 		if translateChatError(g, err) {
 			return
@@ -160,7 +164,7 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		AvatarBig:           ccd.AvatarBig,
 	}
 
-	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy)
+	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
 	if err != nil {
 		if translateChatError(g, err) {
 			return

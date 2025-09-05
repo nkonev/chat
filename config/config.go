@@ -71,6 +71,10 @@ type PostgreSQLConfig struct {
 	Dump               bool
 }
 
+type CommandsConfig struct {
+	MaxParticipantsPerSingleCommand int32
+}
+
 type CqrsConfig struct {
 	SleepBeforeEvent                time.Duration
 	CheckAreEventsProcessedInterval time.Duration
@@ -78,6 +82,8 @@ type CqrsConfig struct {
 	PrettyLog                       bool
 	Export                          ExportConfig
 	Import                          ImportConfig
+	Projections                     ProjectionsConfig
+	Commands                        CommandsConfig
 }
 
 type RestClientConfig struct {
@@ -153,7 +159,6 @@ type AppConfig struct {
 	Server      HttpServerConfig
 	Cqrs        CqrsConfig
 	Http        RestClientConfig
-	Projections ProjectionsConfig
 	Logger      LoggerConfig
 	Aaa         AaaConfig
 	Message     MessageConfig
@@ -243,8 +248,12 @@ func validate(conf *AppConfig) error {
 		return errors.New("nil config")
 	}
 
-	if conf.Projections.ChatUserView.MaxViewableParticipants < 2 {
-		return fmt.Errorf("max viewable participants = %d < 2", conf.Projections.ChatUserView.MaxViewableParticipants)
+	if conf.Cqrs.Projections.ChatUserView.MaxViewableParticipants < 2 {
+		return fmt.Errorf("max viewable participants = %d < 2", conf.Cqrs.Projections.ChatUserView.MaxViewableParticipants)
+	}
+
+	if conf.Cqrs.Commands.MaxParticipantsPerSingleCommand == 0 {
+		return errors.New("max participants = per comamnd cannot be 0")
 	}
 
 	return nil

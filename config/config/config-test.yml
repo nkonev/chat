@@ -48,6 +48,15 @@ cqrs:
     file: ./event.json
   export:
     file: ./event.json
+  projections:
+    chatUserView:
+      maxViewableParticipants: 10
+      lastMessageMaxTextPreviewSize: 256
+    blogView:
+      maxTextPreviewSize: 512
+  commands:
+    maxParticipantsPerSingleCommand: 20
+
 # Rest client
 http:
   maxIdleConns: 2
@@ -55,12 +64,6 @@ http:
   disableCompression: false
   prettyLog: true
   dump: true
-projections:
-  chatUserView:
-    maxViewableParticipants: 10
-    lastMessageMaxTextPreviewSize: 256
-  blogView:
-    maxTextPreviewSize: 512
 logger:
   level: info
   json: false

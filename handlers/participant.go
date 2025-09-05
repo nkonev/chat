@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -18,6 +19,7 @@ type ParticipantHandler struct {
 	dbWrapper           *db.DB
 	commonProjection    *cqrs.CommonProjection
 	enrichingProjection *cqrs.EnrichingProjection
+	cfg                 *config.AppConfig
 }
 
 func NewParticipantHandler(
@@ -26,6 +28,7 @@ func NewParticipantHandler(
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	enrichingProjection *cqrs.EnrichingProjection,
+	cfg *config.AppConfig,
 ) *ParticipantHandler {
 	return &ParticipantHandler{
 		lgr:                 lgr,
@@ -33,6 +36,7 @@ func NewParticipantHandler(
 		dbWrapper:           dbWrapper,
 		commonProjection:    commonProjection,
 		enrichingProjection: enrichingProjection,
+		cfg:                 cfg,
 	}
 }
 
@@ -69,7 +73,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 		BehalfUserId:   userId,
 	}
 
-	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
+	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.cfg)
 	if err != nil {
 		if translateParticipantError(g, err) {
 			return
@@ -116,7 +120,7 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 		BehalfUserId:   userId,
 	}
 
-	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
+	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.cfg)
 	if err != nil {
 		if translateParticipantError(g, err) {
 			return

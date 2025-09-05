@@ -32,8 +32,8 @@ func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppCo
 	return &CommonProjection{
 		db:                 db,
 		lgr:                lgr,
-		chatUserViewConfig: &cfg.Projections.ChatUserView,
-		blogViewConfig:     &cfg.Projections.BlogView,
+		chatUserViewConfig: &cfg.Cqrs.Projections.ChatUserView,
+		blogViewConfig:     &cfg.Cqrs.Projections.BlogView,
 	}
 }
 

@@ -232,16 +232,19 @@ type MessageReactionFlip struct {
 	Reaction       string
 }
 
-func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy) (int64, error) {
+func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy, cfg *config.AppConfig) (int64, error) {
 	var copyCommand *ChatCreate
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
 		return 0, err
 	}
 
-	// TODO make config with max participant ids per one business command
 	if !slices.Contains(copyCommand.ParticipantIds, behalfUserId) {
 		copyCommand.ParticipantIds = append(copyCommand.ParticipantIds, behalfUserId)
+	}
+
+	if int32(len(copyCommand.ParticipantIds)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
+		return 0, fmt.Errorf("Max allowed participants %d, got %d", cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand, copyCommand.ParticipantIds)
 	}
 
 	copyCommand.Title = TrimAmdSanitizeChatTitle(stripTagsPolicy, copyCommand.Title)
@@ -308,7 +311,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus E
 	return chatId, nil
 }
 
-func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy) error {
+func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy, cfg *config.AppConfig) error {
 	var copyCommand *ChatEdit
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -321,6 +324,10 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 	}
 	if !admin {
 		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", copyCommand.BehalfUserId, copyCommand.ChatId))
+	}
+
+	if int32(len(copyCommand.ParticipantIdsToAdd)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
+		return fmt.Errorf("Max allowed participants %d, got %d", cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand, copyCommand.ParticipantIdsToAdd)
 	}
 
 	copyCommand.Title = TrimAmdSanitizeChatTitle(stripTagsPolicy, copyCommand.Title)
@@ -437,7 +444,7 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 	return nil
 }
 
-func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig) error {
 	exists, err := commonProjection.checkChatExists(ctx, dba, s.ChatId)
 	if err != nil {
 		return err
@@ -445,6 +452,10 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 
 	if !exists {
 		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", s.ChatId))
+	}
+
+	if int32(len(s.ParticipantIds)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
+		return fmt.Errorf("Max allowed participants %d, got %d", cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand, s.ParticipantIds)
 	}
 
 	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
@@ -491,13 +502,17 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 	return errOuter
 }
 
-func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig) error {
 	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
 	if !admin {
 		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
+	}
+
+	if int32(len(s.ParticipantIds)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
+		return fmt.Errorf("Max allowed participants %d, got %d", cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand, s.ParticipantIds)
 	}
 
 	pa := &ParticipantDeleted{
