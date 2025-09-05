@@ -66,6 +66,8 @@ create table chat_user_view(
     participants_count bigint,
     participant_ids bigint[],
     consider_messages_as_unread BOOLEAN not null default true,
+    unread_messages bigint not null default 0,
+    last_read_message_id bigint not null default 0,
     primary key (user_id, id)
 );
 SELECT create_distributed_table('chat_user_view', 'user_id');

@@ -30,62 +30,6 @@ curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http
 # create a chat with extra participants TODO not working
 curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat' -d '{"title": "new chat", "participantIds":[2,3,4]}'
 
--- err
-select 
-    ch.id,
-	ch.user_id,
-    cc.title,
-    ch.pinned,
-    coalesce(m.unread_messages, 0) as unread_messages,
-    ch.last_message_id,
-    ch.last_message_owner_id,
-    ch.last_message_content,
-    ch.participants_count,
-    ch.participant_ids,
-    b.id is not null as blog,
-    ch.update_date_time,
-    cc.tet_a_tet,
-	cc.avatar,
-	cc.avatar_big,
-	coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread
-from chat_user_view ch
-join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = any(array[2, 3, 4, 1]))
-left join blog b on ch.id = b.id
-join chat_common cc on cc.id = ch.id
-where ch.user_id = any(array[2, 3, 4, 1]) and ch.id = 7
-limit 4;
-
-
--- fix
-SET citus.enable_repartition_joins = on;
-select 
-inn.* 
-,cc.title
-from (select 
-    ch.id,
-	ch.user_id,
-
-    ch.pinned,
-    coalesce(m.unread_messages, 0) as unread_messages,
-    ch.last_message_id,
-    ch.last_message_owner_id,
-    ch.last_message_content,
-    ch.participants_count,
-    ch.participant_ids,
-    ch.update_date_time,
-
-	coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread
-from chat_user_view ch
-join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = any(array[2, 3, 4, 1]))
-where ch.user_id = any(array[2, 3, 4, 1]) and ch.id = 7
-limit 4
-) inn 
-join chat_common cc on cc.id = inn.id
-;
-
--- permanently enable repartitioning
-https://stackoverflow.com/questions/78352343/enable-enable-repartition-joins-in-citus/79536161#79536161
-
 # rename the chat
 curl -i -X PUT -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat' -d '{"id": 1, "title": "super new chat"}'
 
@@ -183,7 +127,7 @@ docker compose up -d postgresql
 
 ```sql
 select citus_version();
--- SELECT * FROM citus_nodes;
+SELECT * FROM citus_nodes;
 SELECT * FROM citus_shards;
 SELECT * from pg_dist_shard;
 SELECT * from citus_get_active_worker_nodes();

@@ -33,6 +33,10 @@ infra_up:
 infra_down:
 	docker compose down -v
 
+.PHONY: infra_down
+infra_down:
+	docker compose down -v
+
 run: package-go infra
 	./$(EXECUTABLE) serve
 

@@ -16,16 +16,29 @@ import (
 func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId int64, createdTime time.Time) error {
 	_, errInner := tx.ExecContext(ctx, `
 				with blog_message as (
-					select m.* from message m where m.chat_id = $1 and m.blog_post = true
+					select m.* from message m where m.chat_id = $1 and m.blog_post = true limit 1
+				),
+				input_data as (
+					select 
+						 cast ($1 as bigint) as chat_id
+						,m.owner_id
+						,c.title
+						,m.content
+						,left(strip_tags(m.content), $2) as content_preview
+						,cast ($3 as timestamp) as create_date_time
+					from chat_common c 
+					left join blog_message m on c.id = m.chat_id
+					where c.id = $1
 				)
 				insert into blog(id, owner_id, title, post, preview, create_date_time)
 				select 
-				    cast ($1 as bigint), 
-				    (select m.owner_id from blog_message m),
-				    (select c.title from chat_common c where c.id = $1),
-				    (select m.content from blog_message m),
-				    (select left(strip_tags(m.content), $2) from blog_message m),
-					$3
+				     idt.chat_id
+					,idt.owner_id
+					,idt.title
+					,idt.content
+					,idt.content_preview
+					,idt.create_date_time
+				from input_data idt
 				on conflict(id) do update set 
 					owner_id = excluded.owner_id
 					, title = excluded.title
