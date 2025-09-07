@@ -11,6 +11,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+const EventTypeChatCreated = "chat_created"
+
 type EventHandler struct {
 	commonProjection       *CommonProjection
 	enrichingProjection    *EnrichingProjection
@@ -34,7 +36,7 @@ func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *En
 }
 
 func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) error {
-	eventType := "chat_created"
+	eventType := EventTypeChatCreated
 	userIds := event.GetParticipantIds()
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 

@@ -9,6 +9,7 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/handlers"
 	"go-cqrs-chat-example/kafka"
+	"go-cqrs-chat-example/listener"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
 	"go-cqrs-chat-example/producer"
@@ -55,10 +56,12 @@ func resetInfra(lgr *logger.LoggerWrapper, cfg *config.AppConfig) {
 			otel.ConfigureTraceExporter,
 			db.ConfigureDatabase,
 			kafka.ConfigureKafkaAdmin,
+			rabbitmq.CreateRabbitMqConnection,
 		),
 		fx.Invoke(
 			db.RunResetDatabase,
 			kafka.RunDeleteTopic,
+			listener.DeleteTestEventQueue,
 			db.RunMigrations,
 			kafka.RunCreateTopic,
 			app.Shutdown,
@@ -115,9 +118,12 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 			producer.NewRabbitEventsPublisher,
 			rabbitmq.CreateRabbitMqConnection,
 			cqrs.NewEventHandler,
+			listener.CreateTestEventListener,
+			listener.NewTetsEventAccumulator,
 		),
 		fx.Invoke(
 			cqrs.RunCqrsRouter,
+			listener.CreateAndListenTestEventChannel,
 			handlers.RunHttpServer,
 			waitForHealthCheck,
 			testFunc,

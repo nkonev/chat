@@ -148,8 +148,11 @@ type MessageConfig struct {
 }
 
 type RabbitMQConfig struct {
-	Url   string
-	Debug bool
+	Url                             string
+	Debug                           bool
+	CheckAreEventsProcessedInterval time.Duration // for tests
+	MaxWaitForEvents                time.Duration // for tests
+	DumpTestAccumulator             bool          // for tests
 }
 
 type AppConfig struct {

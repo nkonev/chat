@@ -75,6 +75,18 @@ func (r *ChatParamAvatar) Apply(d *dto.ChatCreateDto) {
 	d.AvatarBig = r.avatarBig
 }
 
+type ChatParamParticipants struct {
+	participants []int64
+}
+
+func NewChatOptionParticipants(participants ...int64) *ChatParamParticipants {
+	return &ChatParamParticipants{participants: participants}
+}
+
+func (r *ChatParamParticipants) Apply(d *dto.ChatCreateDto) {
+	d.ParticipantIds = r.participants
+}
+
 func (rc *TestRestClient) CreateChat(ctx context.Context, behalfUserId int64, chatName string, chatCreateOptions ...ChatCreateOption) (int64, error) {
 	req := dto.ChatCreateDto{
 		Title: chatName,

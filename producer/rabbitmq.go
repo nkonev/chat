@@ -12,7 +12,6 @@ import (
 )
 
 const EventsFanoutExchange = "async-events-exchange"
-const NotificationsFanoutExchange = "notifications-exchange"
 
 func (rp *RabbitEventsPublisher) Publish(ctx context.Context, aDto interface{}) error {
 	headers := myRabbitmq.InjectAMQPHeaders(ctx)
@@ -53,47 +52,6 @@ func NewRabbitEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Co
 		return nil, err
 	}
 	return &RabbitEventsPublisher{
-		channel: cha,
-		lgr:     lgr,
-	}, nil
-}
-
-func (rp *RabbitNotificationsPublisher) Publish(ctx context.Context, aDto interface{}) error {
-	headers := myRabbitmq.InjectAMQPHeaders(ctx)
-
-	bytea, err := json.Marshal(aDto)
-	if err != nil {
-		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", "err", err)
-		return err
-	}
-
-	msg := amqp.Publishing{
-		DeliveryMode: amqp.Transient,
-		Timestamp:    time.Now().UTC(),
-		ContentType:  "application/json",
-		Body:         bytea,
-		Headers:      headers,
-	}
-
-	if err := rp.channel.Publish(NotificationsFanoutExchange, "", false, false, msg); err != nil {
-		rp.lgr.ErrorContext(ctx, "Error during publishing dto", "err", err)
-		return err
-	} else {
-		return nil
-	}
-}
-
-type RabbitNotificationsPublisher struct {
-	channel *rabbitmq.Channel
-	lgr     *logger.LoggerWrapper
-}
-
-func NewRabbitNotificationsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection) (*RabbitNotificationsPublisher, error) {
-	cha, err := myRabbitmq.CreateRabbitMqChannel(lgr, connection)
-	if err != nil {
-		return nil, err
-	}
-	return &RabbitNotificationsPublisher{
 		channel: cha,
 		lgr:     lgr,
 	}, nil
