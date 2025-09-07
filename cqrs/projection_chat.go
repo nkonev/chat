@@ -638,7 +638,8 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		    cc.tet_a_tet,
 			cc.avatar,
 			cc.avatar_big,
-			coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread
+			coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread,
+			cc.regular_participant_can_write_message
 		from chat_user_view ch
 		left join blog b on ch.id = b.id
 		join chat_common cc on cc.id = ch.id
