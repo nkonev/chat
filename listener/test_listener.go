@@ -11,6 +11,7 @@ import (
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/rabbitmq"
 	"go.opentelemetry.io/otel"
+	"slices"
 	"time"
 )
 
@@ -63,7 +64,7 @@ func (p *TestEventAccumulator) AssertHasEventsUnordered(asserters []func(e *dto.
 	for _, e := range p.eventsBuffer {
 		for j, c := range assertersCopy {
 			if c(e) {
-				assertersCopy = append(assertersCopy[:j], assertersCopy[j+1:]...)
+				assertersCopy = slices.Delete(assertersCopy, j, j+1)
 				break // inner loop
 			}
 		}
