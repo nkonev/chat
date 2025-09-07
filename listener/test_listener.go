@@ -36,41 +36,37 @@ func (p *TestEventAccumulator) Clean() {
 	p.eventsBuffer = []*dto.GlobalUserEvent{}
 }
 
-func (p *TestEventAccumulator) AssertHasEventsOrdered(comparators []func(e *dto.GlobalUserEvent) bool) bool {
+func (p *TestEventAccumulator) AssertHasEventsOrdered(asserters []func(e *dto.GlobalUserEvent) bool) bool {
 	j := 0 // both second pointer and num of success comparisons
 
 	for _, e := range p.eventsBuffer {
-		if j >= len(comparators) { // bound check
+		if j >= len(asserters) { // bound check
 			break
 		}
 
-		if comparators[j](e) {
+		if asserters[j](e) {
 			j++
 		}
 	}
 
-	return j == len(comparators)
+	return j == len(asserters)
 }
 
-func (p *TestEventAccumulator) AssertHasEventsUnordered(comparators []func(e *dto.GlobalUserEvent) bool) bool {
+func (p *TestEventAccumulator) AssertHasEventsUnordered(asserters []func(e *dto.GlobalUserEvent) bool) bool {
 
-	comparatorsCopy := make([]func(e *dto.GlobalUserEvent) bool, len(comparators))
-	copy(comparatorsCopy, comparators)
-
-	founds := 0 // num of success comparisons
+	assertersCopy := make([]func(e *dto.GlobalUserEvent) bool, len(asserters))
+	copy(assertersCopy, asserters)
 
 	for _, e := range p.eventsBuffer {
-
-		for j, c := range comparatorsCopy {
+		for j, c := range assertersCopy {
 			if c(e) {
-				comparatorsCopy = append(comparatorsCopy[:j], comparatorsCopy[j+1:]...)
-				founds++
-				break
+				assertersCopy = append(assertersCopy[:j], assertersCopy[j+1:]...)
+				break // inner loop
 			}
 		}
 	}
 
-	return founds == len(comparators)
+	return len(assertersCopy) == 0
 }
 
 func (p *TestEventAccumulator) AwaitForBufferContainsSpecifiedEvents(duration time.Duration, ordered bool, comparators []func(e *dto.GlobalUserEvent) bool) error {
