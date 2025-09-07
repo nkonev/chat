@@ -107,9 +107,6 @@ See `Trace-Id` header and put its value into [Jaeger UI](http://localhost:16686)
 docker compose logs -f kafka
 docker compose logs -f postgresql
 
-# show projections
-docker exec -it chat-postgresql-citus-coordinator-1-1  psql -U postgres -d chat
-
 docker compose exec -it kafka bash
 docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --list
 docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --describe --group CommonProjection --offsets
@@ -126,6 +123,8 @@ docker compose up -d postgresql
 ```
 
 ```sql
+docker exec -it chat-postgresql-citus-coordinator-1-1  psql -U postgres -d chat
+
 select citus_version();
 SELECT * FROM citus_nodes;
 SELECT * FROM citus_shards;
