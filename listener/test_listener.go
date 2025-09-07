@@ -36,6 +36,9 @@ func (p *TestEventAccumulator) Clean() {
 	p.eventsBuffer = []*dto.GlobalUserEvent{}
 }
 
+// there can be more events than asserters
+
+// AssertHasEventsOrdered returns true if all the asserters are matched events in order of asserters
 func (p *TestEventAccumulator) AssertHasEventsOrdered(asserters []func(e *dto.GlobalUserEvent) bool) bool {
 	j := 0 // both second pointer and num of success comparisons
 
@@ -52,8 +55,8 @@ func (p *TestEventAccumulator) AssertHasEventsOrdered(asserters []func(e *dto.Gl
 	return j == len(asserters)
 }
 
+// AssertHasEventsUnordered returns true if all the asserters are matched events in any order
 func (p *TestEventAccumulator) AssertHasEventsUnordered(asserters []func(e *dto.GlobalUserEvent) bool) bool {
-
 	assertersCopy := make([]func(e *dto.GlobalUserEvent) bool, len(asserters))
 	copy(assertersCopy, asserters)
 
@@ -106,7 +109,7 @@ func (p *TestEventAccumulator) AwaitForBufferContainsSpecifiedEvents(duration ti
 			return false
 		}()
 		if fv {
-			return nil
+			return nil // success exit
 		}
 
 		time.Sleep(du)
