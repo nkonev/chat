@@ -12,6 +12,7 @@ import (
 )
 
 const EventTypeChatCreated = "chat_created"
+const EventTypeChatEdited = "chat_edited"
 
 type EventHandler struct {
 	commonProjection       *CommonProjection
@@ -48,7 +49,38 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 		return errp
 	}
 
-	chatViews, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(event.Participants)), nil, true, false, dto.NoSearchString, &event.ChatId)
+	chatViews, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId)
+	if err != nil {
+		return err
+	}
+
+	for _, cv := range chatViews {
+		err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
+			UserId:           cv.UserId,
+			EventType:        eventType,
+			ChatNotification: &cv,
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+	}
+	return nil
+}
+
+func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
+	eventType := EventTypeChatEdited
+	userIds := event.ParticipantIds
+	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
+	defer messageSpan.End()
+
+	errp := m.commonProjection.OnChatViewRefreshed(ctx, event)
+	if errp != nil {
+		return errp
+	}
+
+	chatViews, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId)
 	if err != nil {
 		return err
 	}
