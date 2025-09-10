@@ -379,7 +379,6 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 			})
 		}
 
-		// TODO ParticipantsAdded should produce event, only in this case the optimization below (passing copyCommand.ParticipantIdsToAdd has sense)
 		err = eventBus.Publish(ctx, pa)
 		if err != nil {
 			return err
