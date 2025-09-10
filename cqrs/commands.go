@@ -379,6 +379,7 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 			})
 		}
 
+		// TODO ParticipantsAdded should produce event, only in this case the optimization below (passing copyCommand.ParticipantIdsToAdd has sense)
 		err = eventBus.Publish(ctx, pa)
 		if err != nil {
 			return err
@@ -386,7 +387,8 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 	}
 
 	if len(copyCommand.ParticipantIdsToAdd) > 0 {
-		errOuter := commonProjection.IterateOverChatParticipantIds(ctx, dba, copyCommand.ChatId, nil, func(participantIdsPortion []int64) error {
+		// excluding => s.ParticipantIds is an optimization in order not to re-refresh views for the recently added
+		errOuter := commonProjection.IterateOverChatParticipantIds(ctx, dba, copyCommand.ChatId, copyCommand.ParticipantIdsToAdd, func(participantIdsPortion []int64) error {
 			ui := &ChatViewRefreshed{
 				AdditionalData:     copyCommand.AdditionalData,
 				ParticipantIds:     participantIdsPortion,
