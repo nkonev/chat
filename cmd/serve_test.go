@@ -2126,6 +2126,7 @@ func TestAddAndDeleteParticipantEvent(t *testing.T) {
 					e.ChatNotification.Participants[0].Login == user1Login
 			},
 		}))
-
 	})
+
+	// TODO test event change participant
 }
