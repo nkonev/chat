@@ -13,6 +13,7 @@ import (
 
 const EventTypeChatCreated = "chat_created"
 const EventTypeChatEdited = "chat_edited"
+const EventTypeChatDeleted = "chat_deleted"
 
 type EventHandler struct {
 	commonProjection       *CommonProjection
@@ -59,6 +60,32 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 			UserId:           cv.UserId,
 			EventType:        eventType,
 			ChatNotification: &cv,
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+	}
+	return nil
+}
+
+func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *ParticipantDeleted) error {
+	eventType := EventTypeChatDeleted
+	userIds := event.ParticipantIds
+	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
+	defer messageSpan.End()
+
+	errp := m.commonProjection.OnParticipantRemoved(ctx, event)
+	if errp != nil {
+		return errp
+	}
+
+	for _, participantId := range userIds {
+		err := m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
+			UserId:         participantId,
+			EventType:      eventType,
+			ChatDeletedDto: &dto.ChatDeletedDto{Id: event.ChatId},
 		})
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
