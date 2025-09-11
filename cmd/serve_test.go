@@ -2128,5 +2128,6 @@ func TestAddAndDeleteParticipantEvent(t *testing.T) {
 		}))
 	})
 
-	// TODO test event change participant
+	// TODO implement & test event "change participant" (assign | revoke admin)
+	// TODO implement & test event "add participant" (which is used in ParticipantysModal)
 }
