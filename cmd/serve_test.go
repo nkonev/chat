@@ -1743,6 +1743,7 @@ func TestCreateChatEvent(t *testing.T) {
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 1 &&
 					e.ChatNotification.Participants[0].Id == user1 &&
 					e.ChatNotification.Participants[0].Login == user1Login
 			},
@@ -1804,6 +1805,7 @@ func TestCreateChatWithMultipleParticipantsEvent(t *testing.T) {
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 2 &&
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
@@ -1814,6 +1816,7 @@ func TestCreateChatWithMultipleParticipantsEvent(t *testing.T) {
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 2 &&
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
@@ -1877,6 +1880,7 @@ func TestCreateAndDeleteChatEvent(t *testing.T) {
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 2 &&
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
@@ -1887,6 +1891,7 @@ func TestCreateAndDeleteChatEvent(t *testing.T) {
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 2 &&
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
@@ -1975,6 +1980,7 @@ func TestEditChatWithAddingParticipantsEvent(t *testing.T) {
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 1 &&
 					e.ChatNotification.Participants[0].Id == user1 &&
 					e.ChatNotification.Participants[0].Login == user1Login
 			},
@@ -1985,6 +1991,7 @@ func TestEditChatWithAddingParticipantsEvent(t *testing.T) {
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1NewName &&
+					len(e.ChatNotification.Participants) == 2 &&
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
@@ -1995,6 +2002,7 @@ func TestEditChatWithAddingParticipantsEvent(t *testing.T) {
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1NewName &&
+					len(e.ChatNotification.Participants) == 2 &&
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
@@ -2058,6 +2066,7 @@ func TestAddAndDeleteParticipantEvent(t *testing.T) {
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 1 &&
 					e.ChatNotification.Participants[0].Id == user1 &&
 					e.ChatNotification.Participants[0].Login == user1Login
 			},
@@ -2076,6 +2085,7 @@ func TestAddAndDeleteParticipantEvent(t *testing.T) {
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 2 &&
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
@@ -2086,6 +2096,7 @@ func TestAddAndDeleteParticipantEvent(t *testing.T) {
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 2 &&
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
@@ -2110,6 +2121,7 @@ func TestAddAndDeleteParticipantEvent(t *testing.T) {
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 1 &&
 					e.ChatNotification.Participants[0].Id == user1 &&
 					e.ChatNotification.Participants[0].Login == user1Login
 			},
