@@ -304,321 +304,6 @@ func TestUnreads(t *testing.T) {
 	})
 }
 
-func TestCreateChatEvent(t *testing.T) {
-	startAppFull(t, func(
-		lgr *logger.LoggerWrapper,
-		cfg *config.AppConfig,
-		testRestClient *client.TestRestClient,
-		saramaClient sarama.Client,
-		m *cqrs.CommonProjection,
-		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
-		lc fx.Lifecycle,
-	) {
-		const user1 int64 = 1
-		const user2 int64 = 2
-		const user1Login = "admin1"
-		const user2Login = "admin2"
-
-		mockUser1 := dto.User{
-			Id:               user1,
-			Login:            user1Login,
-			Avatar:           nil,
-			ShortInfo:        nil,
-			LoginColor:       nil,
-			LastSeenDateTime: nil,
-			AdditionalData:   nil,
-		}
-
-		mockUser2 := dto.User{
-			Id:               user2,
-			Login:            user2Login,
-			Avatar:           nil,
-			ShortInfo:        nil,
-			LoginColor:       nil,
-			LastSeenDateTime: nil,
-			AdditionalData:   nil,
-		}
-
-		const chat1Name = "new chat 1"
-
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
-
-		ctx := context.Background()
-
-		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
-		require.NoError(t, err, "error in creating chat")
-		assert.True(t, chat1Id > 0)
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e *dto.GlobalUserEvent) bool{
-			func(e *dto.GlobalUserEvent) bool {
-				return e.EventType == cqrs.EventTypeChatCreated &&
-					e.UserId == user1 &&
-					e.ChatNotification.ChatViewDto.Id == chat1Id &&
-					e.ChatNotification.ChatViewDto.Title == chat1Name &&
-					e.ChatNotification.Participants[0].Id == user1 &&
-					e.ChatNotification.Participants[0].Login == user1Login
-			},
-		}))
-	})
-}
-
-func TestCreateAndDeleteChatEvent(t *testing.T) {
-	startAppFull(t, func(
-		lgr *logger.LoggerWrapper,
-		cfg *config.AppConfig,
-		testRestClient *client.TestRestClient,
-		saramaClient sarama.Client,
-		m *cqrs.CommonProjection,
-		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
-		lc fx.Lifecycle,
-	) {
-		const user1 int64 = 1
-		const user2 int64 = 2
-		const user1Login = "admin1"
-		const user2Login = "admin2"
-
-		mockUser1 := dto.User{
-			Id:               user1,
-			Login:            user1Login,
-			Avatar:           nil,
-			ShortInfo:        nil,
-			LoginColor:       nil,
-			LastSeenDateTime: nil,
-			AdditionalData:   nil,
-		}
-
-		mockUser2 := dto.User{
-			Id:               user2,
-			Login:            user2Login,
-			Avatar:           nil,
-			ShortInfo:        nil,
-			LoginColor:       nil,
-			LastSeenDateTime: nil,
-			AdditionalData:   nil,
-		}
-
-		const chat1Name = "new chat 1"
-
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
-
-		ctx := context.Background()
-
-		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
-		require.NoError(t, err, "error in creating chat")
-		assert.True(t, chat1Id > 0)
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e *dto.GlobalUserEvent) bool{
-			func(e *dto.GlobalUserEvent) bool {
-				return e.EventType == cqrs.EventTypeChatCreated &&
-					e.UserId == user1 &&
-					e.ChatNotification.ChatViewDto.Id == chat1Id &&
-					e.ChatNotification.ChatViewDto.Title == chat1Name &&
-					e.ChatNotification.Participants[0].Id == user2 &&
-					e.ChatNotification.Participants[0].Login == user2Login &&
-					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
-			},
-			func(e *dto.GlobalUserEvent) bool {
-				return e.EventType == cqrs.EventTypeChatCreated &&
-					e.UserId == user2 &&
-					e.ChatNotification.ChatViewDto.Id == chat1Id &&
-					e.ChatNotification.ChatViewDto.Title == chat1Name &&
-					e.ChatNotification.Participants[0].Id == user2 &&
-					e.ChatNotification.Participants[0].Login == user2Login &&
-					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
-			},
-		}))
-
-		testEventsAccumulator.Clean()
-
-		err = testRestClient.DeleteChat(ctx, user1, chat1Id)
-		require.NoError(t, err, "error in removing chats")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e *dto.GlobalUserEvent) bool{
-			func(e *dto.GlobalUserEvent) bool {
-				return e.EventType == cqrs.EventTypeChatDeleted &&
-					e.UserId == user1 &&
-					e.ChatDeletedDto.Id == chat1Id
-			},
-			func(e *dto.GlobalUserEvent) bool {
-				return e.EventType == cqrs.EventTypeChatDeleted &&
-					e.UserId == user2 &&
-					e.ChatDeletedDto.Id == chat1Id
-			},
-		}))
-	})
-}
-
-func TestCreateChatWithMultipleParticipantsEvent(t *testing.T) {
-	startAppFull(t, func(
-		lgr *logger.LoggerWrapper,
-		cfg *config.AppConfig,
-		testRestClient *client.TestRestClient,
-		saramaClient sarama.Client,
-		m *cqrs.CommonProjection,
-		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
-		lc fx.Lifecycle,
-	) {
-		const user1 int64 = 1
-		const user2 int64 = 2
-		const user1Login = "admin1"
-		const user2Login = "admin2"
-
-		mockUser1 := dto.User{
-			Id:               user1,
-			Login:            user1Login,
-			Avatar:           nil,
-			ShortInfo:        nil,
-			LoginColor:       nil,
-			LastSeenDateTime: nil,
-			AdditionalData:   nil,
-		}
-
-		mockUser2 := dto.User{
-			Id:               user2,
-			Login:            user2Login,
-			Avatar:           nil,
-			ShortInfo:        nil,
-			LoginColor:       nil,
-			LastSeenDateTime: nil,
-			AdditionalData:   nil,
-		}
-
-		const chat1Name = "new chat 1 with multiple participants"
-
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
-
-		ctx := context.Background()
-
-		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
-		require.NoError(t, err, "error in creating chat")
-		assert.True(t, chat1Id > 0)
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e *dto.GlobalUserEvent) bool{
-			func(e *dto.GlobalUserEvent) bool {
-				return e.EventType == cqrs.EventTypeChatCreated &&
-					e.UserId == user1 &&
-					e.ChatNotification.ChatViewDto.Id == chat1Id &&
-					e.ChatNotification.ChatViewDto.Title == chat1Name &&
-					e.ChatNotification.Participants[0].Id == user2 &&
-					e.ChatNotification.Participants[0].Login == user2Login &&
-					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
-			},
-			func(e *dto.GlobalUserEvent) bool {
-				return e.EventType == cqrs.EventTypeChatCreated &&
-					e.UserId == user2 &&
-					e.ChatNotification.ChatViewDto.Id == chat1Id &&
-					e.ChatNotification.ChatViewDto.Title == chat1Name &&
-					e.ChatNotification.Participants[0].Id == user2 &&
-					e.ChatNotification.Participants[0].Login == user2Login &&
-					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
-			},
-		}))
-	})
-}
-
-func TestEditChatWithAddingParticipantsEvent(t *testing.T) {
-	startAppFull(t, func(
-		lgr *logger.LoggerWrapper,
-		cfg *config.AppConfig,
-		testRestClient *client.TestRestClient,
-		saramaClient sarama.Client,
-		m *cqrs.CommonProjection,
-		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
-		lc fx.Lifecycle,
-	) {
-		const user1 int64 = 1
-		const user2 int64 = 2
-		const user1Login = "admin1"
-		const user2Login = "admin2"
-
-		mockUser1 := dto.User{
-			Id:               user1,
-			Login:            user1Login,
-			Avatar:           nil,
-			ShortInfo:        nil,
-			LoginColor:       nil,
-			LastSeenDateTime: nil,
-			AdditionalData:   nil,
-		}
-
-		mockUser2 := dto.User{
-			Id:               user2,
-			Login:            user2Login,
-			Avatar:           nil,
-			ShortInfo:        nil,
-			LoginColor:       nil,
-			LastSeenDateTime: nil,
-			AdditionalData:   nil,
-		}
-
-		const chat1Name = "new chat 1"
-		const chat1NewName = "new chat 1 with adding participants"
-
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
-
-		ctx := context.Background()
-
-		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
-		require.NoError(t, err, "error in creating chat")
-		assert.True(t, chat1Id > 0)
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
-		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1NewName, client.NewChatOptionParticipants(user2))
-		require.NoError(t, err, "error in changing chat")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e *dto.GlobalUserEvent) bool{
-			// caused by CreateChat()
-			func(e *dto.GlobalUserEvent) bool {
-				return e.EventType == cqrs.EventTypeChatCreated &&
-					e.UserId == user1 &&
-					e.ChatNotification.ChatViewDto.Id == chat1Id &&
-					e.ChatNotification.ChatViewDto.Title == chat1Name &&
-					e.ChatNotification.Participants[0].Id == user1 &&
-					e.ChatNotification.Participants[0].Login == user1Login
-			},
-
-			// caused by EditChat
-			func(e *dto.GlobalUserEvent) bool {
-				return e.EventType == cqrs.EventTypeChatCreated &&
-					e.UserId == user2 &&
-					e.ChatNotification.ChatViewDto.Id == chat1Id &&
-					e.ChatNotification.ChatViewDto.Title == chat1NewName &&
-					e.ChatNotification.Participants[0].Id == user2 &&
-					e.ChatNotification.Participants[0].Login == user2Login &&
-					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
-			},
-			func(e *dto.GlobalUserEvent) bool {
-				return e.EventType == cqrs.EventTypeChatEdited &&
-					e.UserId == user1 &&
-					e.ChatNotification.ChatViewDto.Id == chat1Id &&
-					e.ChatNotification.ChatViewDto.Title == chat1NewName &&
-					e.ChatNotification.Participants[0].Id == user2 &&
-					e.ChatNotification.Participants[0].Login == user2Login &&
-					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
-			},
-		}))
-	})
-}
-
 func TestReadAll(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
@@ -2001,5 +1686,320 @@ func TestMessagePaginate(t *testing.T) {
 		assert.True(t, strings.HasPrefix(resp2Search[0].Content, "generated_message10"))
 		assert.True(t, strings.HasPrefix(resp2Search[1].Content, "generated_message100"))
 		assert.True(t, strings.HasPrefix(resp2Search[2].Content, "generated_message101"))
+	})
+}
+
+func TestCreateChatEvent(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e *dto.GlobalUserEvent) bool{
+			func(e *dto.GlobalUserEvent) bool {
+				return e.EventType == cqrs.EventTypeChatCreated &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					e.ChatNotification.Participants[0].Id == user1 &&
+					e.ChatNotification.Participants[0].Login == user1Login
+			},
+		}))
+	})
+}
+
+func TestCreateChatWithMultipleParticipantsEvent(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1 with multiple participants"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e *dto.GlobalUserEvent) bool{
+			func(e *dto.GlobalUserEvent) bool {
+				return e.EventType == cqrs.EventTypeChatCreated &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login
+			},
+			func(e *dto.GlobalUserEvent) bool {
+				return e.EventType == cqrs.EventTypeChatCreated &&
+					e.UserId == user2 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login
+			},
+		}))
+	})
+}
+
+func TestCreateAndDeleteChatEvent(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e *dto.GlobalUserEvent) bool{
+			func(e *dto.GlobalUserEvent) bool {
+				return e.EventType == cqrs.EventTypeChatCreated &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login
+			},
+			func(e *dto.GlobalUserEvent) bool {
+				return e.EventType == cqrs.EventTypeChatCreated &&
+					e.UserId == user2 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login
+			},
+		}))
+
+		testEventsAccumulator.Clean()
+
+		err = testRestClient.DeleteChat(ctx, user1, chat1Id)
+		require.NoError(t, err, "error in removing chats")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e *dto.GlobalUserEvent) bool{
+			func(e *dto.GlobalUserEvent) bool {
+				return e.EventType == cqrs.EventTypeChatDeleted &&
+					e.UserId == user1 &&
+					e.ChatDeletedDto.Id == chat1Id
+			},
+			func(e *dto.GlobalUserEvent) bool {
+				return e.EventType == cqrs.EventTypeChatDeleted &&
+					e.UserId == user2 &&
+					e.ChatDeletedDto.Id == chat1Id
+			},
+		}))
+	})
+}
+
+func TestEditChatWithAddingParticipantsEvent(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+		const chat1NewName = "new chat 1 with adding participants"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1NewName, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in changing chat")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e *dto.GlobalUserEvent) bool{
+			// caused by CreateChat()
+			func(e *dto.GlobalUserEvent) bool {
+				return e.EventType == cqrs.EventTypeChatCreated &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					e.ChatNotification.Participants[0].Id == user1 &&
+					e.ChatNotification.Participants[0].Login == user1Login
+			},
+
+			// caused by EditChat
+			func(e *dto.GlobalUserEvent) bool {
+				return e.EventType == cqrs.EventTypeChatCreated &&
+					e.UserId == user2 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1NewName &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login
+			},
+			func(e *dto.GlobalUserEvent) bool {
+				return e.EventType == cqrs.EventTypeChatEdited &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1NewName &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login
+			},
+		}))
 	})
 }
