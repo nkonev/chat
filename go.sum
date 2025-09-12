@@ -16,8 +16,8 @@ github.com/PuerkitoBio/goquery v1.8.1 h1:uQxhNlArOIdbrH1tr0UXwdVFgDcZDrZVdcpygAc
 github.com/PuerkitoBio/goquery v1.8.1/go.mod h1:Q8ICL1kNUJ2sXGoAhPGUdYDJvgQgHzJsnnd3H7Ho5jQ=
 github.com/ThreeDotsLabs/watermill v1.5.0 h1:lWk8WSBaoQD/GFJRw10jqJvPyOedZUiXyUG7BOXImhM=
 github.com/ThreeDotsLabs/watermill v1.5.0/go.mod h1:qykQ1+u+K9ElNTBKyCWyTANnpFAeP7t3F3bZFw+n1rs=
-github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.0 h1:DfhVM1ieq+rb+bboB7aoymUgfKsEM3UbH3noQZ6+RJ4=
-github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.0/go.mod h1:o1GcoF/1CSJ9JSmQzUkULvpZeO635pZe+WWrYNFlJNk=
+github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.2 h1:lLmrzZnl8o8U5uLVhMLSFHGSuWLcsqhW1MOtltx2CbQ=
+github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.2/go.mod h1:o1GcoF/1CSJ9JSmQzUkULvpZeO635pZe+WWrYNFlJNk=
 github.com/XSAM/otelsql v0.38.0 h1:zWU0/YM9cJhPE71zJcQ2EBHwQDp+G4AX2tPpljslaB8=
 github.com/XSAM/otelsql v0.38.0/go.mod h1:5ePOgcLEkWvZtN9H3GV4BUlPeM3p3pzLDCnRG73X8h8=
 github.com/andybalholm/cascadia v1.3.1 h1:nhxRkql1kdYCc8Snf7D5/D3spOX+dBgjA6u8x004T2c=

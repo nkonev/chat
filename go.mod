@@ -5,8 +5,10 @@ require (
 	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/ThreeDotsLabs/watermill v1.5.0
-	github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.0
+	github.com/ThreeDotsLabs/watermill-kafka/v3 v3.1.2
 	github.com/XSAM/otelsql v0.38.0
+	github.com/beliyav/go-amqp-reconnect v0.0.0-20200817192340-82ef0f85c3cc
+	github.com/davecgh/go-spew v1.1.1
 	github.com/georgysavva/scany/v2 v2.1.4
 	github.com/gin-gonic/gin v1.10.1
 	github.com/go-ozzo/ozzo-validation/v4 v4.2.1
@@ -18,6 +20,7 @@ require (
 	github.com/nkonev/watermill-opentelemetry v0.1.11
 	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494
 	github.com/shogo82148/go-sql-proxy v0.7.2
+	github.com/streadway/amqp v1.0.0
 	github.com/stretchr/testify v1.11.0
 	github.com/traefik/paerser v0.2.2
 	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.60.0
@@ -36,14 +39,12 @@ require (
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/andybalholm/cascadia v1.3.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
-	github.com/beliyav/go-amqp-reconnect v0.0.0-20200817192340-82ef0f85c3cc // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
 	github.com/chris-ramon/douceur v0.2.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dnwe/otelsarama v0.0.0-20240308230250-9388d9d40bc0 // indirect
 	github.com/eapache/go-resiliency v1.7.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
@@ -91,7 +92,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
 	github.com/sony/gobreaker v1.0.0 // indirect
-	github.com/streadway/amqp v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
