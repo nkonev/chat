@@ -368,7 +368,7 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 
 	searchString := g.Query(dto.SearchStringParam)
 
-	chats, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
+	chats, _, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting chats", "err", err)
 		g.Status(http.StatusInternalServerError)

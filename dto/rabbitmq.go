@@ -6,3 +6,16 @@ type GlobalUserEvent struct {
 	ChatNotification *ChatViewEnrichedDto `json:"chatNotification"`
 	ChatDeletedDto   *ChatDeletedDto      `json:"chatDeletedNotification"`
 }
+
+type ChatEvent struct {
+	EventType                    string                        `json:"eventType"`
+	ChatId                       int64                         `json:"chatId"`
+	UserId                       int64                         `json:"userId"`
+	MessageNotification          *MessageViewEnrichedDto       `json:"messageNotification"`
+	MessageDeletedNotification   *MessageDeletedDto            `json:"messageDeletedNotification"`
+	MessageBroadcastNotification *MessageBroadcastNotification `json:"messageBroadcastNotification"`
+	Participants                 *[]*UserWithAdmin             `json:"participants"`
+	PromoteMessageNotification   *PinnedMessageEvent           `json:"promoteMessageNotification"`
+	PublishedMessageNotification *PublishedMessageEvent        `json:"publishedMessageEvent"`
+	ReactionChangedEvent         *ReactionChangedEvent         `json:"reactionChangedEvent"`
+}

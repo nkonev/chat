@@ -46,6 +46,59 @@ type MessageViewEnrichedDto struct {
 	Reactions []ReactionViewDto `json:"reactions"`
 }
 
+type MessageDeletedDto struct {
+	Id     int64 `json:"id"`
+	ChatId int64 `json:"chatId"`
+}
+
+type MessageBroadcastNotification struct {
+	Login  string `json:"login"`
+	UserId int64  `json:"userId"`
+	Text   string `json:"text"`
+}
+
+type PinnedMessageEvent struct {
+	Message    PinnedMessageDto `json:"message"`
+	TotalCount int64            `json:"totalCount"`
+}
+
+type PublishedMessageEvent struct {
+	Message    PublishedMessageDto `json:"message"`
+	TotalCount int64               `json:"totalCount"`
+}
+
+type ReactionChangedEvent struct {
+	MessageId int64    `json:"messageId"`
+	Reaction  Reaction `json:"reaction"`
+}
+
+type PinnedMessageDto struct {
+	Id             int64     `json:"id"`
+	Text           string    `json:"text"`
+	ChatId         int64     `json:"chatId"`
+	OwnerId        int64     `json:"ownerId"`
+	Owner          *User     `json:"owner"`
+	PinnedPromoted bool      `json:"pinnedPromoted"`
+	CreateDateTime time.Time `json:"createDateTime"`
+	CanPin         bool      `json:"canPin"`
+}
+
+type Reaction struct {
+	Count    int64   `json:"count"`
+	Users    []*User `json:"users"`
+	Reaction string  `json:"reaction"`
+}
+
+type PublishedMessageDto struct {
+	Id             int64     `json:"id"`
+	Text           string    `json:"text"`
+	ChatId         int64     `json:"chatId"`
+	OwnerId        int64     `json:"ownerId"`
+	Owner          *User     `json:"owner"`
+	CanPublish     bool      `json:"canPublish"`
+	CreateDateTime time.Time `json:"createDateTime"`
+}
+
 type MessageBasic struct {
 	Id      int64  `db:"id"`
 	OwnerId int64  `db:"owner_id"`

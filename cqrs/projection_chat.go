@@ -421,19 +421,24 @@ func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.Comm
 
 // contract: either multiple chats
 // or one chatId != nil
-func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfParticipantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, chatId *int64) ([]dto.ChatViewEnrichedDto, error) {
+func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfParticipantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, chatId *int64) ([]dto.ChatViewEnrichedDto, map[int64]*dto.User, error) {
 	searchString = TrimAmdSanitize(m.policy, searchString)
 
 	additionalFoundUserIds := m.searchForUsers(ctx, searchString)
 
-	return db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) ([]dto.ChatViewEnrichedDto, error) {
+	type tupleDto struct {
+		resultChats       []dto.ChatViewEnrichedDto
+		intermediateUsers map[int64]*dto.User
+	}
+
+	d, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*tupleDto, error) {
 		chats, err := m.cp.GetChats(ctx, tx, behalfParticipantIds, size, startingFromItemId, includeStartingFrom, reverse, searchString, additionalFoundUserIds, chatId)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting chats", "err", err)
 			return nil, err
 		}
 
-		userIds := getUserIdsFromChats(chats)
+		userIds := getUserIdsFromChats(chats) // max num of users should fit aaa's limitation
 		users, err := m.aaaRestClient.GetUsers(ctx, userIds)
 		if err != nil {
 			m.lgr.WarnContext(ctx, "unable to get users")
@@ -454,8 +459,15 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 			chatsEnriched = append(chatsEnriched, che)
 		}
 
-		return chatsEnriched, nil
+		return &tupleDto{
+			resultChats:       chatsEnriched,
+			intermediateUsers: usersMap,
+		}, nil
 	})
+	if errOuter != nil {
+		return nil, nil, errOuter
+	}
+	return d.resultChats, d.intermediateUsers, nil
 }
 
 func (m *EnrichingProjection) searchForUsers(ctx context.Context, searchString string) []int64 {
