@@ -3,6 +3,7 @@ package dto
 import "time"
 
 const NoMessageContent = ""
+const NoOwner = -1
 
 type MessageViewDto struct {
 	Id       int64  `db:"id"`

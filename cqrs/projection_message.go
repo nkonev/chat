@@ -406,7 +406,7 @@ func (m *CommonProjection) GetMessageOwner(ctx context.Context, chatId, messageI
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// there were no rows, but otherwise no error occurred
-			return 0, nil
+			return dto.NoOwner, nil
 		} else {
 			return 0, err
 		}
