@@ -60,21 +60,21 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 
 func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		chatExists, err := m.checkChatExists(ctx, tx, event.ChatId)
+		participant, err := m.IsParticipant(ctx, tx, event.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
-		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageEdited because there is no chat", "chat_id", event.ChatId, "message_id", event.Id)
+		if !participant {
+			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't participant", "user_id", event.BehalfUserId, "chat_id", event.ChatId)
 			return nil
 		}
 
-		messageExists, errInner := m.checkMessageExists(ctx, tx, event.ChatId, event.Id)
-		if errInner != nil {
-			return errInner
+		messageOwnerId, err := m.GetMessageOwner(ctx, event.ChatId, event.Id)
+		if err != nil {
+			return err
 		}
-		if !messageExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageEdited because there is no message", "chat_id", event.ChatId, "message_id", event.Id)
+		if messageOwnerId != event.BehalfUserId {
+			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't owner", "user_id", event.BehalfUserId, "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -127,6 +127,24 @@ func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx conte
 
 func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageDeleted) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		participant, err := m.IsParticipant(ctx, tx, event.BehalfUserId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !participant {
+			m.lgr.InfoContext(ctx, "Skipping MessageDeleted because participant isn't participant", "user_id", event.BehalfUserId, "chat_id", event.ChatId)
+			return nil
+		}
+
+		messageOwnerId, err := m.GetMessageOwner(ctx, event.ChatId, event.MessageId)
+		if err != nil {
+			return err
+		}
+		if messageOwnerId != event.BehalfUserId {
+			m.lgr.InfoContext(ctx, "Skipping MessageDeleted because participant isn't owner", "user_id", event.BehalfUserId, "chat_id", event.ChatId)
+			return nil
+		}
+
 		messageBlogPost, err := m.isMessageBlogPost(ctx, tx, event.ChatId, event.MessageId)
 		if err != nil {
 			return err
@@ -328,6 +346,15 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 
 func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		participant, err := m.IsParticipant(ctx, tx, event.BehalfUserId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !participant {
+			m.lgr.InfoContext(ctx, "Skipping MessageReactionFlipped because participant isn't participant", "user_id", event.BehalfUserId, "chat_id", event.ChatId)
+			return nil
+		}
+
 		messageExists, errInner := m.checkMessageExists(ctx, tx, event.ChatId, event.MessageId)
 		if errInner != nil {
 			return errInner
@@ -377,7 +404,12 @@ func (m *CommonProjection) GetMessageOwner(ctx context.Context, chatId, messageI
 	var ownerId int64
 	err := sqlscan.Get(ctx, m.db, &ownerId, "select owner_id from message where (chat_id, id) = ($1, $2)", chatId, messageId)
 	if err != nil {
-		return 0, err
+		if errors.Is(err, sql.ErrNoRows) {
+			// there were no rows, but otherwise no error occurred
+			return 0, nil
+		} else {
+			return 0, err
+		}
 	}
 	return ownerId, nil
 }

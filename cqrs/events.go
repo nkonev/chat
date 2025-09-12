@@ -106,6 +106,7 @@ type MessageCreated struct {
 
 type MessageEdited struct {
 	MessageCommoned
+	BehalfUserId   int64           `json:"behalfUserId"`
 	AdditionalData *AdditionalData `json:"additionalData"`
 }
 
@@ -172,6 +173,7 @@ type MessageBlogPostMade struct {
 
 type MessageDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	BehalfUserId   int64           `json:"behalfUserId"`
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
 }

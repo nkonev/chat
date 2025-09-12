@@ -132,6 +132,7 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 		MessageId:      ccd.Id,
 		ChatId:         chatId,
 		Content:        ccd.Content,
+		BehalfUserId:   userId,
 	}
 	if ccd.EmbedMessageRequest != nil {
 		cc.EmbedMessage = &cqrs.EmbedMessage{
@@ -141,7 +142,7 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 		}
 	}
 
-	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, userId, mc.cfg, mc.lgr, mc.policy)
+	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, mc.cfg, mc.lgr, mc.policy)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
@@ -183,9 +184,10 @@ func (mc *MessageHandler) DeleteMessage(g *gin.Context) {
 		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
 		MessageId:      messageId,
 		ChatId:         chatId,
+		BehalfUserId:   userId,
 	}
 
-	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, userId)
+	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return

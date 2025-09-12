@@ -195,13 +195,28 @@ func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted
 }
 
 func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) error {
-	_, err := m.db.ExecContext(ctx, `
+	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !participant {
+			m.lgr.InfoContext(ctx, "Skipping ChatPinned because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
+			return nil
+		}
+
+		_, err = tx.ExecContext(ctx, `
 		update chat_user_view
 		set pinned = $3
 		where (id, user_id) = ($1, $2)
 	`, event.ChatId, event.ParticipantId, event.Pinned)
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
 	}
 
 	m.lgr.InfoContext(ctx,
@@ -217,7 +232,16 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) 
 func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context, event *ChatNotificationSettingsSetted) error {
 
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		_, err := tx.ExecContext(ctx, `
+		participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !participant {
+			m.lgr.InfoContext(ctx, "Skipping ChatNotificationSettingsSetted because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
+			return nil
+		}
+
+		_, err = tx.ExecContext(ctx, `
 		update chat_user_view 
 		set consider_messages_as_unread = $3
 		where id = $1 and user_id = $2 

@@ -165,6 +165,7 @@ type MessageEdit struct {
 	MessageId      int64
 	Content        string
 	EmbedMessage   *EmbedMessage
+	BehalfUserId   int64
 }
 
 func (a *MessageCreate) Validate() error {
@@ -192,6 +193,7 @@ type MessageDelete struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	MessageId      int64
+	BehalfUserId   int64
 }
 
 type ChatPin struct {
@@ -737,13 +739,13 @@ func (s *MakeMessageBlogPost) Handle(ctx context.Context, eventBus EventBusInter
 	return eventBus.Publish(ctx, &ev)
 }
 
-func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, userId int64) error {
-	participant, err := commonProjection.IsParticipant(ctx, dba, userId, s.ChatId)
+func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	participant, err := commonProjection.IsParticipant(ctx, dba, s.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
 	if !participant {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", userId, s.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.BehalfUserId, s.ChatId))
 	}
 
 	ownerId, err := commonProjection.GetMessageOwner(ctx, s.ChatId, s.MessageId)
@@ -751,14 +753,15 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 		return err
 	}
 
-	if ownerId != userId {
-		return fmt.Errorf("User %v is not an owner of message %v in chat %v", userId, s.MessageId, s.ChatId)
+	if ownerId != s.BehalfUserId {
+		return fmt.Errorf("User %v is not an owner of message %v in chat %v", s.BehalfUserId, s.MessageId, s.ChatId)
 	}
 
 	cp := &MessageDeleted{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
 		MessageId:      s.MessageId,
+		BehalfUserId:   s.BehalfUserId,
 	}
 	err = eventBus.Publish(ctx, cp)
 	if err != nil {
@@ -771,7 +774,7 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 			ParticipantIds:       participantIdsPortion,
 			ChatId:               s.ChatId,
 			UnreadMessagesAction: UnreadMessagesActionRefresh,
-			OwnerId:              userId,
+			OwnerId:              s.BehalfUserId,
 			LastMessageAction:    LastMessageActionRefresh,
 		}
 
@@ -785,19 +788,19 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 	return errOuter
 }
 
-func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, userId int64, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *services.SanitizerPolicy) error {
+func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *services.SanitizerPolicy) error {
 	var copyCommand *MessageEdit
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
 		return err
 	}
 
-	participant, err := commonProjection.IsParticipant(ctx, dba, userId, sp.ChatId)
+	participant, err := commonProjection.IsParticipant(ctx, dba, copyCommand.BehalfUserId, sp.ChatId)
 	if err != nil {
 		return err
 	}
 	if !participant {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", userId, sp.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", copyCommand.BehalfUserId, sp.ChatId))
 	}
 
 	ownerId, err := commonProjection.GetMessageOwner(ctx, copyCommand.ChatId, copyCommand.MessageId)
@@ -805,8 +808,8 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 		return err
 	}
 
-	if ownerId != userId {
-		return NewUnauthorizedError(fmt.Sprintf("User %v is not an owner of message %v in chat %v", userId, copyCommand.MessageId, copyCommand.ChatId))
+	if ownerId != copyCommand.BehalfUserId {
+		return NewUnauthorizedError(fmt.Sprintf("User %v is not an owner of message %v in chat %v", copyCommand.BehalfUserId, copyCommand.MessageId, copyCommand.ChatId))
 	}
 
 	trimmedAndSanitized, err := TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
@@ -827,6 +830,7 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 			ChatId:  copyCommand.ChatId,
 			Content: copyCommand.Content,
 		},
+		BehalfUserId:   copyCommand.BehalfUserId,
 		AdditionalData: copyCommand.AdditionalData,
 	}
 
