@@ -12,6 +12,7 @@ import (
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/rabbitmq"
 	"go-cqrs-chat-example/services"
+	"go-cqrs-chat-example/type_registry"
 	"log/slog"
 	"os"
 
@@ -67,6 +68,7 @@ func RunServe(args []string) {
 			producer.NewRabbitEventsPublisher,
 			rabbitmq.CreateRabbitMqConnection,
 			cqrs.NewEventHandler,
+			type_registry.NewTypeRegistryInstance,
 		),
 		fx.Invoke(
 			db.RunMigrations,

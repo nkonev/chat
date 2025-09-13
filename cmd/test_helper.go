@@ -15,6 +15,7 @@ import (
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/rabbitmq"
 	"go-cqrs-chat-example/services"
+	"go-cqrs-chat-example/type_registry"
 	"log/slog"
 	"os"
 	"testing"
@@ -120,6 +121,7 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 			cqrs.NewEventHandler,
 			listener.CreateTestEventListener,
 			listener.NewTetsEventAccumulator,
+			type_registry.NewTypeRegistryInstance,
 		),
 		fx.Invoke(
 			cqrs.RunCqrsRouter,

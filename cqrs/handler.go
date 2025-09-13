@@ -75,6 +75,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeParticipantAdded))
 	defer participantAddSpan.End()
 
+	// this is an event for ChatParticipantsModal.vue
 	err = m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		// for every participant of chat we send an info about the newly added participants
 		for _, participantId := range participantIdsPortion {

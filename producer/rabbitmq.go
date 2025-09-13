@@ -7,7 +7,7 @@ import (
 	"github.com/streadway/amqp"
 	"go-cqrs-chat-example/logger"
 	myRabbitmq "go-cqrs-chat-example/rabbitmq"
-	"go-cqrs-chat-example/utils"
+	"go-cqrs-chat-example/type_registry"
 	"time"
 )
 
@@ -16,7 +16,7 @@ const EventsFanoutExchange = "async-events-exchange"
 func (rp *RabbitEventsPublisher) Publish(ctx context.Context, aDto interface{}) error {
 	headers := myRabbitmq.InjectAMQPHeaders(ctx)
 
-	aType := utils.GetType(aDto)
+	aType := rp.typeRegistry.GetType(aDto)
 
 	bytea, err := json.Marshal(aDto)
 	if err != nil {
@@ -42,17 +42,19 @@ func (rp *RabbitEventsPublisher) Publish(ctx context.Context, aDto interface{}) 
 }
 
 type RabbitEventsPublisher struct {
-	channel *rabbitmq.Channel
-	lgr     *logger.LoggerWrapper
+	channel      *rabbitmq.Channel
+	lgr          *logger.LoggerWrapper
+	typeRegistry *type_registry.TypeRegistryInstance
 }
 
-func NewRabbitEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection) (*RabbitEventsPublisher, error) {
+func NewRabbitEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, typeRegistry *type_registry.TypeRegistryInstance) (*RabbitEventsPublisher, error) {
 	cha, err := myRabbitmq.CreateRabbitMqChannel(lgr, connection)
 	if err != nil {
 		return nil, err
 	}
 	return &RabbitEventsPublisher{
-		channel: cha,
-		lgr:     lgr,
+		channel:      cha,
+		lgr:          lgr,
+		typeRegistry: typeRegistry,
 	}, nil
 }

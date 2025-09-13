@@ -3,6 +3,7 @@ package listener
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/streadway/amqp"
@@ -10,6 +11,7 @@ import (
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/rabbitmq"
+	"go-cqrs-chat-example/type_registry"
 	"go.opentelemetry.io/otel"
 	"slices"
 	"time"
@@ -18,10 +20,10 @@ import (
 type TestEventAccumulator struct {
 	cfg          *config.AppConfig
 	lgr          *logger.LoggerWrapper
-	eventsBuffer []*dto.GlobalUserEvent
+	eventsBuffer []any
 }
 
-func (p *TestEventAccumulator) OnEvent(ctx context.Context, e *dto.GlobalUserEvent) {
+func (p *TestEventAccumulator) OnEvent(ctx context.Context, e any) {
 	p.eventsBuffer = append(p.eventsBuffer, e)
 }
 
@@ -29,18 +31,18 @@ func NewTetsEventAccumulator(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *
 	return &TestEventAccumulator{
 		cfg:          cfg,
 		lgr:          lgr,
-		eventsBuffer: make([]*dto.GlobalUserEvent, 0),
+		eventsBuffer: make([]any, 0),
 	}
 }
 
 func (p *TestEventAccumulator) Clean() {
-	p.eventsBuffer = []*dto.GlobalUserEvent{}
+	p.eventsBuffer = []any{}
 }
 
 // there can be more events than asserters
 
 // AssertHasEventsOrdered returns true if all the asserters are matched events in order of asserters
-func (p *TestEventAccumulator) AssertHasEventsOrdered(asserters []func(e *dto.GlobalUserEvent) bool) bool {
+func (p *TestEventAccumulator) AssertHasEventsOrdered(asserters []func(e any) bool) bool {
 	j := 0 // both second pointer and num of success comparisons
 
 	for _, e := range p.eventsBuffer {
@@ -57,8 +59,8 @@ func (p *TestEventAccumulator) AssertHasEventsOrdered(asserters []func(e *dto.Gl
 }
 
 // AssertHasEventsUnordered returns true if all the asserters are matched events in any order
-func (p *TestEventAccumulator) AssertHasEventsUnordered(asserters []func(e *dto.GlobalUserEvent) bool) bool {
-	assertersCopy := make([]func(e *dto.GlobalUserEvent) bool, len(asserters))
+func (p *TestEventAccumulator) AssertHasEventsUnordered(asserters []func(e any) bool) bool {
+	assertersCopy := make([]func(e any) bool, len(asserters))
 	copy(assertersCopy, asserters)
 
 	for _, e := range p.eventsBuffer {
@@ -73,7 +75,7 @@ func (p *TestEventAccumulator) AssertHasEventsUnordered(asserters []func(e *dto.
 	return len(assertersCopy) == 0
 }
 
-func (p *TestEventAccumulator) AwaitForBufferContainsSpecifiedEvents(duration time.Duration, ordered bool, comparators []func(e *dto.GlobalUserEvent) bool) error {
+func (p *TestEventAccumulator) AwaitForBufferContainsSpecifiedEvents(duration time.Duration, ordered bool, comparators []func(e any) bool) error {
 	du := p.cfg.RabbitMQ.CheckAreEventsProcessedInterval
 
 	startTime := time.Now()
@@ -97,12 +99,12 @@ func (p *TestEventAccumulator) AwaitForBufferContainsSpecifiedEvents(duration ti
 			}()
 			if ordered {
 				if p.AssertHasEventsOrdered(comparators) {
-					p.lgr.Info("Buffer contains the specified events, exiting")
+					p.lgr.Info("Buffer contains the specified events, exiting successfully")
 					return true
 				}
 			} else {
 				if p.AssertHasEventsUnordered(comparators) {
-					p.lgr.Info("Buffer contains the specified events, exiting")
+					p.lgr.Info("Buffer contains the specified events, exiting successfully")
 					return true
 				}
 			}
@@ -120,7 +122,7 @@ func (p *TestEventAccumulator) AwaitForBufferContainsSpecifiedEvents(duration ti
 
 type TestEventListener func(*amqp.Delivery) error
 
-func CreateTestEventListener(service *TestEventAccumulator, lgr *logger.LoggerWrapper) TestEventListener {
+func CreateTestEventListener(service *TestEventAccumulator, lgr *logger.LoggerWrapper, typeRegistry *type_registry.TypeRegistryInstance) TestEventListener {
 	tr := otel.Tracer("amqp/listener")
 
 	return func(msg *amqp.Delivery) error {
@@ -130,16 +132,36 @@ func CreateTestEventListener(service *TestEventAccumulator, lgr *logger.LoggerWr
 
 		bytesData := msg.Body
 		strData := string(bytesData)
-		lgr.DebugContext(ctx, "Received", "data", strData)
+		aType := msg.Type
 
-		var bindTo = new(dto.GlobalUserEvent)
-		err := json.Unmarshal(msg.Body, bindTo)
-		if err != nil {
-			lgr.ErrorContext(ctx, "Unable to unmarshall test event", "err", err)
-			return err
+		lgr.DebugContext(ctx, "Received", "data", strData, "type", aType)
+
+		if !typeRegistry.HasType(aType) {
+			lgr.ErrorContext(ctx, "Unexpected type in rabbit notifications", "type", aType)
+			return nil
 		}
 
-		service.OnEvent(ctx, bindTo)
+		anInstance := typeRegistry.MakeInstance(aType)
+
+		switch bindTo := anInstance.(type) {
+		case dto.GlobalUserEvent:
+			err := json.Unmarshal(bytesData, &bindTo)
+			if err != nil {
+				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)
+				return err
+			}
+			service.OnEvent(ctx, &bindTo)
+		case dto.ChatEvent:
+			err := json.Unmarshal(bytesData, &bindTo)
+			if err != nil {
+				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)
+				return err
+			}
+			service.OnEvent(ctx, &bindTo)
+		default:
+			lgr.ErrorContext(ctx, "Unexpected type:", "instance", anInstance)
+			return errors.New(fmt.Sprintf("Unexpected type : %v", anInstance))
+		}
 
 		return nil
 	}
