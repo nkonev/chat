@@ -2022,7 +2022,7 @@ func TestEditChatWithAddingParticipantsEvent(t *testing.T) {
 	})
 }
 
-func TestAddAndDeleteParticipantEvent(t *testing.T) {
+func TestAddChangeAndDeleteParticipantEvent(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
@@ -2137,6 +2137,59 @@ func TestAddAndDeleteParticipantEvent(t *testing.T) {
 
 		testEventsAccumulator.Clean()
 
+		err = testRestClient.ChangeChatParticipant(ctx, user1, chat1Id, user2, true)
+		require.NoError(t, err, "error in changing chat participants")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == cqrs.EventTypeParticipantChanged &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					len(*e.Participants) == 1 &&
+					(*e.Participants)[0].Id == user2 &&
+					(*e.Participants)[0].Login == user2Login &&
+					(*e.Participants)[0].ChatAdmin == true
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == cqrs.EventTypeParticipantChanged &&
+					e.UserId == user2 &&
+					e.ChatId == chat1Id &&
+					len(*e.Participants) == 1 &&
+					(*e.Participants)[0].Id == user2 &&
+					(*e.Participants)[0].Login == user2Login &&
+					(*e.Participants)[0].ChatAdmin == true
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 2 &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+					e.UserId == user2 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 2 &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login
+			},
+		}))
+
+		testEventsAccumulator.Clean()
+
 		err = testRestClient.DeleteChatParticipants(ctx, user1, chat1Id, []int64{user2})
 		require.NoError(t, err, "error in removing chat participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
@@ -2177,6 +2230,4 @@ func TestAddAndDeleteParticipantEvent(t *testing.T) {
 			},
 		}))
 	})
-
-	// TODO implement & test event "change participant" (assign | revoke admin)
 }

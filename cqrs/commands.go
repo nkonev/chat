@@ -571,6 +571,26 @@ func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterfa
 		return err
 	}
 
+	errOuter := commonProjection.IterateOverChatParticipantIds(ctx, dba, s.ChatId, nil, func(participantIdsPortion []int64) error {
+		if len(participantIdsPortion) > 0 {
+			ui := &ChatViewRefreshed{
+				AdditionalData:     s.AdditionalData,
+				ParticipantIds:     participantIdsPortion,
+				ChatId:             s.ChatId,
+				ParticipantsAction: ParticipantsActionRefresh,
+			}
+			errInner := eventBus.Publish(ctx, ui)
+			if errInner != nil {
+				return errInner
+			}
+			return nil
+		}
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
+	}
+
 	return nil
 }
 
