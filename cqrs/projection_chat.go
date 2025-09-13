@@ -277,6 +277,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 		// we shouldn't upsert into chat_user_view
 		// we can only update it here
 
+		wasUpdated := false
 		if event.UnreadMessagesAction == UnreadMessagesActionIncrease {
 			participantIdsWithoutOwner := utils.GetSliceWithout(event.OwnerId, event.ParticipantIds)
 			var ownerId *int64
@@ -326,11 +327,15 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
 			}
+
+			wasUpdated = true
 		} else if event.UnreadMessagesAction == UnreadMessagesActionRefresh {
 			err := m.setUnreadMessages(ctx, tx, event.ParticipantIds, event.ChatId, 0, true, true)
 			if err != nil {
 				return err
 			}
+
+			wasUpdated = true
 		}
 
 		if event.LastMessageAction == LastMessageActionRefresh {
@@ -338,6 +343,8 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 			if err != nil {
 				return err
 			}
+
+			wasUpdated = true
 		}
 
 		if event.ParticipantsAction == ParticipantsActionRefresh {
@@ -361,13 +368,17 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 			if err != nil {
 				return fmt.Errorf("error during increasing unread messages: %w", err)
 			}
+
+			wasUpdated = true
 		}
 
-		_, err := tx.ExecContext(ctx, `
+		if wasUpdated {
+			_, err := tx.ExecContext(ctx, `
 				update chat_user_view set update_date_time = $3 where user_id = any($1) and id = $2
 			`, event.ParticipantIds, event.ChatId, event.AdditionalData.CreatedAt)
-		if err != nil {
-			return err
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
