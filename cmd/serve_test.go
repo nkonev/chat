@@ -2143,6 +2143,23 @@ func TestAddAndDeleteParticipantEvent(t *testing.T) {
 
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == cqrs.EventTypeParticipantDeleted &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					len(*e.Participants) == 1 &&
+					(*e.Participants)[0].Id == user2
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == cqrs.EventTypeParticipantDeleted &&
+					e.UserId == user2 &&
+					e.ChatId == chat1Id &&
+					len(*e.Participants) == 1 &&
+					(*e.Participants)[0].Id == user2
+			},
+
+			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == cqrs.EventTypeChatDeleted &&
 					e.UserId == user2 &&
@@ -2162,5 +2179,4 @@ func TestAddAndDeleteParticipantEvent(t *testing.T) {
 	})
 
 	// TODO implement & test event "change participant" (assign | revoke admin)
-	// TODO implement & test event "add participant" (which is used in ParticipantysModal)
 }

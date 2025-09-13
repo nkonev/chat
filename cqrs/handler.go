@@ -15,6 +15,7 @@ const EventTypeChatCreated = "chat_created"
 const EventTypeChatEdited = "chat_edited"
 const EventTypeChatDeleted = "chat_deleted"
 const EventTypeParticipantAdded = "participant_added"
+const EventTypeParticipantDeleted = "participant_deleted"
 
 type EventHandler struct {
 	commonProjection       *CommonProjection
@@ -99,8 +100,41 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 }
 
 func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *ParticipantDeleted) error {
-	eventType := EventTypeChatDeleted
 	userIds := event.ParticipantIds
+
+	eventTypeParticipantDeleted := EventTypeParticipantDeleted
+	m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantDeleted, "user_ids", userIds)
+	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeParticipantDeleted))
+	defer participantAddSpan.End()
+
+	var pseudoUsers = []*dto.UserWithAdmin{}
+	for _, participantIdToRemove := range userIds {
+		pseudoUsers = append(pseudoUsers, &dto.UserWithAdmin{
+			User: dto.User{Id: participantIdToRemove},
+		})
+	}
+
+	// this is an event for ChatParticipantsModal.vue
+	err := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+		// for every participant of chat we send an info about the newly added participants
+		for _, participantId := range participantIdsPortion {
+			err := m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
+				EventType:    eventTypeParticipantDeleted,
+				UserId:       participantId,
+				ChatId:       event.ChatId,
+				Participants: &pseudoUsers,
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+	}
+
+	eventType := EventTypeChatDeleted
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
