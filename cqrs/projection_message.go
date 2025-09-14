@@ -453,10 +453,12 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 	return maxMessageId, nil
 }
 
-func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserId, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string) ([]dto.MessageViewEnrichedDto, error) {
+func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageViewEnrichedDto, error) {
 	return db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) ([]dto.MessageViewEnrichedDto, error) {
 		searchString = TrimAmdSanitize(m.policy, searchString)
 
+		// TODO in case [a query from event handler] when messageId != nil somehow duplicate (either via database or via go)
+		// TODO pass messageId in case [a query from event handler]
 		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting messages", "err", err)
@@ -473,7 +475,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 		for _, message := range messages {
 			populateSets(&message, usersSet, chatsPreSet, chatId, m.messageConfig.MaxDisplayableReactionUsers, reactions)
 		}
-		chats, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserId)
+		chats, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserIds)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", err)
 			return nil, err
@@ -484,7 +486,12 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			m.lgr.WarnContext(ctx, "unable to get users")
 		}
 
-		messagesEnriched := enrichMessages(messages, utils.ToMap(users), chats, reactions)
+		messagesEnriched := make([]dto.MessageViewEnrichedDto, 0, len(messages))
+		for _, mm := range messages {
+			// TODO use UserId from previously duplicated message
+			me := enrichMessage(mm, utils.ToMap(users), chats, reactions, mm.UserId)
+			messagesEnriched = append(messagesEnriched, me)
+		}
 		return messagesEnriched, nil
 	})
 }
@@ -519,20 +526,22 @@ func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, lis
 	return ret, nil
 }
 
-func populateSets(message *dto.MessageViewDto, ownersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, maxDisplayableReactionUsers int, reactions map[int64][]dto.ReactionDto) {
-	ownersSet[message.OwnerId] = true
+func populateSets(message *dto.MessageViewDto, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, maxDisplayableReactionUsers int, reactions map[int64][]dto.ReactionDto) {
+	usersSet[message.OwnerId] = true
+
 	chatsPreSet[currentChatId] = true
+
 	if message.ResponseEmbeddedMessageReplyOwnerId != nil {
 		var embeddedMessageReplyOwnerId = *message.ResponseEmbeddedMessageReplyOwnerId
-		ownersSet[embeddedMessageReplyOwnerId] = true
+		usersSet[embeddedMessageReplyOwnerId] = true
 	} else if message.ResponseEmbeddedMessageResendOwnerId != nil {
 		var embeddedMessageResendOwnerId = *message.ResponseEmbeddedMessageResendOwnerId
-		ownersSet[embeddedMessageResendOwnerId] = true
+		usersSet[embeddedMessageResendOwnerId] = true
 		var embeddedMessageResendChatId = *message.ResponseEmbeddedMessageResendChatId
 		chatsPreSet[embeddedMessageResendChatId] = true
 	}
 
-	takeOnAccountReactions(message.Id, ownersSet, maxDisplayableReactionUsers, reactions)
+	takeOnAccountReactions(message.Id, usersSet, maxDisplayableReactionUsers, reactions)
 }
 
 func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, maxDisplayableReactionUsers int, messageReactions map[int64][]dto.ReactionDto) {
@@ -553,26 +562,32 @@ func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, maxDispla
 	}
 }
 
-func enrichMessages(messages []dto.MessageViewDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto) []dto.MessageViewEnrichedDto {
-	res := make([]dto.MessageViewEnrichedDto, 0, len(messages))
-	for _, m := range messages {
-		me := dto.MessageViewEnrichedDto{
-			Id:             m.Id,
-			OwnerId:        m.OwnerId,
-			Content:        m.Content,
-			BlogPost:       m.BlogPost,
-			UpdateDateTime: m.UpdateDateTime,
-			CreateDateTime: m.CreateDateTime,
-			Owner:          users[m.OwnerId],
-		}
-		setEmbed(m, &me, users, chats)
-
-		rl := reactions[m.Id]
-		setReactions(&me, users, rl)
-
-		res = append(res, me)
+func enrichMessage(m dto.MessageViewDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64) dto.MessageViewEnrichedDto {
+	me := dto.MessageViewEnrichedDto{
+		Id:             m.Id,
+		OwnerId:        m.OwnerId,
+		Content:        m.Content,
+		BlogPost:       m.BlogPost,
+		UpdateDateTime: m.UpdateDateTime,
+		CreateDateTime: m.CreateDateTime,
+		Owner:          users[m.OwnerId],
 	}
-	return res
+	setEmbed(m, &me, users, chats)
+
+	rl := reactions[m.Id]
+	setReactions(&me, users, rl)
+
+	SetMessagePersonalizedFields(me)
+	return me
+}
+
+func SetMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64) {
+	canWriteMessage := chatIsAdmin || chatCanWriteMessage
+
+	copied.CanEdit = ((copied.OwnerId == participantId) && (copied.EmbedMessage == nil || copied.EmbedMessage.EmbedType != dto.EmbedMessageTypeResend)) && canWriteMessage
+	copied.CanDelete = copied.OwnerId == participantId && canWriteMessage
+	copied.CanPublish = CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, copied.OwnerId, participantId)
+	copied.CanPin = CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin)
 }
 
 func setReactions(dst *dto.MessageViewEnrichedDto, users map[int64]*dto.User, reactionsList []dto.ReactionDto) {

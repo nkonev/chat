@@ -545,12 +545,12 @@ func enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.Use
 			}
 		}
 	}
-	SetPersonalizedFields(&che, areAdminsMap[behalfUserId], true)
+	SetChatPersonalizedFields(&che, areAdminsMap[behalfUserId], true)
 
 	return che
 }
 
-func SetPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, participant bool) {
+func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, participant bool) {
 	canEdit := admin && !copied.TetATet
 	copied.CanEdit = &canEdit
 	canDelete := admin
@@ -771,7 +771,7 @@ func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperati
 	return &cht, nil
 }
 
-func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.CommonOperations, chatIds []int64, behalfParticipantId int64) (map[int64]*dto.BasicChatDtoExtended, error) {
+func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.CommonOperations, chatIds []int64, behalfParticipantIds []int64) (map[int64]*dto.BasicChatDtoExtended, error) {
 	result := map[int64]*dto.BasicChatDtoExtended{}
 	if len(chatIds) == 0 {
 		return result, nil
@@ -787,9 +787,9 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 			c.can_resend
 		FROM chat_common c 
 		    LEFT JOIN chat_participant cp 
-		        ON (c.id = cp.chat_id AND cp.user_id = $1) 
+		        ON (c.id = cp.chat_id AND cp.user_id = any($1)) 
 		WHERE c.id = any($2)`,
-		behalfParticipantId, chatIds)
+		behalfParticipantIds, chatIds)
 	if err != nil {
 		return nil, err
 	}

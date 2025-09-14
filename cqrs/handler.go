@@ -19,6 +19,7 @@ const EventTypeChatDeleted = "chat_deleted"
 const EventTypeParticipantAdded = "participant_added"
 const EventTypeParticipantDeleted = "participant_deleted"
 const EventTypeParticipantChanged = "participant_edited"
+const EventTypeMessageCreated = "message_created"
 
 type EventHandler struct {
 	commonProjection       *CommonProjection
@@ -85,14 +86,14 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	err = m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		// for every participant of chat we send an info about the newly added participants
 		for _, participantId := range participantIdsPortion {
-			err = m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
+			errInn := m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
 				EventType:    eventTypeParticipantAdded,
 				UserId:       participantId,
 				ChatId:       event.ChatId,
 				Participants: &addedUsersWithAdmins,
 			})
-			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			if errInn != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
 			}
 		}
 		return nil
@@ -123,14 +124,14 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	err := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		// for every participant of chat we send an info about the newly added participants
 		for _, participantId := range participantIdsPortion {
-			err := m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
+			errInn := m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
 				EventType:    eventTypeParticipantDeleted,
 				UserId:       participantId,
 				ChatId:       event.ChatId,
 				Participants: &pseudoUsers,
 			})
-			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			if errInn != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
 			}
 		}
 		return nil
@@ -182,14 +183,14 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		for _, participantId := range participantIdsPortion {
-			err := m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
+			errInn := m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
 				EventType:    eventTypeParticipantChanged,
 				UserId:       participantId,
 				ChatId:       event.ChatId,
 				Participants: &usersWithAdmins,
 			})
-			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			if errInn != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
 			}
 		}
 
@@ -269,4 +270,39 @@ func (m *EventHandler) buildUserWithAdminBasedOnUserIds(ctx context.Context, use
 		}
 	}
 	return usersWithAdmins, nil
+}
+
+func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreated) error {
+	err := m.commonProjection.OnMessageCreated(ctx, event)
+	if err != nil {
+		return err
+	}
+	// TODO NotifyAboutHasNewMessagesChanged has_unread_messages_changed
+	// TODO NotifyNewMessageBrowserNotification browser_notification_add_message
+
+	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString)
+		if errInn != nil {
+			return errInn
+		}
+
+		for _, messageView := range messageViews {
+			errInn = m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
+				EventType:           EventTypeMessageCreated,
+				UserId:              messageView.ParticipantId,
+				ChatId:              event.ChatId,
+				MessageNotification: &messageView,
+			})
+			if errInn != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+			}
+		}
+
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
+	}
+
+	return nil
 }
