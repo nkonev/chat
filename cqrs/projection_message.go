@@ -457,12 +457,32 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 	return db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) ([]dto.MessageViewEnrichedDto, error) {
 		searchString = TrimAmdSanitize(m.policy, searchString)
 
-		// TODO in case [a query from event handler] when messageId != nil somehow duplicate (either via database or via go)
-		// TODO pass messageId in case [a query from event handler]
-		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString)
+		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, messageId)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting messages", "err", err)
 			return nil, err
+		}
+
+		if messageId != nil {
+			if len(messages) > 1 {
+				return nil, fmt.Errorf("By id = %d %v messages got", *messageId, len(messages))
+			}
+
+			if len(messages) == 1 {
+				var messagesTmp []dto.MessageViewDto
+				for _, userId := range behalfUserIds {
+					msg := messages[0]
+					msg.UserId = userId
+					messagesTmp = append(messagesTmp, msg)
+				}
+				messages = messagesTmp
+			}
+		} else if len(behalfUserIds) == 1 {
+			for i := range messages {
+				messages[i].UserId = behalfUserIds[0]
+			}
+		} else {
+			return nil, fmt.Errorf("Unknown invariant")
 		}
 
 		reactions, err := getReactions(ctx, tx, chatId, messages)
@@ -481,6 +501,11 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			return nil, err
 		}
 
+		areAdmins, err := m.cp.getAreAdminsOfUserIds(ctx, tx, behalfUserIds, chatId)
+		if err != nil {
+			return nil, err
+		}
+
 		users, err := m.aaaRestClient.GetUsers(ctx, utils.MapSetToSlice(usersSet))
 		if err != nil {
 			m.lgr.WarnContext(ctx, "unable to get users")
@@ -488,8 +513,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		messagesEnriched := make([]dto.MessageViewEnrichedDto, 0, len(messages))
 		for _, mm := range messages {
-			// TODO use UserId from previously duplicated message
-			me := enrichMessage(mm, utils.ToMap(users), chats, reactions, mm.UserId)
+			me := enrichMessage(mm, chatId, utils.ToMap(users), chats, reactions, mm.UserId, areAdmins)
 			messagesEnriched = append(messagesEnriched, me)
 		}
 		return messagesEnriched, nil
@@ -562,7 +586,7 @@ func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, maxDispla
 	}
 }
 
-func enrichMessage(m dto.MessageViewDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64) dto.MessageViewEnrichedDto {
+func enrichMessage(m dto.MessageViewDto, chatId int64, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool) dto.MessageViewEnrichedDto {
 	me := dto.MessageViewEnrichedDto{
 		Id:             m.Id,
 		OwnerId:        m.OwnerId,
@@ -571,13 +595,19 @@ func enrichMessage(m dto.MessageViewDto, users map[int64]*dto.User, chats map[in
 		UpdateDateTime: m.UpdateDateTime,
 		CreateDateTime: m.CreateDateTime,
 		Owner:          users[m.OwnerId],
+		UserId:         behalfUserId,
 	}
 	setEmbed(m, &me, users, chats)
 
 	rl := reactions[m.Id]
 	setReactions(&me, users, rl)
 
-	SetMessagePersonalizedFields(me)
+	var chatv dto.BasicChatDtoExtended
+	chat := chats[chatId]
+	if chat != nil {
+		chatv = *chat
+	}
+	SetMessagePersonalizedFields(&me, chatv.RegularParticipantCanPublishMessage, chatv.RegularParticipantCanPinMessage, chatv.RegularCanWriteMessage, areAdmins[behalfUserId], behalfUserId)
 	return me
 }
 
@@ -588,6 +618,14 @@ func SetMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegula
 	copied.CanDelete = copied.OwnerId == participantId && canWriteMessage
 	copied.CanPublish = CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, copied.OwnerId, participantId)
 	copied.CanPin = CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin)
+}
+
+func CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
+	return chatIsAdmin || (chatRegularParticipantCanPublishMessage && messageOwnerId == behalfUserId)
+}
+
+func CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin bool) bool {
+	return chatIsAdmin || chatRegularParticipantCanPinMessage
 }
 
 func setReactions(dst *dto.MessageViewEnrichedDto, users map[int64]*dto.User, reactionsList []dto.ReactionDto) {
@@ -671,7 +709,12 @@ func setEmbed(srcDbMessage dto.MessageViewDto, dstRet *dto.MessageViewEnrichedDt
 	}
 }
 
-func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string) ([]dto.MessageViewDto, error) {
+func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageViewDto, error) {
+
+	if startingFromItemId != nil && messageId != nil {
+		return nil, fmt.Errorf("wrong invariant: both startingFromItemId and messageId provided")
+	}
+
 	ma := []dto.MessageViewDto{}
 
 	queryArgs := []any{chatId, size}
@@ -694,10 +737,14 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		}
 	}
 
+	conditionClause := ""
+
 	paginationKeyset := ""
 	if startingFromItemId != nil {
-		paginationKeyset = fmt.Sprintf(` and m.id %s $3`, nonEquality)
 		queryArgs = append(queryArgs, *startingFromItemId)
+		paginationKeyset = fmt.Sprintf(` and m.id %s $%d `, nonEquality, len(queryArgs))
+
+		conditionClause = paginationKeyset
 	}
 
 	var searchClause string
@@ -705,6 +752,17 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		searchStringPercents := "%" + searchString + "%"
 		queryArgs = append(queryArgs, searchStringPercents)
 		searchClause = fmt.Sprintf(" AND strip_tags(m.content) ILIKE $%d ", len(queryArgs))
+	}
+
+	orderClause := fmt.Sprintf(" order by m.id %s ", order)
+
+	if messageId != nil {
+		messageIdV := *messageId
+		queryArgs = append(queryArgs, messageIdV)
+		messageIdClause := fmt.Sprintf(" and m.id = $%d ", len(queryArgs))
+
+		conditionClause = messageIdClause
+		orderClause = ""
 	}
 
 	err := sqlscan.Select(ctx, co, &ma, fmt.Sprintf(`
@@ -727,9 +785,9 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 			on (m.chat_id = me.chat_id and m.embed_message_id = me.id and m.embed_message_type = '%v')
 			where m.chat_id = $1 %s 
 			%s
-			order by m.id %s 
+			%s 
 			limit $2
-		`, dto.EmbedMessageTypeReply, paginationKeyset, searchClause, order),
+		`, dto.EmbedMessageTypeReply, conditionClause, searchClause, orderClause),
 		queryArgs...)
 
 	if err != nil {

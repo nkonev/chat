@@ -21,6 +21,8 @@ type MessageViewDto struct {
 
 	CreateDateTime time.Time  `db:"create_date_time"`
 	UpdateDateTime *time.Time `db:"update_date_time"`
+
+	UserId int64
 }
 
 type EmbedMessageResponse struct {
@@ -44,6 +46,13 @@ type MessageViewEnrichedDto struct {
 
 	Owner     *User             `json:"owner"`
 	Reactions []ReactionViewDto `json:"reactions"`
+
+	CanEdit    bool `json:"canEdit"`
+	CanDelete  bool `json:"canDelete"`
+	CanPublish bool `json:"canPublish"`
+	CanPin     bool `json:"canPin"`
+
+	UserId int64 `json:"-"` // behalf user id
 }
 
 type MessageDeletedDto struct {

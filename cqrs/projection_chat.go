@@ -402,12 +402,44 @@ func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOper
 }
 
 // returns [userId]isAdmin
-func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatIds []int64) (map[int64]bool, error) {
-	type ParticipantAdmin struct {
-		UserId int64 `db:"user_id"`
-		ChatId int64 `db:"chat_id"`
-		Admin  bool  `db:"chat_admin"`
+func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64) (map[int64]bool, error) {
+	res := map[int64]bool{}
+
+	list, err := m.areAdminsCommon(ctx, co, participantIds, []int64{chatId})
+	if err != nil {
+		return res, err
 	}
+
+	for _, pa := range list {
+		res[pa.UserId] = pa.Admin
+	}
+
+	return res, nil
+}
+
+// returns [chatId]isAdmin
+func (m *CommonProjection) getAreAdminsOfChatIds(ctx context.Context, co db.CommonOperations, participantId int64, chatIds []int64) (map[int64]bool, error) {
+	res := map[int64]bool{}
+
+	list, err := m.areAdminsCommon(ctx, co, []int64{participantId}, chatIds)
+	if err != nil {
+		return res, err
+	}
+
+	for _, pa := range list {
+		res[pa.ChatId] = pa.Admin
+	}
+
+	return res, nil
+}
+
+type ParticipantAdmin struct {
+	UserId int64 `db:"user_id"`
+	ChatId int64 `db:"chat_id"`
+	Admin  bool  `db:"chat_admin"`
+}
+
+func (m *CommonProjection) areAdminsCommon(ctx context.Context, co db.CommonOperations, participantIds []int64, chatIds []int64) ([]ParticipantAdmin, error) {
 	list := []ParticipantAdmin{}
 	err := sqlscan.Select(ctx, co, &list, `
 		select 
@@ -421,18 +453,20 @@ func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.Comm
 	if err != nil {
 		return nil, err
 	}
-
-	res := map[int64]bool{}
-	for _, pa := range list {
-		res[pa.UserId] = pa.Admin
-	}
-
-	return res, nil
+	return list, nil
 }
 
 // contract: either multiple chats
 // or one chatId != nil
 func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfParticipantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, chatId *int64) ([]dto.ChatViewEnrichedDto, map[int64]*dto.User, error) {
+	if len(behalfParticipantIds) == 0 {
+		return nil, nil, errors.New("Wrong invariant")
+	}
+	multipleBehalfUserId := len(behalfParticipantIds) > 1
+	if multipleBehalfUserId && chatId == nil {
+		return nil, nil, errors.New("Wrong invariant")
+	}
+
 	searchString = TrimAmdSanitize(m.policy, searchString)
 
 	additionalFoundUserIds := m.searchForUsers(ctx, searchString)
@@ -457,16 +491,32 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 
 		usersMap := utils.ToMap(users)
 
-		chatIds := getChatIdsFromChats(chats)
+		var areAdminsOfUserIds = map[int64]bool{}
+		var areAdminsOfChatIds = map[int64]bool{}
+		if multipleBehalfUserId {
+			areAdminsOfUserIds, err = m.cp.getAreAdminsOfUserIds(ctx, tx, behalfParticipantIds, *chatId)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			chatIds := getChatIdsFromChats(chats)
 
-		areAdmins, err := m.cp.getAreAdminsOfUserIds(ctx, tx, behalfParticipantIds, chatIds)
-		if err != nil {
-			return nil, err
+			areAdminsOfChatIds, err = m.cp.getAreAdminsOfChatIds(ctx, tx, behalfParticipantIds[0], chatIds)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		chatsEnriched := make([]dto.ChatViewEnrichedDto, 0, len(chats))
 		for _, ch := range chats {
-			che := enrichChat(ch.UserId, ch, usersMap, areAdmins)
+			var admin bool
+			if multipleBehalfUserId {
+				admin = areAdminsOfUserIds[ch.UserId]
+			} else {
+				admin = areAdminsOfChatIds[ch.Id]
+			}
+
+			che := enrichChat(ch.UserId, ch, usersMap, admin)
 			chatsEnriched = append(chatsEnriched, che)
 		}
 
@@ -528,7 +578,7 @@ func getChatIdsFromChats(chats []dto.ChatViewDto) []int64 {
 	return r
 }
 
-func enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.User, areAdminsMap map[int64]bool) dto.ChatViewEnrichedDto {
+func enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.User, admin bool) dto.ChatViewEnrichedDto {
 	che := dto.ChatViewEnrichedDto{
 		ChatViewDto:  ch,
 		Participants: makeParticipants(ch.ParticipantIds, users),
@@ -545,7 +595,7 @@ func enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.Use
 			}
 		}
 	}
-	SetChatPersonalizedFields(&che, areAdminsMap[behalfUserId], true)
+	SetChatPersonalizedFields(&che, admin, true)
 
 	return che
 }
@@ -784,7 +834,10 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 			c.title,
 			(cp.user_id is not null) as behalf_user_is_participant,
 			c.tet_a_tet,
-			c.can_resend
+			c.can_resend,
+			c.regular_participant_can_publish_message,
+			c.regular_participant_can_pin_message,
+			c.regular_participant_can_write_message
 		FROM chat_common c 
 		    LEFT JOIN chat_participant cp 
 		        ON (c.id = cp.chat_id AND cp.user_id = any($1)) 

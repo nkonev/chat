@@ -14,7 +14,9 @@ create table chat_common(
     available_to_search boolean not null default false,
     avatar text,
     avatar_big text,
-    regular_participant_can_write_message BOOLEAN NOT NULL DEFAULT TRUE
+    regular_participant_can_write_message BOOLEAN NOT NULL DEFAULT TRUE,
+    regular_participant_can_publish_message boolean not null default false,
+    regular_participant_can_pin_message BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 create table chat_participant(

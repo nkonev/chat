@@ -9,7 +9,7 @@ const NoSearchString = ""
 
 type ChatViewDto struct {
 	Id                                int64      `json:"id"`
-	UserId                            int64      `json:"-"`
+	UserId                            int64      `json:"-"` // behalf user id
 	Title                             string     `json:"title"`
 	Pinned                            bool       `json:"pinned"`
 	UnreadMessages                    int64      `json:"unreadMessages"`
@@ -60,7 +60,10 @@ type ChatBasic struct {
 
 type BasicChatDtoExtended struct {
 	ChatBasic
-	BehalfUserIsParticipant bool `db:"behalf_user_is_participant"`
+	BehalfUserIsParticipant             bool `db:"behalf_user_is_participant"`
+	RegularParticipantCanPublishMessage bool `db:"regular_participant_can_publish_message"`
+	RegularParticipantCanPinMessage     bool `db:"regular_participant_can_pin_message"`
+	RegularCanWriteMessage              bool `db:"regular_participant_can_write_message"`
 }
 
 type UserChatNotificationSettings struct {

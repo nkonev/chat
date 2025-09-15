@@ -255,7 +255,7 @@ func (m *EventHandler) buildUserWithAdminBasedOnUserIds(ctx context.Context, use
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
 	usersMap := utils.ToMap(users)
-	areAdmins, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, []int64{chatId})
+	areAdmins, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, chatId)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +281,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	// TODO NotifyNewMessageBrowserNotification browser_notification_add_message
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString)
+		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.Id)
 		if errInn != nil {
 			return errInn
 		}
@@ -289,7 +289,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 		for _, messageView := range messageViews {
 			errInn = m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
 				EventType:           EventTypeMessageCreated,
-				UserId:              messageView.ParticipantId,
+				UserId:              messageView.UserId,
 				ChatId:              event.ChatId,
 				MessageNotification: &messageView,
 			})
