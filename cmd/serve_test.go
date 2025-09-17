@@ -2281,26 +2281,14 @@ func TestMessageCreateEvent(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
+		testEventsAccumulator.Clean()
+
 		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 		assert.True(t, message1Id > 0)
 
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			// caused by CreateChat()
-			func(ee any) bool {
-				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
-					e.UserId == user1 &&
-					e.ChatNotification.ChatViewDto.Id == chat1Id &&
-					e.ChatNotification.ChatViewDto.Title == chat1Name &&
-					len(e.ChatNotification.Participants) == 2 &&
-					e.ChatNotification.Participants[0].Id == user2 &&
-					e.ChatNotification.Participants[0].Login == user2Login &&
-					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
-			},
-
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == cqrs.EventTypeMessageCreated &&
@@ -2320,6 +2308,37 @@ func TestMessageCreateEvent(t *testing.T) {
 					e.MessageNotification.Content == message1Text &&
 					e.MessageNotification.Owner.Id == user1 &&
 					e.MessageNotification.Owner.Login == user1Login
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					*e.ChatNotification.ChatViewDto.LastMessageId == message1Id &&
+					*e.ChatNotification.ChatViewDto.LastMessageOwnerId == user1 &&
+					*e.ChatNotification.ChatViewDto.LastMessageContent == message1Text &&
+					len(e.ChatNotification.Participants) == 2 &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+					e.UserId == user2 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					*e.ChatNotification.ChatViewDto.LastMessageId == message1Id &&
+					*e.ChatNotification.ChatViewDto.LastMessageOwnerId == user1 &&
+					*e.ChatNotification.ChatViewDto.LastMessageContent == message1Text &&
+					len(e.ChatNotification.Participants) == 2 &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login
 			},
 		}))
 	})
