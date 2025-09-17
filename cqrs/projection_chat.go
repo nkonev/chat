@@ -711,7 +711,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		chatIdClause := fmt.Sprintf("and ch.id = $%d", len(queryArgs))
 
 		conditionClause = chatIdClause
-		orderClause = ""
+		orderClause = "order by ch.update_date_time desc, ch.user_id" // to prevent flaky tests. the same as in projection_participantv :: getParticipantsCommon()
 	}
 
 	// it is optimized (all order by in the same table)
@@ -781,13 +781,33 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 	return res, nil
 }
 
-func (m *CommonProjection) GetHasUnreadMessages(ctx context.Context, userId int64) (*dto.HasUnreadMessages, error) {
-	var has bool
-	err := sqlscan.Get(ctx, m.db, &has, "select exists (select * from has_unread_messages where user_id = $1 and has = true)", userId)
+func (m *CommonProjection) GetHasUnreadMessages(ctx context.Context, userIds []int64) (map[int64]bool, error) {
+	var has = map[int64]bool{}
+
+	type hasDto struct {
+		UserId int64 `db:"user_id"`
+		Has    bool  `db:"has"`
+	}
+	list := []hasDto{}
+	err := sqlscan.Select(ctx, m.db, &list, `
+	with
+	normalized_user as (
+		select unnest(cast ($1 as bigint[])) as user_id
+	)
+	select 
+		nu.user_id,
+		coalesce(h.has, false) as has
+	from has_unread_messages h
+	right join normalized_user nu on h.user_id = nu.user_id
+	where h.user_id = any($1)
+	`, userIds)
 	if err != nil {
 		return nil, err
 	}
-	return &dto.HasUnreadMessages{HasUnreadMessages: has}, nil
+	for _, hd := range list {
+		has[hd.UserId] = hd.Has
+	}
+	return has, nil
 }
 
 func (m *CommonProjection) GetChatByUserIdAndChatId(ctx context.Context, userId, chatId int64) (string, error) {

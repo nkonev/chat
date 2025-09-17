@@ -20,6 +20,7 @@ const EventTypeParticipantAdded = "participant_added"
 const EventTypeParticipantDeleted = "participant_deleted"
 const EventTypeParticipantChanged = "participant_edited"
 const EventTypeMessageCreated = "message_created"
+const EventTypeUnreadMessagesChanged = "has_unread_messages_changed"
 
 type EventHandler struct {
 	commonProjection       *CommonProjection
@@ -205,6 +206,7 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
 	eventType := EventTypeChatEdited
+	eventTypeUnreadMessagesChanged := EventTypeUnreadMessagesChanged
 	userIds := event.ParticipantIds
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
@@ -221,6 +223,14 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 		return err
 	}
 
+	var hasUnreadMessages = map[int64]bool{}
+	if event.UnreadMessagesAction != 0 {
+		hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, cv := range chatViews {
 		err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
 			UserId:           cv.UserId,
@@ -229,6 +239,19 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 		})
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+
+		if event.UnreadMessagesAction != 0 {
+			err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
+				UserId:    cv.UserId,
+				EventType: eventTypeUnreadMessagesChanged,
+				HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+					HasUnreadMessages: hasUnreadMessages[cv.UserId],
+				},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
 		}
 	}
 	return nil
@@ -277,7 +300,6 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	if err != nil {
 		return err
 	}
-	// TODO NotifyAboutHasNewMessagesChanged has_unread_messages_changed
 	// TODO NotifyNewMessageBrowserNotification browser_notification_add_message
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {

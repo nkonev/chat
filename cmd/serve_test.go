@@ -2323,7 +2323,14 @@ func TestMessageCreateEvent(t *testing.T) {
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
+					e.ChatNotification.Participants[1].Login == user1Login &&
+					e.ChatNotification.UnreadMessages == 0
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeUnreadMessagesChanged &&
+					e.UserId == user1 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == false // it's not being change for himself
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
@@ -2338,7 +2345,14 @@ func TestMessageCreateEvent(t *testing.T) {
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
+					e.ChatNotification.Participants[1].Login == user1Login &&
+					e.ChatNotification.UnreadMessages == 1
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == true // a cumulative indicator representing unreads in all the chats, user dor the red dot
 			},
 		}))
 	})

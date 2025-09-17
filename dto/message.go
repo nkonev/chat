@@ -129,3 +129,7 @@ type ReactionViewDto struct {
 	Users    []*User `json:"users"`
 	Reaction string  `json:"reaction"`
 }
+
+type HasUnreadMessagesChanged struct {
+	HasUnreadMessages bool `json:"hasUnreadMessages"`
+}

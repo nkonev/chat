@@ -338,14 +338,16 @@ func (ch *ChatHandler) HasNewMessages(g *gin.Context) {
 		return
 	}
 
-	has, err := ch.commonProjection.GetHasUnreadMessages(g.Request.Context(), userId)
+	has, err := ch.commonProjection.GetHasUnreadMessages(g.Request.Context(), []int64{userId})
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting HasNewMessages", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
-	g.JSON(http.StatusOK, has)
+	g.JSON(http.StatusOK, &dto.HasUnreadMessages{
+		HasUnreadMessages: has[userId],
+	})
 }
 
 func (ch *ChatHandler) SearchChats(g *gin.Context) {
