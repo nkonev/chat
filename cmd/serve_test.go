@@ -2232,7 +2232,7 @@ func TestAddChangeAndDeleteParticipantEvent(t *testing.T) {
 	})
 }
 
-func TestMessageEvent(t *testing.T) {
+func TestMessageCreateEvent(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
@@ -2304,7 +2304,7 @@ func TestMessageEvent(t *testing.T) {
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == cqrs.EventTypeMessageCreated &&
-					e.UserId == user2 &&
+					e.UserId == user1 &&
 					e.ChatId == chat1Id &&
 					e.MessageNotification.Id == message1Id &&
 					e.MessageNotification.Content == message1Text &&
@@ -2314,7 +2314,7 @@ func TestMessageEvent(t *testing.T) {
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == cqrs.EventTypeMessageCreated &&
-					e.UserId == user1 &&
+					e.UserId == user2 &&
 					e.ChatId == chat1Id &&
 					e.MessageNotification.Id == message1Id &&
 					e.MessageNotification.Content == message1Text &&

@@ -382,7 +382,7 @@ func getParticipantsCommon(ctx context.Context, co db.CommonOperations, chatId i
 		FROM chat_participant
 		WHERE chat_id = $1
 			%s
-		ORDER BY create_date_time %s
+		ORDER BY create_date_time %s, user_id asc
 		LIMIT $2 OFFSET $3
 	`, condition, order)
 	err = sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
