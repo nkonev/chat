@@ -501,6 +501,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			return nil, err
 		}
 
+		// it's ok because we have 1 chat in the both cases
 		areAdmins, err := m.cp.getAreAdminsOfUserIds(ctx, tx, behalfUserIds, chatId)
 		if err != nil {
 			return nil, err
