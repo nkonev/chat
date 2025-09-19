@@ -2357,3 +2357,124 @@ func TestMessageCreateEvent(t *testing.T) {
 		}))
 	})
 }
+
+func TestMessageEditEvent(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+		const message1Text = "message text 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		testEventsAccumulator.Clean()
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		assert.True(t, message1Id > 0)
+
+		testEventsAccumulator.Clean()
+
+		const message1TextNew = "new message 1 edited"
+		err = testRestClient.EditMessage(ctx, user1, chat1Id, message1Id, message1TextNew)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == cqrs.EventTypeMessageEdited &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					e.MessageNotification.Id == message1Id &&
+					e.MessageNotification.Content == message1TextNew &&
+					e.MessageNotification.Owner.Id == user1 &&
+					e.MessageNotification.Owner.Login == user1Login
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == cqrs.EventTypeMessageEdited &&
+					e.UserId == user2 &&
+					e.ChatId == chat1Id &&
+					e.MessageNotification.Id == message1Id &&
+					e.MessageNotification.Content == message1TextNew &&
+					e.MessageNotification.Owner.Id == user1 &&
+					e.MessageNotification.Owner.Login == user1Login
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					*e.ChatNotification.ChatViewDto.LastMessageId == message1Id &&
+					*e.ChatNotification.ChatViewDto.LastMessageOwnerId == user1 &&
+					*e.ChatNotification.ChatViewDto.LastMessageContent == message1TextNew &&
+					len(e.ChatNotification.Participants) == 2 &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login &&
+					e.ChatNotification.UnreadMessages == 0
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+					e.UserId == user2 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					*e.ChatNotification.ChatViewDto.LastMessageId == message1Id &&
+					*e.ChatNotification.ChatViewDto.LastMessageOwnerId == user1 &&
+					*e.ChatNotification.ChatViewDto.LastMessageContent == message1TextNew &&
+					len(e.ChatNotification.Participants) == 2 &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login &&
+					e.ChatNotification.UnreadMessages == 1
+			},
+		}))
+	})
+}

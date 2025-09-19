@@ -21,6 +21,7 @@ const EventTypeParticipantDeleted = "participant_deleted"
 const EventTypeParticipantChanged = "participant_edited"
 const EventTypeMessageCreated = "message_created"
 const EventTypeUnreadMessagesChanged = "has_unread_messages_changed"
+const EventTypeMessageEdited = "message_edited"
 
 type EventHandler struct {
 	commonProjection       *CommonProjection
@@ -300,6 +301,14 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	if err != nil {
 		return err
 	}
+
+	eventType := EventTypeMessageCreated
+
+	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.OwnerId)
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
+	defer messageSpan.End()
+
 	// TODO NotifyNewMessageBrowserNotification browser_notification_add_message
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
@@ -310,7 +319,47 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 
 		for _, messageView := range messageViews {
 			errInn = m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
-				EventType:           EventTypeMessageCreated,
+				EventType:           eventType,
+				UserId:              messageView.UserId,
+				ChatId:              event.ChatId,
+				MessageNotification: &messageView,
+			})
+			if errInn != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+			}
+		}
+
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
+	}
+
+	return nil
+}
+
+func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
+	err := m.commonProjection.OnMessageEdited(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	eventType := EventTypeMessageEdited
+
+	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.BehalfUserId)
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
+	defer messageSpan.End()
+
+	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.Id)
+		if errInn != nil {
+			return errInn
+		}
+
+		for _, messageView := range messageViews {
+			errInn = m.rabbitmqEventPublisher.Publish(ctx, dto.ChatEvent{
+				EventType:           eventType,
 				UserId:              messageView.UserId,
 				ChatId:              event.ChatId,
 				MessageNotification: &messageView,

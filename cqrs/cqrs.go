@@ -246,7 +246,7 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(commonProjection.OnChatPinned),
 		cqrs.NewGroupEventHandler(commonProjection.OnChatNotificationSettingsSetted),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageCreated),
-		cqrs.NewGroupEventHandler(commonProjection.OnMessageEdited),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageEdited),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatViewRefreshed),
 		cqrs.NewGroupEventHandler(commonProjection.OnUnreadMessageReaded),
 		cqrs.NewGroupEventHandler(commonProjection.OnMessageBlogPostMade),
