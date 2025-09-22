@@ -304,6 +304,34 @@ func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co
 	return lastError
 }
 
+func (m *CommonProjection) IterateOverParticipantsChatIds(ctx context.Context, co db.CommonOperations, participantId int64, consumer func(chatIdsPortion []int64) error) error {
+	shouldContinue := true
+	var lastError error
+	for page := int64(0); shouldContinue; page++ {
+		offset := utils.GetOffset(page, utils.DefaultSize)
+		chatIds, err := getParticipantsChatsCommon(ctx, co, participantId, utils.DefaultSize, offset, false)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			lastError = err
+			break
+		}
+		if len(chatIds) == 0 {
+			return nil
+		}
+		if len(chatIds) < utils.DefaultSize {
+			shouldContinue = false
+		}
+
+		err = consumer(chatIds)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			lastError = err
+			break
+		}
+	}
+	return lastError
+}
+
 func (m *CommonProjection) IsChatAdmin(ctx context.Context, co db.CommonOperations, userId, chatId int64) (bool, error) {
 	var admin bool
 	err := sqlscan.Get(ctx, co, &admin, "SELECT exists(SELECT * FROM chat_participant WHERE user_id = $1 AND chat_id = $2 AND chat_admin = true LIMIT 1)", userId, chatId)
@@ -385,6 +413,32 @@ func getParticipantsCommon(ctx context.Context, co db.CommonOperations, chatId i
 		ORDER BY create_date_time %s, user_id asc
 		LIMIT $2 OFFSET $3
 	`, condition, order)
+	err = sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("error during interacting with db: %w", err)
+	}
+	return list, nil
+}
+
+func getParticipantsChatsCommon(ctx context.Context, co db.CommonOperations, participantId int64, chatsSize int32, chatsOffset int64, reverseOrder bool) ([]int64, error) {
+	list := make([]int64, 0)
+
+	var err error
+
+	order := "asc"
+	if reverseOrder {
+		order = "desc"
+	}
+
+	sqlArgs := []any{participantId, chatsSize, chatsOffset}
+	sqlQuery := fmt.Sprintf(`
+		SELECT 
+		    chat_id
+		FROM chat_participant
+		WHERE user_id = $1
+		ORDER BY create_date_time %s, user_id asc
+		LIMIT $2 OFFSET $3
+	`, order)
 	err = sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("error during interacting with db: %w", err)

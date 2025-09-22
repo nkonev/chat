@@ -141,6 +141,7 @@ type ReadMessagesAction int16
 
 const (
 	ReadMessagesActionOneMessage = iota + 1
+	ReadMessagesActionAllMessagesInOneChat
 	ReadMessagesActionAllChats
 )
 
