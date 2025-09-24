@@ -228,11 +228,49 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 	}
 
 	mr := cqrs.MessageRead{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
-		ChatId:         chatId,
-		MessageId:      messageId,
-		ParticipantId:  userId,
-		ReadAll:        false,
+		AdditionalData:     cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		ChatId:             chatId,
+		MessageId:          messageId,
+		ParticipantId:      userId,
+		ReadMessagesAction: cqrs.ReadMessagesActionOneMessage,
+	}
+
+	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection, mc.dbWrapper)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageRead command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.Status(http.StatusOK)
+}
+
+func (mc *MessageHandler) MarkChatAsRead(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mr := cqrs.MessageRead{
+		AdditionalData:     cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		ParticipantId:      userId,
+		ReadMessagesAction: cqrs.ReadMessagesActionAllMessagesInOneChat,
+		ChatId:             chatId,
 	}
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection, mc.dbWrapper)
@@ -259,9 +297,9 @@ func (mc *MessageHandler) MarkAsReadAll(g *gin.Context) {
 	}
 
 	mr := cqrs.MessageRead{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
-		ParticipantId:  userId,
-		ReadAll:        true,
+		AdditionalData:     cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		ParticipantId:      userId,
+		ReadMessagesAction: cqrs.ReadMessagesActionAllChats,
 	}
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection, mc.dbWrapper)

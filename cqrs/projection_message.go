@@ -325,7 +325,25 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 				return nil
 			}
 
-			return m.setUnreadMessages(ctx, tx, []int64{event.ParticipantId}, event.ChatId, event.MessageId, false, false)
+			return m.setUnreadMessages(ctx, tx, []int64{event.ParticipantId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
+		} else if event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+			participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
+			if err != nil {
+				return err
+			}
+			if !participant {
+				m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
+				return nil
+			}
+
+			_, err = tx.ExecContext(ctx, `
+				update chat_user_view uv set unread_messages = 0, last_read_message_id = last_message_id where uv.user_id = $1 and uv.id = $2
+			`, event.ParticipantId, event.ChatId)
+			if err != nil {
+				return err
+			}
+
+			return m.updateHasUnreads(ctx, tx, []int64{event.ParticipantId})
 		} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
 			_, err := tx.ExecContext(ctx, `
 				update chat_user_view uv set unread_messages = 0, last_read_message_id = last_message_id where uv.user_id = $1
@@ -335,8 +353,9 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 			}
 			_, err = tx.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", event.ParticipantId)
 			return err
+		} else {
+			return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
 		}
-		return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
 	})
 	if errOuter != nil {
 		return fmt.Errorf("error during read messages: %w", errOuter)

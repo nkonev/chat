@@ -211,11 +211,11 @@ type ChatNotificationSettingsSet struct {
 }
 
 type MessageRead struct {
-	AdditionalData *AdditionalData
-	ChatId         int64
-	MessageId      int64
-	ParticipantId  int64
-	ReadAll        bool
+	AdditionalData     *AdditionalData
+	ChatId             int64
+	MessageId          int64
+	ParticipantId      int64
+	ReadMessagesAction ReadMessagesAction
 }
 
 type MakeMessageBlogPost struct {
@@ -697,7 +697,19 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 }
 
 func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, commonProjection *CommonProjection, dba *db.DB) error {
-	if s.ReadAll {
+	if s.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+		cp := &MessageReaded{
+			AdditionalData:     s.AdditionalData,
+			ParticipantId:      s.ParticipantId,
+			ReadMessagesAction: ReadMessagesActionAllMessagesInOneChat,
+			ChatId:             s.ChatId,
+		}
+		err := eventBus.Publish(ctx, cp)
+		if err != nil {
+			return err
+		}
+		return nil
+	} else if s.ReadMessagesAction == ReadMessagesActionAllChats {
 		cp := &MessageReaded{
 			AdditionalData:     s.AdditionalData,
 			ParticipantId:      s.ParticipantId,
@@ -707,7 +719,8 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 		if err != nil {
 			return err
 		}
-	} else {
+		return nil
+	} else if s.ReadMessagesAction == ReadMessagesActionOneMessage {
 		participant, err := commonProjection.IsParticipant(ctx, dba, s.ParticipantId, s.ChatId)
 		if err != nil {
 			return err
@@ -741,9 +754,10 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 				return err
 			}
 		}
+		return nil
+	} else {
+		return fmt.Errorf("Unknown action: %T", s.ReadMessagesAction)
 	}
-
-	return nil
 }
 
 func (s *MakeMessageBlogPost) Handle(ctx context.Context, eventBus EventBusInterface) error {
