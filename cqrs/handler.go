@@ -425,7 +425,7 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 		}
 		return nil
 	} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
-		// TODO for every chat which has unread messages ch.notificator.NotifyAboutUnreadMessage(c.Request().Context(), chatId, userPrincipalDto.UserId, 0, lastUpdated)
+		// TODO do before m.commonProjection.OnUnreadMessageReaded(ctx, event) - for every chat which has unread messages ch.notificator.NotifyAboutUnreadMessage(c.Request().Context(), chatId, userPrincipalDto.UserId, 0, lastUpdated)
 
 		// ch.notificator.NotifyAboutHasNewMessagesChanged(c.Request().Context(), userPrincipalDto.UserId, hasUnreadMessages) // has_unread_messages_changed HasUnreadMessages:bool
 		err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
