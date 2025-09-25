@@ -20,7 +20,8 @@ const EventTypeParticipantAdded = "participant_added"
 const EventTypeParticipantDeleted = "participant_deleted"
 const EventTypeParticipantChanged = "participant_edited"
 const EventTypeMessageCreated = "message_created"
-const EventTypeUnreadMessagesChanged = "has_unread_messages_changed"
+const EventTypeHasUnreadMessagesChanged = "has_unread_messages_changed"
+const EventTypeChatUnreadMessagesChanged = "chat_unread_messages_changed"
 const EventTypeMessageEdited = "message_edited"
 
 type EventHandler struct {
@@ -207,7 +208,7 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
 	eventType := EventTypeChatEdited
-	eventTypeUnreadMessagesChanged := EventTypeUnreadMessagesChanged
+	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
 	userIds := event.ParticipantIds
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
@@ -381,9 +382,30 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
 	userIds := []int64{event.ParticipantId}
 
-	eventTypeUnreadMessagesChanged := EventTypeUnreadMessagesChanged
+	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
+	eventTypeChatUnreadMessagesChanged := EventTypeChatUnreadMessagesChanged
 
-	err := m.commonProjection.OnUnreadMessageReaded(ctx, event)
+	err := m.commonProjection.OnUnreadMessageReaded(ctx, event, func(updatedChatsPortion []dto.ChatUnreadResetDto) {
+		if event.ReadMessagesAction != ReadMessagesActionAllChats {
+			m.lgr.ErrorContext(ctx, "wrong invariant")
+			return
+		}
+
+		for _, v := range updatedChatsPortion {
+			err := m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
+				UserId:    event.ParticipantId,
+				EventType: eventTypeChatUnreadMessagesChanged,
+				UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
+					ChatId:             v.ChatId,
+					UnreadMessages:     0,
+					LastUpdateDateTime: v.UpdateDateTime,
+				},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+	})
 	if err != nil {
 		return err
 	}
@@ -394,52 +416,41 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 		return err
 	}
 
-	if event.ReadMessagesAction == ReadMessagesActionOneMessage {
-		// TODO not.NotifyAboutUnreadMessage(ctx, chatId, participantId, unreadMessagesByUserId[participantId], lastUpdated)
+	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+		// not.NotifyAboutUnreadMessage(ctx, chatId, participantId, unreadMessagesByUserId[participantId], lastUpdated)
+		cvb, err := m.commonProjection.GetChatUserViewBasic(ctx, m.db, event.ChatId, event.ParticipantId)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during getting chat UserViewBasic", "err", err)
+		}
 
-		// mc.notificator.NotifyAboutHasNewMessagesChanged(ctx, userId, has)
 		err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
 			UserId:    event.ParticipantId,
-			EventType: eventTypeUnreadMessagesChanged,
-			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
-				HasUnreadMessages: hasUnreadMessages[event.ParticipantId],
+			EventType: eventTypeChatUnreadMessagesChanged,
+			UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
+				ChatId:             event.ChatId,
+				UnreadMessages:     cvb.UnreadMessages,
+				LastUpdateDateTime: cvb.UpdateDateTime,
 			},
 		})
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 		}
-		return nil
-	} else if event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
-		// TODO ch.notificator.NotifyAboutUnreadMessage(c.Request().Context(), chatId, userPrincipalDto.UserId, 0, lastUpdated) // chat_unread_messages_changed{ChatId:UnreadMessages}
 
-		// ch.notificator.NotifyAboutHasNewMessagesChanged(c.Request().Context(), userPrincipalDto.UserId, hasUnreadMessages) // has_unread_messages_changed HasUnreadMessages:bool
-		err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
-			UserId:    event.ParticipantId,
-			EventType: eventTypeUnreadMessagesChanged,
-			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
-				HasUnreadMessages: hasUnreadMessages[event.ParticipantId],
-			},
-		})
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
-		}
-		return nil
 	} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
-		// TODO do before m.commonProjection.OnUnreadMessageReaded(ctx, event) - for every chat which has unread messages ch.notificator.NotifyAboutUnreadMessage(c.Request().Context(), chatId, userPrincipalDto.UserId, 0, lastUpdated)
-
-		// ch.notificator.NotifyAboutHasNewMessagesChanged(c.Request().Context(), userPrincipalDto.UserId, hasUnreadMessages) // has_unread_messages_changed HasUnreadMessages:bool
-		err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
-			UserId:    event.ParticipantId,
-			EventType: eventTypeUnreadMessagesChanged,
-			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
-				HasUnreadMessages: hasUnreadMessages[event.ParticipantId],
-			},
-		})
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during IterateOverParticipantsChatIds", "err", err)
-		}
-		return nil
+		// nothing
 	} else {
 		return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
 	}
+
+	err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
+		UserId:    event.ParticipantId,
+		EventType: eventTypeUnreadMessagesChanged,
+		HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+			HasUnreadMessages: hasUnreadMessages[event.ParticipantId],
+		},
+	})
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during IterateOverParticipantsChatIds", "err", err)
+	}
+	return nil
 }

@@ -69,3 +69,14 @@ type BasicChatDtoExtended struct {
 type UserChatNotificationSettings struct {
 	ConsiderMessagesOfThisChatAsUnread bool `json:"considerMessagesOfThisChatAsUnread" db:"consider_messages_as_unread"`
 }
+
+type ChatUnreadResetDto struct {
+	ChatId         int64     `db:"id"`
+	UpdateDateTime time.Time `db:"update_date_time"`
+}
+
+type ChatUserViewBasic struct {
+	ChatId         int64     `json:"id"`
+	UpdateDateTime time.Time `json:"update_date_time"`
+	UnreadMessages int64     `json:"unread_messages"`
+}

@@ -2328,7 +2328,7 @@ func TestMessageCreateEvent(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeUnreadMessagesChanged &&
+				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
 					e.UserId == user1 &&
 					e.HasUnreadMessagesChanged.HasUnreadMessages == false // it's not being change for himself
 			},
@@ -2350,7 +2350,7 @@ func TestMessageCreateEvent(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeUnreadMessagesChanged &&
+				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.HasUnreadMessagesChanged.HasUnreadMessages == true // a cumulative indicator representing unreads in all the chats, user dor the red dot
 			},

@@ -133,3 +133,9 @@ type ReactionViewDto struct {
 type HasUnreadMessagesChanged struct {
 	HasUnreadMessages bool `json:"hasUnreadMessages"`
 }
+
+type ChatUnreadMessageChanged struct {
+	ChatId             int64     `json:"chatId"`
+	UnreadMessages     int64     `json:"unreadMessages"`
+	LastUpdateDateTime time.Time `json:"lastUpdateDateTime"` // it's need to lift the chat in case adding new unread messages
+}

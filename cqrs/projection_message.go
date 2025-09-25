@@ -310,7 +310,7 @@ func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, part
 	return err
 }
 
-func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
+func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded, allChatsReadedConsumer func([]dto.ChatUnreadResetDto)) error {
 	// actually it should be an update
 	// but we give a chance to create a row unread_messages_user_view in case lack of it
 	// so message read event has a self-healing effect
@@ -345,13 +345,34 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 
 			return m.updateHasUnreads(ctx, tx, []int64{event.ParticipantId})
 		} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
-			_, err := tx.ExecContext(ctx, `
-				update chat_user_view uv set unread_messages = 0, last_read_message_id = last_message_id where uv.user_id = $1
-			`, event.ParticipantId)
-			if err != nil {
-				return err
+			offset := 0
+			for {
+				updatedChatsPortion := []dto.ChatUnreadResetDto{}
+				err := sqlscan.Select(ctx, tx, &updatedChatsPortion, `
+				update chat_user_view uv 
+				set unread_messages = 0, last_read_message_id = last_message_id 
+				where uv.user_id = $1 and uv.id = (
+					select inn.id 
+					from chat_user_view inn 
+					where inn.user_id = $1 and inn.unread_messages > 0 -- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
+					order by inn.id 
+					limit $2 offset $3
+				)
+				returning uv.id, uv.update_date_time
+			`, event.ParticipantId, utils.DefaultSize, offset)
+				if err != nil {
+					return err
+				}
+
+				allChatsReadedConsumer(updatedChatsPortion)
+
+				if len(updatedChatsPortion) < utils.DefaultSize {
+					break
+				}
+
+				offset += utils.DefaultSize
 			}
-			_, err = tx.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", event.ParticipantId)
+			_, err := tx.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", event.ParticipantId)
 			return err
 		} else {
 			return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)

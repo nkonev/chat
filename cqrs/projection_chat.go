@@ -819,6 +819,16 @@ func (m *CommonProjection) GetChatByUserIdAndChatId(ctx context.Context, userId,
 	return t, nil
 }
 
+func (m *CommonProjection) GetChatUserViewBasic(ctx context.Context, co db.CommonOperations, chatId, participantId int64) (dto.ChatUserViewBasic, error) {
+	var t dto.ChatUserViewBasic
+	err := sqlscan.Get(ctx, co, &t, "select ch.id, ch.update_date_time, ch.unread_messages from chat_user_view ch where ch.user_id = $1 and ch.id = $2", participantId, chatId)
+	if err != nil {
+		return t, err
+	}
+	return t, nil
+
+}
+
 func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperations, chatId int64) (*dto.ChatBasic, error) {
 	var cht dto.ChatBasic
 
