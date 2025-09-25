@@ -391,14 +391,14 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 			return
 		}
 
-		for _, v := range updatedChatsPortion {
+		for _, cvb := range updatedChatsPortion {
 			err := m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
 				UserId:    event.ParticipantId,
 				EventType: eventTypeChatUnreadMessagesChanged,
 				UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
-					ChatId:             v.ChatId,
-					UnreadMessages:     v.UnreadMessages,
-					LastUpdateDateTime: v.UpdateDateTime,
+					ChatId:             cvb.ChatId,
+					UnreadMessages:     cvb.UnreadMessages,
+					LastUpdateDateTime: cvb.UpdateDateTime,
 				},
 			})
 			if err != nil {
@@ -421,23 +421,22 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 		cvb, err := m.commonProjection.GetChatUserViewBasic(ctx, m.db, event.ChatId, event.ParticipantId)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during getting chat UserViewBasic", "err", err)
+		} else {
+			err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
+				UserId:    event.ParticipantId,
+				EventType: eventTypeChatUnreadMessagesChanged,
+				UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
+					ChatId:             cvb.ChatId,
+					UnreadMessages:     cvb.UnreadMessages,
+					LastUpdateDateTime: cvb.UpdateDateTime,
+				},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
 		}
-
-		err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
-			UserId:    event.ParticipantId,
-			EventType: eventTypeChatUnreadMessagesChanged,
-			UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
-				ChatId:             event.ChatId,
-				UnreadMessages:     cvb.UnreadMessages,
-				LastUpdateDateTime: cvb.UpdateDateTime,
-			},
-		})
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
-		}
-
 	} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
-		// nothing
+		// nothing, see the callback of commonProjection.OnUnreadMessageReaded()
 	} else {
 		return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
 	}
