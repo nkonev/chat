@@ -311,44 +311,49 @@ func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, part
 }
 
 func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded, allChatsReadedConsumer func([]dto.ChatUserViewBasic)) error {
-	// actually it should be an update
-	// but we give a chance to create a row unread_messages_user_view in case lack of it
-	// so message read event has a self-healing effect
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		if event.ReadMessagesAction == ReadMessagesActionOneMessage {
-			participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
-			if err != nil {
-				return err
-			}
-			if !participant {
-				m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
-				return nil
-			}
+	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+			if event.ReadMessagesAction == ReadMessagesActionOneMessage {
+				participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
+				if err != nil {
+					return err
+				}
+				if !participant {
+					m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
+					return nil
+				}
 
-			return m.setUnreadMessages(ctx, tx, []int64{event.ParticipantId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
-		} else if event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
-			participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
-			if err != nil {
-				return err
-			}
-			if !participant {
-				m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
-				return nil
-			}
+				return m.setUnreadMessages(ctx, tx, []int64{event.ParticipantId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
+			} else if event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+				participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
+				if err != nil {
+					return err
+				}
+				if !participant {
+					m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
+					return nil
+				}
 
-			_, err = tx.ExecContext(ctx, `
+				_, err = tx.ExecContext(ctx, `
 				update chat_user_view uv set unread_messages = 0, last_read_message_id = last_message_id where uv.user_id = $1 and uv.id = $2
 			`, event.ParticipantId, event.ChatId)
-			if err != nil {
-				return err
-			}
+				if err != nil {
+					return err
+				}
 
-			return m.updateHasUnreads(ctx, tx, []int64{event.ParticipantId})
-		} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
-			offset := 0
-			for {
-				updatedChatsPortion := []dto.ChatUserViewBasic{}
-				err := sqlscan.Select(ctx, tx, &updatedChatsPortion, `
+				return m.updateHasUnreads(ctx, tx, []int64{event.ParticipantId})
+			} else {
+				return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
+			}
+		})
+		if errOuter != nil {
+			return fmt.Errorf("error during read messages: %w", errOuter)
+		}
+	} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
+		offset := 0
+		for {
+			updatedChatsPortion := []dto.ChatUserViewBasic{}
+			err := sqlscan.Select(ctx, m.db, &updatedChatsPortion, `
 				update chat_user_view uv 
 				set unread_messages = 0, last_read_message_id = uv.last_message_id 
 				where uv.user_id = $1 and uv.id = (
@@ -360,26 +365,22 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 				)
 				returning uv.id, uv.unread_messages, uv.update_date_time
 			`, event.ParticipantId, utils.DefaultSize, offset)
-				if err != nil {
-					return err
-				}
-
-				allChatsReadedConsumer(updatedChatsPortion)
-
-				if len(updatedChatsPortion) < utils.DefaultSize {
-					break
-				}
-
-				offset += utils.DefaultSize
+			if err != nil {
+				return err
 			}
-			_, err := tx.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", event.ParticipantId)
-			return err
-		} else {
-			return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
+
+			allChatsReadedConsumer(updatedChatsPortion)
+
+			if len(updatedChatsPortion) < utils.DefaultSize {
+				break
+			}
+
+			offset += utils.DefaultSize
 		}
-	})
-	if errOuter != nil {
-		return fmt.Errorf("error during read messages: %w", errOuter)
+		_, err := m.db.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", event.ParticipantId)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
