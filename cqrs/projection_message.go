@@ -350,7 +350,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 				updatedChatsPortion := []dto.ChatUserViewBasic{}
 				err := sqlscan.Select(ctx, tx, &updatedChatsPortion, `
 				update chat_user_view uv 
-				set unread_messages = 0, last_read_message_id = last_message_id 
+				set unread_messages = 0, last_read_message_id = uv.last_message_id 
 				where uv.user_id = $1 and uv.id = (
 					select inn.id 
 					from chat_user_view inn 
