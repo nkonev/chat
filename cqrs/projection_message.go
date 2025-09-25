@@ -381,6 +381,8 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 		if err != nil {
 			return err
 		}
+	} else {
+		return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
 	}
 	return nil
 }
