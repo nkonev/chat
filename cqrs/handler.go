@@ -387,7 +387,7 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 
 	err := m.commonProjection.OnUnreadMessageReaded(ctx, event, func(updatedChatsPortion []dto.ChatUnreadResetDto) {
 		if event.ReadMessagesAction != ReadMessagesActionAllChats {
-			m.lgr.ErrorContext(ctx, "wrong invariant")
+			m.lgr.ErrorContext(ctx, "wrong invariant, an logic error in commonProjection.OnUnreadMessageReaded")
 			return
 		}
 
