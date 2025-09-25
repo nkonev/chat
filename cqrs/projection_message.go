@@ -356,7 +356,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 			err := sqlscan.Select(ctx, m.db, &updatedChatsPortion, `
 				update chat_user_view uv 
 				set unread_messages = 0, last_read_message_id = uv.last_message_id 
-				where uv.user_id = $1 and uv.id = (
+				where uv.user_id = $1 and uv.id in (
 					select inn.id 
 					from chat_user_view inn 
 					where inn.user_id = $1 and inn.unread_messages > 0 -- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
