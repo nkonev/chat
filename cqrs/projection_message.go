@@ -310,7 +310,7 @@ func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, part
 	return err
 }
 
-func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded, allChatsReadedConsumer func([]dto.ChatUnreadResetDto)) error {
+func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded, allChatsReadedConsumer func([]dto.ChatUserViewBasic)) error {
 	// actually it should be an update
 	// but we give a chance to create a row unread_messages_user_view in case lack of it
 	// so message read event has a self-healing effect
@@ -347,7 +347,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 		} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
 			offset := 0
 			for {
-				updatedChatsPortion := []dto.ChatUnreadResetDto{}
+				updatedChatsPortion := []dto.ChatUserViewBasic{}
 				err := sqlscan.Select(ctx, tx, &updatedChatsPortion, `
 				update chat_user_view uv 
 				set unread_messages = 0, last_read_message_id = last_message_id 
@@ -358,7 +358,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 					order by inn.id 
 					limit $2 offset $3
 				)
-				returning uv.id, uv.update_date_time
+				returning uv.id, uv.unread_messages, uv.update_date_time
 			`, event.ParticipantId, utils.DefaultSize, offset)
 				if err != nil {
 					return err
