@@ -577,6 +577,7 @@ func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterfa
 				AdditionalData: s.AdditionalData,
 				ParticipantIds: participantIdsPortion,
 				ChatId:         s.ChatId,
+				// here we don't add ParticipantsAction == ParticipantsActionRefresh because changing a participant (e. g. making him admin) shouldn't change chat_user_view
 			}
 			errInner := eventBus.Publish(ctx, ui)
 			if errInner != nil {
