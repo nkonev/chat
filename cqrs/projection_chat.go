@@ -270,6 +270,8 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 	return errOuter
 }
 
+// called in cases when chat should lift because of changing update_date_time
+// in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - another method can be used
 func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// in oder not to have a potential race condition
