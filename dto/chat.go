@@ -71,7 +71,7 @@ type UserChatNotificationSettings struct {
 }
 
 type ChatUserViewBasic struct {
-	ChatId         int64     `json:"id"`
-	UpdateDateTime time.Time `json:"update_date_time"`
-	UnreadMessages int64     `json:"unread_messages"`
+	ChatId         int64     `db:"id"`
+	UpdateDateTime time.Time `db:"update_date_time"`
+	UnreadMessages int64     `db:"unread_messages"`
 }

@@ -287,7 +287,7 @@ func (mc *MessageHandler) MarkChatAsRead(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
-func (mc *MessageHandler) MarkAsReadAll(g *gin.Context) {
+func (mc *MessageHandler) MarkAsReadAllChats(g *gin.Context) {
 
 	userId, err := getUserId(g)
 	if err != nil {
