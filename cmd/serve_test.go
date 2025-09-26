@@ -130,6 +130,8 @@ func TestUnreads(t *testing.T) {
 		// 2 separate calls to guarantee order
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
 		require.NoError(t, err, "error in adding participants")
+		// TODO if comment this kafka.WaitForAllEventsProcessed() - below, after adding a message chat_edited of user2 has 2 users, but should 3
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user3})
 		require.NoError(t, err, "error in adding participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
@@ -232,9 +234,37 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user3HasUnreadMessagesNew2)
 
+		testEventsAccumulator.Clean()
+
 		const message2Text = "new message 2"
 		messageId2, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text)
 		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+					e.UserId == user2 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 3 &&
+					e.ChatNotification.Participants[0].Id == user3 &&
+					e.ChatNotification.Participants[0].Login == user3Login &&
+					e.ChatNotification.Participants[1].Id == user2 &&
+					e.ChatNotification.Participants[1].Login == user2Login &&
+					e.ChatNotification.Participants[2].Id == user1 &&
+					e.ChatNotification.Participants[2].Login == user1Login &&
+					e.ChatNotification.UnreadMessages == 1
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == true
+			},
+		}))
 
 		const message3Text = "new message 3"
 		messageId3, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message3Text)
