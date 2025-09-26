@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
+	"github.com/sanity-io/litter"
 	"github.com/streadway/amqp"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/dto"
@@ -90,7 +90,7 @@ func (p *TestEventAccumulator) AwaitForBufferContainsSpecifiedEvents(duration ti
 
 		p.lgr.Info("Checking condition, the buffer is")
 		if p.cfg.RabbitMQ.DumpTestAccumulator {
-			spew.Dump(p.eventsBuffer)
+			litter.Dump(p.eventsBuffer)
 		}
 
 		fv := func() bool {
