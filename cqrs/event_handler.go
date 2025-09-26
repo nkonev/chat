@@ -50,6 +50,8 @@ func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *En
 
 func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) error {
 	eventTypeChatCreated := EventTypeChatCreated
+	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
+
 	ctx, chatAddSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeChatCreated))
 	defer chatAddSpan.End()
 
@@ -67,6 +69,12 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 		return err
 	}
 
+	var hasUnreadMessages = map[int64]bool{}
+	hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
+	if err != nil {
+		return err
+	}
+
 	for _, cv := range chatViews {
 		err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
 			UserId:           cv.UserId,
@@ -75,6 +83,17 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 		})
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+
+		err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
+			UserId:    cv.UserId,
+			EventType: eventTypeUnreadMessagesChanged,
+			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+				HasUnreadMessages: hasUnreadMessages[cv.UserId],
+			},
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during IterateOverParticipantsChatIds", "err", err)
 		}
 	}
 
@@ -111,6 +130,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *ParticipantDeleted) error {
 	userIds := event.ParticipantIds
 
+	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
 	eventTypeParticipantDeleted := EventTypeParticipantDeleted
 	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeParticipantDeleted))
 	defer participantAddSpan.End()
@@ -153,6 +173,12 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 		return errp
 	}
 
+	var hasUnreadMessages = map[int64]bool{}
+	hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
+	if err != nil {
+		return err
+	}
+
 	for _, participantId := range userIds {
 		err := m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
 			UserId:         participantId,
@@ -161,6 +187,17 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 		})
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+
+		err = m.rabbitmqEventPublisher.Publish(ctx, dto.GlobalUserEvent{
+			UserId:    participantId,
+			EventType: eventTypeUnreadMessagesChanged,
+			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+				HasUnreadMessages: hasUnreadMessages[participantId],
+			},
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during IterateOverParticipantsChatIds", "err", err)
 		}
 	}
 	return nil

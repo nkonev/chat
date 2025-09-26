@@ -20,7 +20,6 @@ import (
 	"testing"
 )
 
-// TODO test events for reading unreads (add event assertions into this and 2 below tests)
 func TestUnreads(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
@@ -29,6 +28,7 @@ func TestUnreads(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -125,12 +125,37 @@ func TestUnreads(t *testing.T) {
 		assert.Equal(t, message1Id, message1.Id)
 		assert.Equal(t, message1Text, message1.Content)
 
+		testEventsAccumulator.Clean()
+
 		// 2 separate calls to guarantee order
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
 		require.NoError(t, err, "error in adding participants")
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user3})
 		require.NoError(t, err, "error in adding participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+					e.UserId == user2 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 2 &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login &&
+					e.ChatNotification.UnreadMessages == 1
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == true
+			},
+		}))
 
 		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
 		require.NoError(t, err, "error in chat participants")
@@ -164,9 +189,28 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user3HasUnreadMessagesNew)
 
+		testEventsAccumulator.Clean()
+
 		err = testRestClient.ReadMessage(ctx, user2, chat1Id, message1.Id)
 		require.NoError(t, err, "error in reading message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.UnreadMessagesNotification.ChatId == chat1Id &&
+					e.UnreadMessagesNotification.UnreadMessages == 0
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == false
+			},
+		}))
 
 		user2ChatsNew2, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
@@ -313,6 +357,7 @@ func TestReadAllChats(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -393,6 +438,30 @@ func TestReadAllChats(t *testing.T) {
 		require.NoError(t, err, "error in read all messages")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.UnreadMessagesNotification.ChatId == chat1Id &&
+					e.UnreadMessagesNotification.UnreadMessages == 0
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.UnreadMessagesNotification.ChatId == chat2Id &&
+					e.UnreadMessagesNotification.UnreadMessages == 0
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == false
+			},
+		}))
+
 		user2ChatsNew, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 2, len(user2ChatsNew))
@@ -415,6 +484,7 @@ func TestReadOneChat(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -495,6 +565,23 @@ func TestReadOneChat(t *testing.T) {
 		require.NoError(t, err, "error in read all messages")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.UnreadMessagesNotification.ChatId == chat1Id &&
+					e.UnreadMessagesNotification.UnreadMessages == 0
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == true
+			},
+		}))
+
 		user2ChatsNew, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 2, len(user2ChatsNew))
@@ -511,6 +598,23 @@ func TestReadOneChat(t *testing.T) {
 		err = testRestClient.MarkChatAsRead(ctx, user2, chat2Id)
 		require.NoError(t, err, "error in read all messages")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeChatUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.UnreadMessagesNotification.ChatId == chat2Id &&
+					e.UnreadMessagesNotification.UnreadMessages == 0
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == false
+			},
+		}))
 
 		user2ChatsNew2, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
