@@ -130,7 +130,8 @@ func TestUnreads(t *testing.T) {
 		// 2 separate calls to guarantee order
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
 		require.NoError(t, err, "error in adding participants")
-		// TODO if comment this kafka.WaitForAllEventsProcessed() - below, after adding a message chat_edited of user2 has 2 users, but should 3
+		// if comment this kafka.WaitForAllEventsProcessed() - below, after adding a message chat_edited of user2 has 2 users, but should 3
+		// it's explained by iterating on users during creating events in ParticipantAdd command
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user3})
 		require.NoError(t, err, "error in adding participants")
