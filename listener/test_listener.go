@@ -51,6 +51,7 @@ func (p *TestEventAccumulator) AssertHasEventsOrdered(asserters []func(e any) bo
 		}
 
 		if asserters[j](e) {
+			p.lgr.Info("Ordered - satisfying asserter with index", "index", j)
 			j++
 		}
 	}
@@ -63,9 +64,10 @@ func (p *TestEventAccumulator) AssertHasEventsUnordered(asserters []func(e any) 
 	assertersCopy := make([]func(e any) bool, len(asserters))
 	copy(assertersCopy, asserters)
 
-	for _, e := range p.eventsBuffer {
+	for eventIdx, e := range p.eventsBuffer {
 		for j, c := range assertersCopy {
 			if c(e) {
+				p.lgr.Info("Unordered - satisfying asserter for event with index", "index", eventIdx)
 				assertersCopy = slices.Delete(assertersCopy, j, j+1)
 				break // inner loop
 			}
