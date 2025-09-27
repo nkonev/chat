@@ -13,7 +13,6 @@ import (
 	"go.uber.org/fx"
 	"io"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -100,7 +99,7 @@ func RunResetPartitions(
 	err := kafkaAdmin.DeleteConsumerGroup(cfg.Kafka.ConsumerGroup)
 
 	if err != nil {
-		if strings.Contains(err.Error(), "The group id does not exist") {
+		if errors.Is(err, sarama.ErrGroupIDNotFound) {
 			lgr.Info("There is no consumer group", "consumer_group", cfg.Kafka.ConsumerGroup)
 		} else {
 			return err
