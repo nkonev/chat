@@ -4,7 +4,7 @@ $$ LANGUAGE SQL;
 
 create sequence chat_id_sequence;
 
-create table chat_common(
+create unlogged table chat_common(
     id bigint primary key,
     title varchar(512) not null,
     last_generated_message_id bigint not null default 0,
@@ -19,7 +19,7 @@ create table chat_common(
     regular_participant_can_pin_message BOOLEAN NOT NULL DEFAULT FALSE
 );
 
-create table chat_participant(
+create unlogged table chat_participant(
     user_id bigint not null,
     chat_id bigint not null,
     create_date_time timestamp not null,
@@ -28,7 +28,7 @@ create table chat_participant(
 );
 SELECT create_distributed_table('chat_participant', 'chat_id');
 
-create table message(
+create unlogged table message(
     id bigint not null,
     chat_id bigint not null,
     owner_id bigint not null,
@@ -44,7 +44,7 @@ create table message(
 );
 SELECT create_distributed_table('message', 'chat_id');
 
-CREATE TABLE message_reaction(
+CREATE unlogged TABLE message_reaction(
     chat_id BIGINT,
     user_id BIGINT NOT NULL,
     reaction VARCHAR(4) NOT NULL,
@@ -57,7 +57,7 @@ CREATE TABLE message_reaction(
 -- https://docs.citusdata.com/en/v11.1/develop/api_udf.html#example
 SELECT create_distributed_table('message_reaction', 'chat_id', colocate_with => 'message');
 
-create table chat_user_view(
+create unlogged table chat_user_view(
     id bigint not null,
     pinned boolean not null default false,
     user_id bigint not null,
@@ -74,15 +74,15 @@ create table chat_user_view(
 );
 SELECT create_distributed_table('chat_user_view', 'user_id');
 
-create table has_unread_messages(user_id bigint primary key, has boolean not null default false);
+create unlogged table has_unread_messages(user_id bigint primary key, has boolean not null default false);
 SELECT create_distributed_table('has_unread_messages', 'user_id');
 
-create table technical(
+create unlogged table technical(
     id int primary key,
     need_to_fast_forward_sequences bool not null default false
 );
 
-create table blog(
+create unlogged table blog(
     id int primary key,
     owner_id bigint,
     title varchar(256) not null,
