@@ -66,11 +66,20 @@ func (p *ParticipantsAdded) GetParticipantIds() []int64 {
 	return res
 }
 
+type GetParticipantsType int16
+
+const (
+	GetParticipantsTypeNormal = iota + 1
+	GetParticipantsTypeAllInChatExcepting
+)
+
 type ParticipantDeleted struct {
-	AdditionalData *AdditionalData `json:"additionalData"`
-	ParticipantIds []int64         `json:"participantIds"`
-	ChatId         int64           `json:"chatId"`
-	BehalfUserId   int64           `json:"behalfUserId"`
+	AdditionalData             *AdditionalData     `json:"additionalData"`
+	GetParticipantsType        GetParticipantsType `json:"getParticipantsType"`
+	ParticipantIds             []int64             `json:"participantIds"`
+	AllParticipantIdsExcepting []int64             `json:"allParticipantIdsExcepting"`
+	ChatId                     int64               `json:"chatId"`
+	BehalfUserId               int64               `json:"behalfUserId"`
 }
 
 type ParticipantChanged struct {

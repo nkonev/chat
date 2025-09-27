@@ -128,12 +128,26 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 }
 
 func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *ParticipantDeleted) error {
-	userIds := event.ParticipantIds
-
-	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
 	eventTypeParticipantDeleted := EventTypeParticipantDeleted
 	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeParticipantDeleted))
 	defer participantAddSpan.End()
+
+	if event.GetParticipantsType == GetParticipantsTypeNormal {
+		return m.handleParticipantRemoved(ctx, event, event.ParticipantIds)
+	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting {
+		return m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+			return m.handleParticipantRemoved(ctx, event, participantIdsPortion)
+		})
+	} else {
+		return fmt.Errorf("Unknown event.GetParticipantsType = %v", event.GetParticipantsType)
+	}
+}
+
+func (m *EventHandler) handleParticipantRemoved(ctx context.Context, event *ParticipantDeleted, participantIds []int64) error {
+	userIds := participantIds
+
+	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
+	eventTypeParticipantDeleted := EventTypeParticipantDeleted
 	m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantDeleted, "user_ids", userIds)
 
 	var pseudoUsers = []*dto.UserWithAdmin{}
@@ -144,6 +158,7 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	}
 
 	// this is an event for ChatParticipantsModal.vue
+	// we send for all the participant an event about removing those
 	err := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		// for every participant of chat we send an info about the newly added participants
 		for _, participantId := range participantIdsPortion {
@@ -168,7 +183,7 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	defer messageSpan.End()
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
-	errp := m.commonProjection.OnParticipantRemoved(ctx, event)
+	errp := m.commonProjection.OnParticipantRemoved(ctx, event, userIds)
 	if errp != nil {
 		return errp
 	}

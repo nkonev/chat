@@ -416,20 +416,16 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
 	}
 
-	errOuter := commonProjection.IterateOverChatParticipantIds(ctx, dba, s.ChatId, nil, func(participantIdsPortion []int64) error {
-		pa := &ParticipantDeleted{
-			AdditionalData: s.AdditionalData,
-			ParticipantIds: participantIdsPortion,
-			// TODO eliminate commonProjection.IterateOverChatParticipantIds here. introduce GetParticipantsType: "all_in_chat" \\ also put the existing behaviour beneath "normal"
-			ChatId:       s.ChatId,
-			BehalfUserId: s.BehalfUserId,
-		}
-		errInner := eventBus.Publish(ctx, pa)
+	pa := &ParticipantDeleted{
+		AdditionalData:             s.AdditionalData,
+		GetParticipantsType:        GetParticipantsTypeAllInChatExcepting,
+		AllParticipantIdsExcepting: []int64{},
+		ChatId:                     s.ChatId,
+		BehalfUserId:               s.BehalfUserId,
+	}
+	errInner := eventBus.Publish(ctx, pa)
+	if errInner != nil {
 		return errInner
-
-	})
-	if errOuter != nil {
-		return errOuter
 	}
 
 	cc := &ChatDeleted{
@@ -513,10 +509,11 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 	}
 
 	pa := &ParticipantDeleted{
-		AdditionalData: s.AdditionalData,
-		ParticipantIds: s.ParticipantIds,
-		ChatId:         s.ChatId,
-		BehalfUserId:   s.BehalfUserId,
+		AdditionalData:      s.AdditionalData,
+		ParticipantIds:      s.ParticipantIds,
+		GetParticipantsType: GetParticipantsTypeNormal,
+		ChatId:              s.ChatId,
+		BehalfUserId:        s.BehalfUserId,
 	}
 	err = eventBus.Publish(ctx, pa)
 	if err != nil {

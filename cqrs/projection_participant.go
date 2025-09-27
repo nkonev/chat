@@ -113,7 +113,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	return nil
 }
 
-func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *ParticipantDeleted) error {
+func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *ParticipantDeleted, participantIds []int64) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
 		if err != nil {
@@ -130,19 +130,19 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *Part
 
 		_, err = tx.ExecContext(ctx, `
 		delete from chat_participant where chat_id = $2 and user_id = any($1)
-	`, event.ParticipantIds, event.ChatId)
+	`, participantIds, event.ChatId)
 		if err != nil {
 			return err
 		}
 
 		_, err = tx.ExecContext(ctx, `
 		delete from chat_user_view where user_id = any($1) and id = $2
-	`, event.ParticipantIds, event.ChatId)
+	`, participantIds, event.ChatId)
 		if err != nil {
 			return err
 		}
 
-		err = m.updateHasUnreads(ctx, tx, event.ParticipantIds)
+		err = m.updateHasUnreads(ctx, tx, participantIds)
 		if err != nil {
 			return err
 		}
