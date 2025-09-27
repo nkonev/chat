@@ -391,8 +391,9 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		// excluding => s.ParticipantIds is an optimization in order not to re-refresh views for the recently added
 		errOuter := commonProjection.IterateOverChatParticipantIds(ctx, dba, copyCommand.ChatId, copyCommand.ParticipantIdsToAdd, func(participantIdsPortion []int64) error {
 			ui := &ChatViewRefreshed{
-				AdditionalData:     copyCommand.AdditionalData,
-				ParticipantIds:     participantIdsPortion,
+				AdditionalData: copyCommand.AdditionalData,
+				ParticipantIds: participantIdsPortion,
+				// TODO introduce GetParticipantsType: "all_in_chat_excluding" \\ also put the existing behaviour beneath "normal" \\ also we can just drop the existing behaviour
 				ChatId:             copyCommand.ChatId,
 				ParticipantsAction: ParticipantsActionRefresh,
 			}
@@ -424,8 +425,9 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 		pa := &ParticipantDeleted{
 			AdditionalData: s.AdditionalData,
 			ParticipantIds: participantIdsPortion,
-			ChatId:         s.ChatId,
-			BehalfUserId:   s.BehalfUserId,
+			// TODO introduce GetParticipantsType: "all_in_chat" \\ also put the existing behaviour beneath "normal"
+			ChatId:       s.ChatId,
+			BehalfUserId: s.BehalfUserId,
 		}
 		errInner := eventBus.Publish(ctx, pa)
 		return errInner
