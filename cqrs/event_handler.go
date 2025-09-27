@@ -133,17 +133,17 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	defer participantAddSpan.End()
 
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
-		return m.handleParticipantRemoved(ctx, event, event.ParticipantIds)
+		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.BehalfUserId)
 	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting {
 		return m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-			return m.handleParticipantRemoved(ctx, event, participantIdsPortion)
+			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.BehalfUserId)
 		})
 	} else {
 		return fmt.Errorf("Unknown event.GetParticipantsType = %v", event.GetParticipantsType)
 	}
 }
 
-func (m *EventHandler) handleParticipantRemoved(ctx context.Context, event *ParticipantDeleted, participantIds []int64) error {
+func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64) error {
 	userIds := participantIds
 
 	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
@@ -159,13 +159,13 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, event *Part
 
 	// this is an event for ChatParticipantsModal.vue
 	// we send for all the participant an event about removing those
-	err := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+	err := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, chatId, nil, func(participantIdsPortion []int64) error {
 		// for every participant of chat we send an info about the newly added participants
 		for _, participantId := range participantIdsPortion {
-			errInn := m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+			errInn := m.rabbitmqEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:    eventTypeParticipantDeleted,
 				UserId:       participantId,
-				ChatId:       event.ChatId,
+				ChatId:       chatId,
 				Participants: &pseudoUsers,
 			})
 			if errInn != nil {
@@ -183,7 +183,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, event *Part
 	defer messageSpan.End()
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
-	errp := m.commonProjection.OnParticipantRemoved(ctx, event, userIds)
+	errp := m.commonProjection.OnParticipantRemoved(ctx, additionalData, userIds, chatId, behalfUserId)
 	if errp != nil {
 		return errp
 	}
@@ -195,16 +195,16 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, event *Part
 	}
 
 	for _, participantId := range userIds {
-		err := m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		err := m.rabbitmqEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
 			UserId:         participantId,
 			EventType:      eventType,
-			ChatDeletedDto: &dto.ChatDeletedDto{Id: event.ChatId},
+			ChatDeletedDto: &dto.ChatDeletedDto{Id: chatId},
 		})
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 		}
 
-		err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		err = m.rabbitmqEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
 			UserId:    participantId,
 			EventType: eventTypeUnreadMessagesChanged,
 			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
@@ -269,7 +269,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 		userIds := participantIdsPortion
 		m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
-		errp := m.commonProjection.OnChatViewRefreshed(ctx, event, participantIdsPortion)
+		errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.ParticipantsAction, event.IncreaseOn, event.OwnerId)
 		if errp != nil {
 			return errp
 		}
