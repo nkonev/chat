@@ -272,7 +272,7 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 
 // called in cases when chat should lift because of changing update_date_time
 // in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
-func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
+func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed, participantIds []int64) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// in oder not to have a potential race condition
 		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
@@ -281,9 +281,9 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 
 		wasUpdated := false
 		if event.UnreadMessagesAction == UnreadMessagesActionIncrease {
-			participantIdsWithoutOwner := utils.GetSliceWithout(event.OwnerId, event.ParticipantIds)
+			participantIdsWithoutOwner := utils.GetSliceWithout(event.OwnerId, participantIds)
 			var ownerId *int64
-			if slices.Contains(event.ParticipantIds, event.OwnerId) { // for batches without owner
+			if slices.Contains(participantIds, event.OwnerId) { // for batches without owner
 				ownerId = &event.OwnerId
 			}
 
@@ -332,7 +332,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 
 			wasUpdated = true
 		} else if event.UnreadMessagesAction == UnreadMessagesActionRefresh {
-			err := m.setUnreadMessages(ctx, tx, event.ParticipantIds, event.ChatId, 0, true, true)
+			err := m.setUnreadMessages(ctx, tx, participantIds, event.ChatId, 0, true, true)
 			if err != nil {
 				return err
 			}
@@ -341,7 +341,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 		}
 
 		if event.LastMessageAction == LastMessageActionRefresh {
-			err := m.setLastMessage(ctx, tx, event.ParticipantIds, event.ChatId)
+			err := m.setLastMessage(ctx, tx, participantIds, event.ChatId)
 			if err != nil {
 				return err
 			}
@@ -366,7 +366,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 						participants_count = (select count from chat_participant_count),
 						participant_ids = (select array_agg(user_id) from chat_participants_last_n)
 					WHERE user_id = any($1) and id = $2;
-				`, event.ParticipantIds, event.ChatId, m.chatUserViewConfig.MaxViewableParticipants)
+				`, participantIds, event.ChatId, m.chatUserViewConfig.MaxViewableParticipants)
 			if err != nil {
 				return fmt.Errorf("error during increasing unread messages: %w", err)
 			}
@@ -377,7 +377,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, event *ChatV
 		if wasUpdated {
 			_, err := tx.ExecContext(ctx, `
 				update chat_user_view set update_date_time = $3 where user_id = any($1) and id = $2
-			`, event.ParticipantIds, event.ChatId, event.AdditionalData.CreatedAt)
+			`, participantIds, event.ChatId, event.AdditionalData.CreatedAt)
 			if err != nil {
 				return err
 			}

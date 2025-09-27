@@ -274,6 +274,9 @@ func (m *EnrichingProjection) searchUsersContaining(ctx context.Context, co db.C
 	return resUsers, totalCountInChat, nil
 }
 
+// you cannot use it in command handler
+// if you do this you will introduce a race condition
+// see comments in TestUnreads()
 func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, consumer func(participantIdsPortion []int64) error) error {
 	shouldContinue := true
 	var lastError error

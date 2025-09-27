@@ -246,54 +246,59 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
 	eventType := EventTypeChatEdited
 	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
-	userIds := event.ParticipantIds
-	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
 	defer messageSpan.End()
 
-	errp := m.commonProjection.OnChatViewRefreshed(ctx, event)
-	if errp != nil {
-		return errp
-	}
+	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, event.AllParticipantIdsExcepting, func(participantIdsPortion []int64) error {
+		userIds := participantIdsPortion
+		m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
-	chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId)
-	if err != nil {
-		return err
-	}
+		errp := m.commonProjection.OnChatViewRefreshed(ctx, event, participantIdsPortion)
+		if errp != nil {
+			return errp
+		}
 
-	var hasUnreadMessages = map[int64]bool{}
-	if event.UnreadMessagesAction != 0 {
-		hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
+		chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId)
 		if err != nil {
 			return err
 		}
-	}
 
-	for _, cv := range chatViews {
-		err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-			UserId:           cv.UserId,
-			EventType:        eventType,
-			ChatNotification: &cv,
-		})
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		var hasUnreadMessages = map[int64]bool{}
+		if event.UnreadMessagesAction != 0 {
+			hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
+			if err != nil {
+				return err
+			}
 		}
 
-		if event.UnreadMessagesAction != 0 {
+		for _, cv := range chatViews {
 			err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-				UserId:    cv.UserId,
-				EventType: eventTypeUnreadMessagesChanged,
-				HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
-					HasUnreadMessages: hasUnreadMessages[cv.UserId],
-				},
+				UserId:           cv.UserId,
+				EventType:        eventType,
+				ChatNotification: &cv,
 			})
 			if err != nil {
 				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 			}
+
+			if event.UnreadMessagesAction != 0 {
+				err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+					UserId:    cv.UserId,
+					EventType: eventTypeUnreadMessagesChanged,
+					HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+						HasUnreadMessages: hasUnreadMessages[cv.UserId],
+					},
+				})
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
+			}
 		}
-	}
-	return nil
+		return nil
+	})
+
+	return errOuter
 }
 
 func (m *EventHandler) buildUserWithAdminBasedOnParticipantWithAdmin(participants []ParticipantWithAdmin, usersMap map[int64]*dto.User) []*dto.UserWithAdmin {

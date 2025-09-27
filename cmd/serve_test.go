@@ -130,9 +130,9 @@ func TestUnreads(t *testing.T) {
 		// 2 separate calls to guarantee order
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
 		require.NoError(t, err, "error in adding participants")
-		// if comment this kafka.WaitForAllEventsProcessed() - below, after adding a message chat_edited of user2 has 2 users, but should 3
-		// it's explained by iterating on users during creating events in ParticipantAdd command
-		//require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		// by not adding kafka.WaitForAllEventsProcessed() we test a potential race condition effect due to still not applied chat participant_added event
+		// in short - we shouldn't iterate over chat participants on the command handler side
+		// we can iterate only on the kafka output - e. g. in event handler
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user3})
 		require.NoError(t, err, "error in adding participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
@@ -249,7 +249,7 @@ func TestUnreads(t *testing.T) {
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
-					len(e.ChatNotification.Participants) == 3 &&
+					len(e.ChatNotification.Participants) == 3 && // in case race condition it's going to fail
 					e.ChatNotification.Participants[0].Id == user3 &&
 					e.ChatNotification.Participants[0].Login == user3Login &&
 					e.ChatNotification.Participants[1].Id == user2 &&

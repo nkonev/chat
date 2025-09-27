@@ -154,14 +154,14 @@ const (
 )
 
 type ChatViewRefreshed struct {
-	AdditionalData       *AdditionalData      `json:"additionalData"`
-	ParticipantIds       []int64              `json:"participantIds"`
-	ChatId               int64                `json:"chatId"`
-	UnreadMessagesAction UnreadMessagesAction `json:"unreadMessagesAction"`
-	LastMessageAction    LastMessageAction    `json:"lastMessageAction"`
-	ParticipantsAction   ParticipantsAction   `json:"participantsAction"`
-	IncreaseOn           int                  `json:"increaseOn"`
-	OwnerId              int64                `json:"ownerId"` // owner of message
+	AdditionalData             *AdditionalData      `json:"additionalData"`
+	AllParticipantIdsExcepting []int64              `json:"allParticipantIdsExcepting"`
+	ChatId                     int64                `json:"chatId"`
+	UnreadMessagesAction       UnreadMessagesAction `json:"unreadMessagesAction"`
+	LastMessageAction          LastMessageAction    `json:"lastMessageAction"`
+	ParticipantsAction         ParticipantsAction   `json:"participantsAction"`
+	IncreaseOn                 int                  `json:"increaseOn"`
+	OwnerId                    int64                `json:"ownerId"` // owner of message
 }
 
 type MessageReaded struct {
