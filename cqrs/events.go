@@ -10,6 +10,14 @@ type AdditionalData struct {
 	CorrelationId *string   `json:"correlationId"`
 }
 
+func (p *AdditionalData) GetCorrelationId() *string {
+	if p == nil {
+		return nil
+	}
+
+	return p.CorrelationId
+}
+
 type ChatCreated struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`

@@ -12,9 +12,13 @@ import (
 )
 
 const EventsFanoutExchange = "async-events-exchange"
+const correlationIdName = "correlationId"
 
-func (rp *RabbitEventsPublisher) Publish(ctx context.Context, aDto interface{}) error {
+func (rp *RabbitEventsPublisher) Publish(ctx context.Context, correlationId *string, aDto interface{}) error {
 	headers := myRabbitmq.InjectAMQPHeaders(ctx)
+	if correlationId != nil {
+		headers[correlationIdName] = *correlationId
+	}
 
 	aType := rp.typeRegistry.GetType(aDto)
 
