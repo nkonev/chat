@@ -113,31 +113,31 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	return nil
 }
 
-func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *ParticipantDeleted, participantIds []int64) error {
+func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		admin, err := m.IsChatAdmin(ctx, tx, behalfUserId, chatId)
 		if err != nil {
 			return err
 		}
 		if !admin {
 			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot remove a participant",
-				"user_id", event.BehalfUserId,
-				"chat_id", event.ChatId,
+				"user_id", behalfUserId,
+				"chat_id", chatId,
 			)
 			return nil
 		}
 
 		_, err = tx.ExecContext(ctx, `
 		delete from chat_participant where chat_id = $2 and user_id = any($1)
-	`, participantIds, event.ChatId)
+	`, participantIds, chatId)
 		if err != nil {
 			return err
 		}
 
 		_, err = tx.ExecContext(ctx, `
 		delete from chat_user_view where user_id = any($1) and id = $2
-	`, participantIds, event.ChatId)
+	`, participantIds, chatId)
 		if err != nil {
 			return err
 		}
@@ -155,8 +155,8 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, event *Part
 
 	m.lgr.InfoContext(ctx,
 		"Participant removed from common chat",
-		"user_ids", event.ParticipantIds,
-		"chat_id", event.ChatId,
+		"user_ids", participantIds,
+		"chat_id", chatId,
 	)
 
 	return nil
