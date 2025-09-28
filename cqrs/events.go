@@ -49,7 +49,6 @@ type ChatDeleted struct {
 type ParticipantsAdded struct {
 	AdditionalData     *AdditionalData        `json:"additionalData"`
 	Participants       []ParticipantWithAdmin `json:"participants"`
-	Admins             bool                   `json:"admins"`
 	ChatId             int64                  `json:"chatId"`
 	BehalfUserId       int64                  `json:"behalfUserId"`
 	SkipChatAdminCheck bool                   `json:"skipChatAdminCheck"`
