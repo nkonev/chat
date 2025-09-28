@@ -23,6 +23,7 @@ const EventTypeMessageCreated = "message_created"
 const EventTypeHasUnreadMessagesChanged = "has_unread_messages_changed"
 const EventTypeChatUnreadMessagesChanged = "chat_unread_messages_changed"
 const EventTypeMessageEdited = "message_edited"
+const EventTypeMessageDeleted = "message_deleted"
 
 type EventHandler struct {
 	commonProjection       *CommonProjection
@@ -52,8 +53,9 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	eventTypeChatCreated := EventTypeChatCreated
 	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
 
-	ctx, chatAddSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeChatCreated))
-	defer chatAddSpan.End()
+	eventTypeParticipantAdded := EventTypeParticipantAdded
+	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("participant.%s", eventTypeParticipantAdded))
+	defer participantAddSpan.End()
 
 	userIds := event.GetParticipantIds()
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventTypeChatCreated, "user_ids", userIds)
@@ -99,9 +101,6 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 
 	addedUsersWithAdmins := m.buildUserWithAdminBasedOnParticipantWithAdmin(event.Participants, usersMap)
 
-	eventTypeParticipantAdded := EventTypeParticipantAdded
-	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeParticipantAdded))
-	defer participantAddSpan.End()
 	m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantAdded, "user_ids", userIds)
 
 	// this is an event for ChatParticipantsModal.vue
@@ -129,8 +128,8 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 
 func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *ParticipantDeleted) error {
 	eventTypeParticipantDeleted := EventTypeParticipantDeleted
-	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeParticipantDeleted))
-	defer participantAddSpan.End()
+	ctx, participantSpan := m.tr.Start(ctx, fmt.Sprintf("participant.%s", eventTypeParticipantDeleted))
+	defer participantSpan.End()
 
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
 		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.BehalfUserId)
@@ -146,8 +145,10 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64) error {
 	userIds := participantIds
 
-	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
+	eventType := EventTypeChatDeleted
 	eventTypeParticipantDeleted := EventTypeParticipantDeleted
+
+	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
 	m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantDeleted, "user_ids", userIds)
 
 	var pseudoUsers = []*dto.UserWithAdmin{}
@@ -178,9 +179,6 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 	}
 
-	eventType := EventTypeChatDeleted
-	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
-	defer messageSpan.End()
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
 	errp := m.commonProjection.OnParticipantRemoved(ctx, additionalData, userIds, chatId, behalfUserId)
@@ -219,6 +217,10 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 }
 
 func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *ParticipantChanged) error {
+	eventTypeParticipantChanged := EventTypeParticipantChanged
+	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("participant.%s", eventTypeParticipantChanged))
+	defer participantAddSpan.End()
+
 	userIds := []int64{event.ParticipantId}
 
 	errp := m.commonProjection.OnParticipantChanged(ctx, event)
@@ -231,9 +233,6 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 		return err
 	}
 
-	eventTypeParticipantChanged := EventTypeParticipantChanged
-	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeParticipantChanged))
-	defer participantAddSpan.End()
 	m.lgr.DebugContext(ctx, "Sending notification about the participant", "event_type", eventTypeParticipantChanged, "user_ids", userIds)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
@@ -267,6 +266,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, event.AllParticipantIdsExcepting, func(participantIdsPortion []int64) error {
 		userIds := participantIdsPortion
+
 		m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
 		errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.ParticipantsAction, event.IncreaseOn, event.OwnerId)
@@ -355,17 +355,17 @@ func (m *EventHandler) buildUserWithAdminBasedOnUserIds(ctx context.Context, use
 }
 
 func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreated) error {
+	eventType := EventTypeMessageCreated
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
+	defer messageSpan.End()
+
 	err := m.commonProjection.OnMessageCreated(ctx, event)
 	if err != nil {
 		return err
 	}
 
-	eventType := EventTypeMessageCreated
-
 	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.OwnerId)
-
-	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
-	defer messageSpan.End()
 
 	// TODO NotifyNewMessageBrowserNotification browser_notification_add_message
 
@@ -397,17 +397,17 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 }
 
 func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
+	eventType := EventTypeMessageEdited
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
+	defer messageSpan.End()
+
 	err := m.commonProjection.OnMessageEdited(ctx, event)
 	if err != nil {
 		return err
 	}
 
-	eventType := EventTypeMessageEdited
-
 	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.BehalfUserId)
-
-	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
-	defer messageSpan.End()
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.Id)
@@ -436,11 +436,53 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 	return nil
 }
 
+func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDeleted) error {
+	eventType := EventTypeMessageDeleted
+
+	// mc.notificator.NotifyAboutDeleteMessage(c.Request().Context(), participantIds, chatId, cd)
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
+	defer messageSpan.End()
+
+	err := m.commonProjection.OnMessageRemoved(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.BehalfUserId)
+
+	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+		for _, participantId := range participantIdsPortion {
+			errInn := m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+				EventType: eventType,
+				UserId:    participantId,
+				ChatId:    event.ChatId,
+				MessageDeletedNotification: &dto.MessageDeletedDto{
+					Id:     event.MessageId,
+					ChatId: event.ChatId,
+				},
+			})
+			if errInn != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+			}
+		}
+
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
+	}
+
+	return nil
+}
+
 func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
 	userIds := []int64{event.ParticipantId}
 
 	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
 	eventTypeChatUnreadMessagesChanged := EventTypeChatUnreadMessagesChanged
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventTypeChatUnreadMessagesChanged))
+	defer messageSpan.End()
 
 	err := m.commonProjection.OnUnreadMessageReaded(ctx, event, func(updatedChatsPortion []dto.ChatUserViewBasic) {
 		if event.ReadMessagesAction != ReadMessagesActionAllChats {

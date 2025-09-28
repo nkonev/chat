@@ -250,7 +250,7 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatViewRefreshed),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUnreadMessageReaded),
 		cqrs.NewGroupEventHandler(commonProjection.OnMessageBlogPostMade),
-		cqrs.NewGroupEventHandler(commonProjection.OnMessageRemoved),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageRemoved),
 		cqrs.NewGroupEventHandler(commonProjection.OnMessageReactionFlipped),
 	)
 	if err != nil {

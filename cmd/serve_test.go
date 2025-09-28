@@ -293,9 +293,38 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user3HasUnreadMessagesNew3)
 
+		testEventsAccumulator.Clean()
+
 		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, messageId3)
 		require.NoError(t, err, "error in delete message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == cqrs.EventTypeMessageDeleted &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					e.MessageDeletedNotification.Id == messageId3 &&
+					e.MessageDeletedNotification.ChatId == chat1Id
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == cqrs.EventTypeMessageDeleted &&
+					e.UserId == user2 &&
+					e.ChatId == chat1Id &&
+					e.MessageDeletedNotification.Id == messageId3 &&
+					e.MessageDeletedNotification.ChatId == chat1Id
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == cqrs.EventTypeMessageDeleted &&
+					e.UserId == user3 &&
+					e.ChatId == chat1Id &&
+					e.MessageDeletedNotification.Id == messageId3 &&
+					e.MessageDeletedNotification.ChatId == chat1Id
+			},
+		}))
 
 		user2ChatsNew4, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
