@@ -557,6 +557,10 @@ func getUserIdsFromChats(chats []dto.ChatViewDto) []int64 {
 		for _, p := range ch.ParticipantIds {
 			m[p] = struct{}{}
 		}
+
+		if ch.LastMessageOwnerId != nil {
+			m[*ch.LastMessageOwnerId] = struct{}{}
+		}
 	}
 
 	r := []int64{}
@@ -601,7 +605,24 @@ func enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.Use
 	}
 	SetChatPersonalizedFields(&che, admin, true)
 
+	if ch.LastMessageOwnerId != nil && ch.LastMessageContent != nil {
+		u := users[*ch.LastMessageOwnerId]
+		if u != nil {
+			preview := createMessagePreview(*ch.LastMessageContent, u.Login)
+			che.LastMessagePreview = &preview
+		}
+	}
+
 	return che
+}
+
+func createMessagePreview(text, login string) string {
+	input := loginPrefix(login) + text
+	return input
+}
+
+func loginPrefix(login string) string {
+	return login + ": "
 }
 
 func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, participant bool) {

@@ -5,7 +5,7 @@ import "time"
 const NoMessageContent = ""
 const NoOwner = -1
 
-type MessageViewDto struct {
+type MessageDto struct {
 	Id       int64  `db:"id"`
 	OwnerId  int64  `db:"owner_id"`
 	Content  string `db:"content"`

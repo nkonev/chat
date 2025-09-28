@@ -10,7 +10,7 @@ const NoSearchString = ""
 type ChatViewDto struct {
 	Id                                int64      `json:"id"`
 	UserId                            int64      `json:"-"` // behalf user id
-	Title                             string     `json:"title"`
+	Title                             string     `json:"name"`
 	Pinned                            bool       `json:"pinned"`
 	UnreadMessages                    int64      `json:"unreadMessages"`
 	LastMessageId                     *int64     `json:"lastMessageId"`
@@ -39,16 +39,17 @@ type ChatDeletedDto struct {
 
 type ChatViewEnrichedDto struct {
 	ChatViewDto
-	Participants        []User `json:"participants"`
-	CanEdit             *bool  `json:"canEdit"`
-	CanDelete           *bool  `json:"canDelete"`
-	CanLeave            *bool  `json:"canLeave"`
-	CanBroadcast        bool   `json:"canBroadcast"`
-	CanVideoKick        bool   `json:"canVideoKick"`
-	CanAudioMute        bool   `json:"canAudioMute"`
-	CanChangeChatAdmins bool   `json:"canChangeChatAdmins"`
-	IsResultFromSearch  *bool  `json:"isResultFromSearch"`
-	CanWriteMessage     bool   `json:"canWriteMessage"`
+	LastMessagePreview  *string `json:"lastMessagePreview"`
+	Participants        []User  `json:"participants"`
+	CanEdit             *bool   `json:"canEdit"`
+	CanDelete           *bool   `json:"canDelete"`
+	CanLeave            *bool   `json:"canLeave"`
+	CanBroadcast        bool    `json:"canBroadcast"`
+	CanVideoKick        bool    `json:"canVideoKick"`
+	CanAudioMute        bool    `json:"canAudioMute"`
+	CanChangeChatAdmins bool    `json:"canChangeChatAdmins"`
+	IsResultFromSearch  *bool   `json:"isResultFromSearch"`
+	CanWriteMessage     bool    `json:"canWriteMessage"`
 }
 
 type ChatBasic struct {

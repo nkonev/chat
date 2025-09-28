@@ -513,7 +513,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			}
 
 			if len(messages) == 1 {
-				var messagesTmp []dto.MessageViewDto
+				var messagesTmp []dto.MessageDto
 				for _, userId := range behalfUserIds {
 					msg := messages[0]
 					msg.UserId = userId
@@ -565,7 +565,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 	})
 }
 
-func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, list []dto.MessageViewDto) (map[int64][]dto.ReactionDto, error) {
+func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, list []dto.MessageDto) (map[int64][]dto.ReactionDto, error) {
 	messageIds := make([]int64, 0)
 	for _, message := range list {
 		messageIds = append(messageIds, message.Id)
@@ -595,7 +595,7 @@ func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, lis
 	return ret, nil
 }
 
-func populateSets(message *dto.MessageViewDto, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, maxDisplayableReactionUsers int, reactions map[int64][]dto.ReactionDto) {
+func populateSets(message *dto.MessageDto, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, maxDisplayableReactionUsers int, reactions map[int64][]dto.ReactionDto) {
 	usersSet[message.OwnerId] = true
 
 	chatsPreSet[currentChatId] = true
@@ -631,7 +631,7 @@ func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, maxDispla
 	}
 }
 
-func enrichMessage(m dto.MessageViewDto, chatId int64, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool) dto.MessageViewEnrichedDto {
+func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool) dto.MessageViewEnrichedDto {
 	me := dto.MessageViewEnrichedDto{
 		Id:             m.Id,
 		OwnerId:        m.OwnerId,
@@ -718,7 +718,7 @@ func getDeletedUser(id int64) *dto.User {
 	return &dto.User{Login: fmt.Sprintf("deleted_user_%v", id), Id: id}
 }
 
-func setEmbed(srcDbMessage dto.MessageViewDto, dstRet *dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) {
+func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) {
 	if srcDbMessage.ResponseEmbeddedMessageType != nil {
 		if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeReply {
 			embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageReplyOwnerId]
@@ -754,13 +754,13 @@ func setEmbed(srcDbMessage dto.MessageViewDto, dstRet *dto.MessageViewEnrichedDt
 	}
 }
 
-func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageViewDto, error) {
+func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageDto, error) {
 
 	if startingFromItemId != nil && messageId != nil {
 		return nil, fmt.Errorf("wrong invariant: both startingFromItemId and messageId provided")
 	}
 
-	ma := []dto.MessageViewDto{}
+	ma := []dto.MessageDto{}
 
 	queryArgs := []any{chatId, size}
 
