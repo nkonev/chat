@@ -467,8 +467,8 @@ func translateMessageError(g *gin.Context, err error) bool {
 	if err == nil {
 		return false
 	}
-	var mediaError *cqrs.MediaUrlErr
-	var mediaOverflowError *cqrs.MediaOverflowErr
+	var mediaError *services.MediaUrlErr
+	var mediaOverflowError *services.MediaOverflowErr
 	var validationError *cqrs.ValidationError
 	var chatStillNotExistsError *cqrs.ChatStillNotExistsError
 	var unauthError *cqrs.UnauthorizedError

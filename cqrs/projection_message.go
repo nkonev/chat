@@ -8,6 +8,7 @@ import (
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 )
 
@@ -498,7 +499,7 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 
 func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageViewEnrichedDto, error) {
 	return db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) ([]dto.MessageViewEnrichedDto, error) {
-		searchString = TrimAmdSanitize(m.policy, searchString)
+		searchString = services.TrimAmdSanitize(m.policy, searchString)
 
 		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, messageId)
 		if err != nil {
