@@ -1,5 +1,11 @@
 package cqrs
 
+// In general, to avoid race conditions, we should avoid relying on database here, in command_handler.
+// Invoking db here, we can get an old data and make wrong decisions.
+// The best place to perform checks against database is the projection side.
+// In sake optimization here we have as an exception a few db calls.
+// See comments about it in TestUnreads()
+
 import (
 	"context"
 	"errors"
