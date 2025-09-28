@@ -273,7 +273,7 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 
 // called in cases when chat should lift because of changing update_date_time
 // in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
-func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, participantsAction ParticipantsAction, increaseOn int, ownerId int64) error {
+func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, participantsAction ParticipantsAction, increaseOn int, messageOwnerId int64) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// in oder not to have a potential race condition
 		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
@@ -282,19 +282,19 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 		wasUpdated := false
 		if unreadMessagesAction == UnreadMessagesActionIncrease {
-			participantIdsWithoutOwner := utils.GetSliceWithout(ownerId, participantIds)
+			participantIdsWithoutMessageOwner := utils.GetSliceWithout(messageOwnerId, participantIds)
 			var ownerIdP *int64
-			if slices.Contains(participantIds, ownerId) { // for batches without owner
-				ownerIdP = &ownerId
+			if slices.Contains(participantIds, messageOwnerId) { // for batches with[out] owner
+				ownerIdP = &messageOwnerId
 			}
 
 			// not owners
-			if len(participantIdsWithoutOwner) > 0 && increaseOn > 0 {
+			if len(participantIdsWithoutMessageOwner) > 0 && increaseOn > 0 {
 				_, err := tx.ExecContext(ctx, `
 					UPDATE chat_user_view 
 					SET unread_messages = unread_messages + $3
 					WHERE user_id = any($1) and id = $2;
-				`, participantIdsWithoutOwner, chatId, increaseOn)
+				`, participantIdsWithoutMessageOwner, chatId, increaseOn)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
@@ -313,7 +313,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 					from input_data idt
 					on conflict (user_id) do update set
 					has = excluded.has
-				`, participantIdsWithoutOwner, chatId)
+				`, participantIdsWithoutMessageOwner, chatId)
 				if err != nil {
 					return fmt.Errorf("error during setting has unread messages: %w", err)
 				}
