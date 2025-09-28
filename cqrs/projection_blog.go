@@ -63,14 +63,14 @@ func (m *CommonProjection) removeBlog(ctx context.Context, tx *db.Tx, chatId int
 
 func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *MessageBlogPostMade) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !admin {
 			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannon make message blog post",
-				"user_id", event.BehalfUserId,
+				"user_id", event.AdditionalData.BehalfUserId,
 				"chat_id", event.ChatId,
 			)
 			return nil

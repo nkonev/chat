@@ -73,10 +73,9 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 	}
 
 	cc := cqrs.MessageCreate{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ChatId:         chatId,
 		Content:        mcd.Content,
-		OwnerId:        userId,
 	}
 	if mcd.EmbedMessageRequest != nil {
 		cc.EmbedMessage = &cqrs.EmbedMessage{
@@ -128,11 +127,10 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 	}
 
 	cc := cqrs.MessageEdit{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		MessageId:      ccd.Id,
 		ChatId:         chatId,
 		Content:        ccd.Content,
-		BehalfUserId:   userId,
 	}
 	if ccd.EmbedMessageRequest != nil {
 		cc.EmbedMessage = &cqrs.EmbedMessage{
@@ -181,10 +179,9 @@ func (mc *MessageHandler) DeleteMessage(g *gin.Context) {
 	}
 
 	cc := cqrs.MessageDelete{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		MessageId:      messageId,
 		ChatId:         chatId,
-		BehalfUserId:   userId,
 	}
 
 	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
@@ -228,10 +225,9 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 	}
 
 	mr := cqrs.MessageRead{
-		AdditionalData:     cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData:     cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ChatId:             chatId,
 		MessageId:          messageId,
-		ParticipantId:      userId,
 		ReadMessagesAction: cqrs.ReadMessagesActionOneMessage,
 	}
 
@@ -267,8 +263,7 @@ func (mc *MessageHandler) MarkChatAsRead(g *gin.Context) {
 	}
 
 	mr := cqrs.MessageRead{
-		AdditionalData:     cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
-		ParticipantId:      userId,
+		AdditionalData:     cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ReadMessagesAction: cqrs.ReadMessagesActionAllMessagesInOneChat,
 		ChatId:             chatId,
 	}
@@ -297,8 +292,7 @@ func (mc *MessageHandler) MarkAsReadAllChats(g *gin.Context) {
 	}
 
 	mr := cqrs.MessageRead{
-		AdditionalData:     cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
-		ParticipantId:      userId,
+		AdditionalData:     cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ReadMessagesAction: cqrs.ReadMessagesActionAllChats,
 	}
 
@@ -351,10 +345,9 @@ func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
 	}
 
 	mr := cqrs.MessageReactionFlip{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ChatId:         chatId,
 		MessageId:      messageId,
-		BehalfUserId:   userId,
 		Reaction:       ccd.Reaction,
 	}
 
@@ -398,11 +391,10 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 	}
 
 	mr := cqrs.MakeMessageBlogPost{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ChatId:         chatId,
 		MessageId:      messageId,
 		BlogPost:       true,
-		BehalfUserId:   userId,
 	}
 
 	err = mr.Handle(g.Request.Context(), mc.eventBus)

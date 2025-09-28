@@ -64,7 +64,7 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatCreate{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		Title:          ccd.Title,
 		ParticipantIds: ccd.ParticipantIds,
 		CanResend:      ccd.CanResend,
@@ -73,7 +73,7 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		AvatarBig:      ccd.AvatarBig,
 	}
 
-	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
+	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
 	if err != nil {
 		if translateChatError(g, err) {
 			return
@@ -110,13 +110,13 @@ func (ch *ChatHandler) CreateTetAChat(g *gin.Context) {
 	tetATetChatName := fmt.Sprintf("tet_a_tet_%v_%v", userId, oppositeUserId)
 
 	cc := cqrs.ChatCreate{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		Title:          tetATetChatName,
 		ParticipantIds: []int64{oppositeUserId},
 		TetATet:        true,
 	}
 
-	chatId, err := cc.Handle(g.Request.Context(), userId, ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
+	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
 	if err != nil {
 		if translateChatError(g, err) {
 			return
@@ -153,12 +153,11 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatEdit{
-		AdditionalData:      cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData:      cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ChatId:              ccd.Id,
 		Title:               ccd.Title,
 		ParticipantIdsToAdd: ccd.ParticipantIds,
 		Blog:                ccd.Blog,
-		BehalfUserId:        userId,
 		CanResend:           ccd.CanResend,
 		Avatar:              ccd.Avatar,
 		AvatarBig:           ccd.AvatarBig,
@@ -196,9 +195,8 @@ func (ch *ChatHandler) DeleteChat(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatDelete{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ChatId:         chatId,
-		BehalfUserId:   userId,
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
@@ -237,10 +235,9 @@ func (ch *ChatHandler) PinChat(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatPin{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ChatId:         chatId,
 		Pin:            pin,
-		ParticipantId:  userId,
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus)
@@ -283,10 +280,9 @@ func (ch *ChatHandler) PutUserChatNotificationSettings(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatNotificationSettingsSet{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g)),
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ChatId:         chatId,
 		Set:            req.ConsiderMessagesOfThisChatAsUnread,
-		ParticipantId:  userId,
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus)

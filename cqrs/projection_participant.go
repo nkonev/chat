@@ -21,14 +21,14 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			return nil
 		}
 
-		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !admin && !event.SkipChatAdminCheck {
 			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot add a participant",
-				"user_id", event.BehalfUserId,
+				"user_id", event.AdditionalData.BehalfUserId,
 				"chat_id", event.ChatId,
 			)
 			return nil
@@ -165,14 +165,14 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalD
 
 func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *ParticipantChanged) error {
 	return db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !admin {
 			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot change admin flag of the other participant",
-				"user_id", event.BehalfUserId,
+				"user_id", event.AdditionalData.BehalfUserId,
 				"chat_id", event.ChatId,
 			)
 			return nil

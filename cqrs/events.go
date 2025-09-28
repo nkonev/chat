@@ -8,6 +8,7 @@ import (
 type AdditionalData struct {
 	CreatedAt     time.Time `json:"createdAt"`
 	CorrelationId *string   `json:"correlationId"`
+	BehalfUserId  int64     `json:"behalfUserId"`
 }
 
 func (p *AdditionalData) GetCorrelationId() *string {
@@ -34,7 +35,6 @@ type ChatEdited struct {
 	ChatId         int64           `json:"chatId"`
 	Title          string          `json:"title"`
 	Blog           bool            `json:"blog"`
-	BehalfUserId   int64           `json:"behalfUserId"`
 	CanResend      bool            `json:"canResend"`
 	Avatar         *string         `json:"avatar"`
 	AvatarBig      *string         `json:"avatarBig"`
@@ -43,14 +43,12 @@ type ChatEdited struct {
 type ChatDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`
-	BehalfUserId   int64           `json:"behalfUserId"`
 }
 
 type ParticipantsAdded struct {
 	AdditionalData     *AdditionalData        `json:"additionalData"`
 	Participants       []ParticipantWithAdmin `json:"participants"`
 	ChatId             int64                  `json:"chatId"`
-	BehalfUserId       int64                  `json:"behalfUserId"`
 	SkipChatAdminCheck bool                   `json:"skipChatAdminCheck"`
 }
 
@@ -78,27 +76,23 @@ type ParticipantDeleted struct {
 	ParticipantIds             []int64             `json:"participantIds"`
 	AllParticipantIdsExcepting []int64             `json:"allParticipantIdsExcepting"`
 	ChatId                     int64               `json:"chatId"`
-	BehalfUserId               int64               `json:"behalfUserId"`
 }
 
 type ParticipantChanged struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ParticipantId  int64           `json:"participantId"`
 	ChatId         int64           `json:"chatId"`
-	BehalfUserId   int64           `json:"behalfUserId"`
 	NewAdmin       bool            `json:"newAdmin"`
 }
 
 type ChatPinned struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
-	ParticipantId  int64           `json:"participantId"`
 	ChatId         int64           `json:"chatId"`
 	Pinned         bool            `json:"pinned"`
 }
 
 type ChatNotificationSettingsSetted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
-	ParticipantId  int64           `json:"participantId"`
 	ChatId         int64           `json:"chatId"`
 	Setted         bool            `json:"setted"`
 }
@@ -117,12 +111,10 @@ type MessageCommoned struct {
 type MessageCreated struct {
 	MessageCommoned
 	AdditionalData *AdditionalData `json:"additionalData"`
-	OwnerId        int64           `json:"ownerId"`
 }
 
 type MessageEdited struct {
 	MessageCommoned
-	BehalfUserId   int64           `json:"behalfUserId"`
 	AdditionalData *AdditionalData `json:"additionalData"`
 }
 
@@ -169,12 +161,10 @@ type ChatViewRefreshed struct {
 	LastMessageAction          LastMessageAction    `json:"lastMessageAction"`
 	ParticipantsAction         ParticipantsAction   `json:"participantsAction"`
 	IncreaseOn                 int                  `json:"increaseOn"`
-	OwnerId                    int64                `json:"ownerId"` // owner of message
 }
 
 type MessageReaded struct {
 	AdditionalData     *AdditionalData    `json:"additionalData"`
-	ParticipantId      int64              `json:"participantId"`
 	ChatId             int64              `json:"chatId"`
 	MessageId          int64              `json:"messageId"`
 	ReadMessagesAction ReadMessagesAction `json:"readMessagesAction"`
@@ -185,12 +175,10 @@ type MessageBlogPostMade struct {
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
 	BlogPost       bool            `json:"blogPost"`
-	BehalfUserId   int64           `json:"behalfUserId"`
 }
 
 type MessageDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
-	BehalfUserId   int64           `json:"behalfUserId"`
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
 }
@@ -199,14 +187,14 @@ type MessageReactionFlipped struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
-	BehalfUserId   int64           `json:"behalfUserId"`
 	Reaction       string          `json:"reaction"`
 }
 
-func GenerateMessageAdditionalData(correlationId *string) *AdditionalData {
+func GenerateMessageAdditionalData(correlationId *string, behalfUserId int64) *AdditionalData {
 	return &AdditionalData{
 		CreatedAt:     time.Now().UTC(),
 		CorrelationId: correlationId,
+		BehalfUserId:  behalfUserId,
 	}
 }
 

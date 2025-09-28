@@ -85,7 +85,6 @@ type ChatEdit struct {
 	Title               string
 	ParticipantIdsToAdd []int64
 	Blog                bool // desired state
-	BehalfUserId        int64
 	CanResend           bool
 	Avatar              *string
 	AvatarBig           *string
@@ -115,21 +114,18 @@ func (a *ChatCreate) Validate() error {
 type ChatDelete struct {
 	ChatId         int64
 	AdditionalData *AdditionalData
-	BehalfUserId   int64
 }
 
 type ParticipantAdd struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	ParticipantIds []int64
-	BehalfUserId   int64
 }
 
 type ParticipantDelete struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	ParticipantIds []int64
-	BehalfUserId   int64
 }
 
 type ParticipantChange struct {
@@ -137,7 +133,6 @@ type ParticipantChange struct {
 	ChatId         int64
 	ParticipantId  int64
 	NewAdmin       bool
-	BehalfUserId   int64
 }
 
 type EmbedMessage struct {
@@ -149,7 +144,6 @@ type EmbedMessage struct {
 type MessageCreate struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
-	OwnerId        int64
 	Content        string
 	EmbedMessage   *EmbedMessage
 }
@@ -160,7 +154,6 @@ type MessageEdit struct {
 	MessageId      int64
 	Content        string
 	EmbedMessage   *EmbedMessage
-	BehalfUserId   int64
 }
 
 func (a *MessageCreate) Validate() error {
@@ -188,28 +181,24 @@ type MessageDelete struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	MessageId      int64
-	BehalfUserId   int64
 }
 
 type ChatPin struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	Pin            bool
-	ParticipantId  int64
 }
 
 type ChatNotificationSettingsSet struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	Set            bool
-	ParticipantId  int64
 }
 
 type MessageRead struct {
 	AdditionalData     *AdditionalData
 	ChatId             int64
 	MessageId          int64
-	ParticipantId      int64
 	ReadMessagesAction ReadMessagesAction
 }
 
@@ -218,26 +207,24 @@ type MakeMessageBlogPost struct {
 	ChatId         int64
 	MessageId      int64
 	BlogPost       bool
-	BehalfUserId   int64
 }
 
 type MessageReactionFlip struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	MessageId      int64
-	BehalfUserId   int64
 	Reaction       string
 }
 
-func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy, cfg *config.AppConfig) (int64, error) {
+func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy, cfg *config.AppConfig) (int64, error) {
 	var copyCommand *ChatCreate
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
 		return 0, err
 	}
 
-	if !slices.Contains(copyCommand.ParticipantIds, behalfUserId) {
-		copyCommand.ParticipantIds = append(copyCommand.ParticipantIds, behalfUserId)
+	if !slices.Contains(copyCommand.ParticipantIds, copyCommand.AdditionalData.BehalfUserId) {
+		copyCommand.ParticipantIds = append(copyCommand.ParticipantIds, copyCommand.AdditionalData.BehalfUserId)
 	}
 
 	if int32(len(copyCommand.ParticipantIds)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
@@ -290,13 +277,12 @@ func (sp *ChatCreate) Handle(ctx context.Context, behalfUserId int64, eventBus E
 		AdditionalData:     copyCommand.AdditionalData,
 		ChatId:             chatId,
 		Participants:       make([]ParticipantWithAdmin, 0),
-		BehalfUserId:       behalfUserId,
 		SkipChatAdminCheck: true,
 	}
 	for _, participantId := range copyCommand.ParticipantIds {
 		pa.Participants = append(pa.Participants, ParticipantWithAdmin{
 			ParticipantId: participantId,
-			ChatAdmin:     participantId == behalfUserId || copyCommand.TetATet,
+			ChatAdmin:     participantId == copyCommand.AdditionalData.BehalfUserId || copyCommand.TetATet,
 		})
 	}
 
@@ -315,12 +301,12 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		return err
 	}
 
-	admin, err := commonProjection.IsChatAdmin(ctx, dba, copyCommand.BehalfUserId, copyCommand.ChatId)
+	admin, err := commonProjection.IsChatAdmin(ctx, dba, copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId)
 	if err != nil {
 		return err
 	}
 	if !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", copyCommand.BehalfUserId, copyCommand.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId))
 	}
 
 	if int32(len(copyCommand.ParticipantIdsToAdd)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
@@ -353,7 +339,6 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		ChatId:         copyCommand.ChatId,
 		Title:          copyCommand.Title,
 		Blog:           copyCommand.Blog,
-		BehalfUserId:   copyCommand.BehalfUserId,
 		CanResend:      copyCommand.CanResend,
 		Avatar:         copyCommand.Avatar,
 		AvatarBig:      copyCommand.AvatarBig,
@@ -367,7 +352,6 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		pa := &ParticipantsAdded{
 			AdditionalData: copyCommand.AdditionalData,
 			ChatId:         copyCommand.ChatId,
-			BehalfUserId:   copyCommand.BehalfUserId,
 		}
 		for _, participantId := range copyCommand.ParticipantIdsToAdd {
 			pa.Participants = append(pa.Participants, ParticipantWithAdmin{
@@ -403,12 +387,12 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 }
 
 func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
-	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
+	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
 	if !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	pa := &ParticipantDeleted{
@@ -416,7 +400,6 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 		GetParticipantsType:        GetParticipantsTypeAllInChatExcepting,
 		AllParticipantIdsExcepting: []int64{},
 		ChatId:                     s.ChatId,
-		BehalfUserId:               s.BehalfUserId,
 	}
 	errInner := eventBus.Publish(ctx, pa)
 	if errInner != nil {
@@ -426,7 +409,6 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 	cc := &ChatDeleted{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
-		BehalfUserId:   s.BehalfUserId,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {
@@ -449,18 +431,17 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 		return fmt.Errorf("Max allowed participants %d, got %d", cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand, s.ParticipantIds)
 	}
 
-	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
+	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
 	if !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	pa := &ParticipantsAdded{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
-		BehalfUserId:   s.BehalfUserId,
 	}
 	for _, participantId := range s.ParticipantIds {
 		pa.Participants = append(pa.Participants, ParticipantWithAdmin{
@@ -491,12 +472,12 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 }
 
 func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig) error {
-	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
+	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
 	if !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	if int32(len(s.ParticipantIds)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
@@ -508,7 +489,6 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 		ParticipantIds:      s.ParticipantIds,
 		GetParticipantsType: GetParticipantsTypeNormal,
 		ChatId:              s.ChatId,
-		BehalfUserId:        s.BehalfUserId,
 	}
 	err = eventBus.Publish(ctx, pa)
 	if err != nil {
@@ -534,19 +514,18 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 }
 
 func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
-	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.BehalfUserId, s.ChatId)
+	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
 	if !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.BehalfUserId, s.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	pa := &ParticipantChanged{
 		AdditionalData: s.AdditionalData,
 		ParticipantId:  s.ParticipantId,
 		ChatId:         s.ChatId,
-		BehalfUserId:   s.BehalfUserId,
 		NewAdmin:       s.NewAdmin,
 	}
 	err = eventBus.Publish(ctx, pa)
@@ -570,7 +549,6 @@ func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterfa
 func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error {
 	cp := &ChatPinned{
 		AdditionalData: s.AdditionalData,
-		ParticipantId:  s.ParticipantId,
 		ChatId:         s.ChatId,
 		Pinned:         s.Pin,
 	}
@@ -580,7 +558,6 @@ func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error 
 func (s *ChatNotificationSettingsSet) Handle(ctx context.Context, eventBus EventBusInterface) error {
 	cp := &ChatNotificationSettingsSetted{
 		AdditionalData: s.AdditionalData,
-		ParticipantId:  s.ParticipantId,
 		ChatId:         s.ChatId,
 		Setted:         s.Set,
 	}
@@ -594,13 +571,13 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		return 0, err
 	}
 
-	participant, err := commonProjection.IsParticipant(ctx, dba, sp.OwnerId, sp.ChatId)
+	participant, err := commonProjection.IsParticipant(ctx, dba, sp.AdditionalData.BehalfUserId, sp.ChatId)
 	if err != nil {
 		return 0, err
 	}
 
 	if !participant {
-		return 0, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", sp.OwnerId, sp.ChatId))
+		return 0, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", sp.AdditionalData.BehalfUserId, sp.ChatId))
 	}
 
 	trimmedAndSanitized, err := services.TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
@@ -621,7 +598,6 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 			Content: copyCommand.Content,
 		},
 		AdditionalData: copyCommand.AdditionalData,
-		OwnerId:        copyCommand.OwnerId,
 	}
 
 	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.EmbedMessage, &mc.MessageCommoned)
@@ -651,7 +627,6 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		ChatId:                     copyCommand.ChatId,
 		UnreadMessagesAction:       UnreadMessagesActionIncrease,
 		IncreaseOn:                 1,
-		OwnerId:                    copyCommand.OwnerId,
 		LastMessageAction:          LastMessageActionRefresh,
 	}
 
@@ -667,7 +642,6 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 	if s.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
 		cp := &MessageReaded{
 			AdditionalData:     s.AdditionalData,
-			ParticipantId:      s.ParticipantId,
 			ReadMessagesAction: ReadMessagesActionAllMessagesInOneChat,
 			ChatId:             s.ChatId,
 		}
@@ -679,7 +653,6 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 	} else if s.ReadMessagesAction == ReadMessagesActionAllChats {
 		cp := &MessageReaded{
 			AdditionalData:     s.AdditionalData,
-			ParticipantId:      s.ParticipantId,
 			ReadMessagesAction: ReadMessagesActionAllChats,
 		}
 		err := eventBus.Publish(ctx, cp)
@@ -688,16 +661,16 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 		}
 		return nil
 	} else if s.ReadMessagesAction == ReadMessagesActionOneMessage {
-		participant, err := commonProjection.IsParticipant(ctx, dba, s.ParticipantId, s.ChatId)
+		participant, err := commonProjection.IsParticipant(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 		if err != nil {
 			return err
 		}
 
 		if !participant {
-			return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.ParticipantId, s.ChatId))
+			return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 		}
 
-		lastMessageReadedId, lastMessgeReadedExists, maxMessageId, err := commonProjection.GetLastMessageReaded(ctx, s.ChatId, s.ParticipantId)
+		lastMessageReadedId, lastMessgeReadedExists, maxMessageId, err := commonProjection.GetLastMessageReaded(ctx, s.ChatId, s.AdditionalData.BehalfUserId)
 		if err != nil {
 			return err
 		}
@@ -711,7 +684,6 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 		if (lastMessgeReadedExists && messageIdToMark > lastMessageReadedId) || (!lastMessgeReadedExists && lastMessageReadedId == 0) {
 			cp := &MessageReaded{
 				AdditionalData:     s.AdditionalData,
-				ParticipantId:      s.ParticipantId,
 				ChatId:             s.ChatId,
 				MessageId:          messageIdToMark,
 				ReadMessagesAction: ReadMessagesActionOneMessage,
@@ -733,19 +705,18 @@ func (s *MakeMessageBlogPost) Handle(ctx context.Context, eventBus EventBusInter
 		ChatId:         s.ChatId,
 		MessageId:      s.MessageId,
 		BlogPost:       s.BlogPost,
-		BehalfUserId:   s.BehalfUserId,
 	}
 
 	return eventBus.Publish(ctx, &ev)
 }
 
 func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
-	participant, err := commonProjection.IsParticipant(ctx, dba, s.BehalfUserId, s.ChatId)
+	participant, err := commonProjection.IsParticipant(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
 	if !participant {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.BehalfUserId, s.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	ownerId, err := commonProjection.GetMessageOwner(ctx, s.ChatId, s.MessageId)
@@ -753,15 +724,14 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 		return err
 	}
 
-	if ownerId != s.BehalfUserId {
-		return fmt.Errorf("User %v is not an owner of message %v in chat %v", s.BehalfUserId, s.MessageId, s.ChatId)
+	if ownerId != s.AdditionalData.BehalfUserId {
+		return fmt.Errorf("User %v is not an owner of message %v in chat %v", s.AdditionalData.BehalfUserId, s.MessageId, s.ChatId)
 	}
 
 	cp := &MessageDeleted{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
 		MessageId:      s.MessageId,
-		BehalfUserId:   s.BehalfUserId,
 	}
 	err = eventBus.Publish(ctx, cp)
 	if err != nil {
@@ -773,7 +743,6 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 		AllParticipantIdsExcepting: []int64{},
 		ChatId:                     s.ChatId,
 		UnreadMessagesAction:       UnreadMessagesActionRefresh,
-		OwnerId:                    s.BehalfUserId,
 		LastMessageAction:          LastMessageActionRefresh,
 	}
 
@@ -792,12 +761,12 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 		return err
 	}
 
-	participant, err := commonProjection.IsParticipant(ctx, dba, copyCommand.BehalfUserId, sp.ChatId)
+	participant, err := commonProjection.IsParticipant(ctx, dba, copyCommand.AdditionalData.BehalfUserId, sp.ChatId)
 	if err != nil {
 		return err
 	}
 	if !participant {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", copyCommand.BehalfUserId, sp.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", copyCommand.AdditionalData.BehalfUserId, sp.ChatId))
 	}
 
 	ownerId, err := commonProjection.GetMessageOwner(ctx, copyCommand.ChatId, copyCommand.MessageId)
@@ -805,8 +774,8 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 		return err
 	}
 
-	if ownerId != copyCommand.BehalfUserId {
-		return NewUnauthorizedError(fmt.Sprintf("User %v is not an owner of message %v in chat %v", copyCommand.BehalfUserId, copyCommand.MessageId, copyCommand.ChatId))
+	if ownerId != copyCommand.AdditionalData.BehalfUserId {
+		return NewUnauthorizedError(fmt.Sprintf("User %v is not an owner of message %v in chat %v", copyCommand.AdditionalData.BehalfUserId, copyCommand.MessageId, copyCommand.ChatId))
 	}
 
 	trimmedAndSanitized, err := services.TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
@@ -827,7 +796,6 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 			ChatId:  copyCommand.ChatId,
 			Content: copyCommand.Content,
 		},
-		BehalfUserId:   copyCommand.BehalfUserId,
 		AdditionalData: copyCommand.AdditionalData,
 	}
 
@@ -860,13 +828,13 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 }
 
 func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
-	participant, err := commonProjection.IsParticipant(ctx, dba, s.BehalfUserId, s.ChatId)
+	participant, err := commonProjection.IsParticipant(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
 
 	if !participant {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.BehalfUserId, s.ChatId))
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	if len(s.Reaction) > 4 || len(s.Reaction) < 1 {
@@ -877,7 +845,6 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInter
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
 		MessageId:      s.MessageId,
-		BehalfUserId:   s.BehalfUserId,
 		Reaction:       s.Reaction,
 	}
 

@@ -132,10 +132,10 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	defer participantSpan.End()
 
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
-		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.BehalfUserId)
+		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId)
 	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting {
 		return m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.BehalfUserId)
+			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId)
 		})
 	} else {
 		return fmt.Errorf("Unknown event.GetParticipantsType = %v", event.GetParticipantsType)
@@ -269,7 +269,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 
 		m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
-		errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.ParticipantsAction, event.IncreaseOn, event.OwnerId)
+		errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.ParticipantsAction, event.IncreaseOn, event.AdditionalData.BehalfUserId)
 		if errp != nil {
 			return errp
 		}
@@ -365,7 +365,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 		return err
 	}
 
-	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.OwnerId)
+	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
 
 	// TODO NotifyNewMessageBrowserNotification browser_notification_add_message
 
@@ -407,7 +407,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		return err
 	}
 
-	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.BehalfUserId)
+	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.Id)
@@ -448,7 +448,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 		return err
 	}
 
-	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.BehalfUserId)
+	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		for _, participantId := range participantIdsPortion {
@@ -476,7 +476,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 }
 
 func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
-	userIds := []int64{event.ParticipantId}
+	userIds := []int64{event.AdditionalData.BehalfUserId}
 
 	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
 	eventTypeChatUnreadMessagesChanged := EventTypeChatUnreadMessagesChanged
@@ -492,7 +492,7 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 
 		for _, cvb := range updatedChatsPortion {
 			err := m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-				UserId:    event.ParticipantId,
+				UserId:    event.AdditionalData.BehalfUserId,
 				EventType: eventTypeChatUnreadMessagesChanged,
 				UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
 					ChatId:             cvb.ChatId,
@@ -517,12 +517,12 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 
 	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
 		// not.NotifyAboutUnreadMessage(ctx, chatId, participantId, unreadMessagesByUserId[participantId], lastUpdated)
-		cvb, err := m.commonProjection.GetChatUserViewBasic(ctx, m.db, event.ChatId, event.ParticipantId)
+		cvb, err := m.commonProjection.GetChatUserViewBasic(ctx, m.db, event.ChatId, event.AdditionalData.BehalfUserId)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during getting chat UserViewBasic", "err", err)
 		} else {
 			err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-				UserId:    event.ParticipantId,
+				UserId:    event.AdditionalData.BehalfUserId,
 				EventType: eventTypeChatUnreadMessagesChanged,
 				UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
 					ChatId:             cvb.ChatId,
@@ -541,10 +541,10 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 	}
 
 	err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-		UserId:    event.ParticipantId,
+		UserId:    event.AdditionalData.BehalfUserId,
 		EventType: eventTypeUnreadMessagesChanged,
 		HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
-			HasUnreadMessages: hasUnreadMessages[event.ParticipantId],
+			HasUnreadMessages: hasUnreadMessages[event.AdditionalData.BehalfUserId],
 		},
 	})
 	if err != nil {

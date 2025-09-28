@@ -23,12 +23,12 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 			return nil
 		}
 
-		participant, err := m.IsParticipant(ctx, tx, event.OwnerId, event.ChatId)
+		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping MessageCreated because participant isn't participant", "user_id", event.OwnerId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageCreated because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -43,14 +43,14 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 		    , embed_owner_id = excluded.embed_owner_id
 		    , embed_message_type = excluded.embed_message_type
 		    , update_date_time = excluded.update_date_time
-	`, event.Id, event.ChatId, event.OwnerId, event.Content, event.EmbedMessageId, event.EmbedMessageChatId, event.EmbedMessageOwnerId, event.EmbedMessageType, event.AdditionalData.CreatedAt, nil)
+	`, event.Id, event.ChatId, event.AdditionalData.BehalfUserId, event.Content, event.EmbedMessageId, event.EmbedMessageChatId, event.EmbedMessageOwnerId, event.EmbedMessageType, event.AdditionalData.CreatedAt, nil)
 		if err != nil {
 			return err
 		}
 		m.lgr.InfoContext(ctx,
 			"Handling message added",
 			"id", event.Id,
-			"user_id", event.OwnerId,
+			"user_id", event.AdditionalData.BehalfUserId,
 			"chat_id", event.ChatId,
 		)
 		return nil
@@ -61,12 +61,12 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 
 func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		participant, err := m.IsParticipant(ctx, tx, event.BehalfUserId, event.ChatId)
+		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't participant", "user_id", event.BehalfUserId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -74,8 +74,8 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 		if err != nil {
 			return err
 		}
-		if messageOwnerId != event.BehalfUserId {
-			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't owner", "user_id", event.BehalfUserId, "chat_id", event.ChatId)
+		if messageOwnerId != event.AdditionalData.BehalfUserId {
+			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't owner", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -128,12 +128,12 @@ func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx conte
 
 func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageDeleted) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		participant, err := m.IsParticipant(ctx, tx, event.BehalfUserId, event.ChatId)
+		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping MessageDeleted because participant isn't participant", "user_id", event.BehalfUserId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageDeleted because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -141,8 +141,8 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 		if err != nil {
 			return err
 		}
-		if messageOwnerId != event.BehalfUserId {
-			m.lgr.InfoContext(ctx, "Skipping MessageDeleted because participant isn't owner", "user_id", event.BehalfUserId, "chat_id", event.ChatId)
+		if messageOwnerId != event.AdditionalData.BehalfUserId {
+			m.lgr.InfoContext(ctx, "Skipping MessageDeleted because participant isn't owner", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -315,34 +315,34 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
 		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 			if event.ReadMessagesAction == ReadMessagesActionOneMessage {
-				participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
+				participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 				if err != nil {
 					return err
 				}
 				if !participant {
-					m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
+					m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
 					return nil
 				}
 
-				return m.setUnreadMessages(ctx, tx, []int64{event.ParticipantId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
+				return m.setUnreadMessages(ctx, tx, []int64{event.AdditionalData.BehalfUserId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
 			} else if event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
-				participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
+				participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 				if err != nil {
 					return err
 				}
 				if !participant {
-					m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
+					m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
 					return nil
 				}
 
 				_, err = tx.ExecContext(ctx, `
 				update chat_user_view uv set unread_messages = 0, last_read_message_id = last_message_id where uv.user_id = $1 and uv.id = $2
-			`, event.ParticipantId, event.ChatId)
+			`, event.AdditionalData.BehalfUserId, event.ChatId)
 				if err != nil {
 					return err
 				}
 
-				return m.updateHasUnreads(ctx, tx, []int64{event.ParticipantId})
+				return m.updateHasUnreads(ctx, tx, []int64{event.AdditionalData.BehalfUserId})
 			} else {
 				return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
 			}
@@ -365,7 +365,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 					limit $2 offset $3
 				)
 				returning uv.id, uv.unread_messages, uv.update_date_time
-			`, event.ParticipantId, utils.DefaultSize, offset)
+			`, event.AdditionalData.BehalfUserId, utils.DefaultSize, offset)
 			if err != nil {
 				return err
 			}
@@ -378,7 +378,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 
 			offset += utils.DefaultSize
 		}
-		_, err := m.db.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", event.ParticipantId)
+		_, err := m.db.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", event.AdditionalData.BehalfUserId)
 		if err != nil {
 			return err
 		}
@@ -390,12 +390,12 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 
 func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		participant, err := m.IsParticipant(ctx, tx, event.BehalfUserId, event.ChatId)
+		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping MessageReactionFlipped because participant isn't participant", "user_id", event.BehalfUserId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageReactionFlipped because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -410,7 +410,7 @@ func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *
 		}
 
 		var exists bool
-		errInner = sqlscan.Get(ctx, tx, &exists, "SELECT EXISTS(SELECT 1 FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4)", event.ChatId, event.MessageId, event.BehalfUserId, event.Reaction)
+		errInner = sqlscan.Get(ctx, tx, &exists, "SELECT EXISTS(SELECT 1 FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4)", event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction)
 		if errInner != nil {
 			return errInner
 		}
@@ -420,12 +420,12 @@ func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *
 			insert into message_reaction(chat_id, message_id, user_id, reaction, create_date_time)
 			values ($1, $2, $3, $4, $5)
 			on conflict (chat_id, message_id, user_id, reaction) do nothing
-		`, event.ChatId, event.MessageId, event.BehalfUserId, event.Reaction, event.AdditionalData.CreatedAt)
+		`, event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction, event.AdditionalData.CreatedAt)
 			if errInner != nil {
 				return errInner
 			}
 		} else {
-			_, errInner = tx.ExecContext(ctx, "DELETE FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4", event.ChatId, event.MessageId, event.BehalfUserId, event.Reaction)
+			_, errInner = tx.ExecContext(ctx, "DELETE FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4", event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction)
 			if errInner != nil {
 				return errInner
 			}

@@ -81,14 +81,14 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 			return nil
 		}
 
-		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !admin {
 			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot change chat",
-				"user_id", event.BehalfUserId,
+				"user_id", event.AdditionalData.BehalfUserId,
 				"chat_id", event.ChatId,
 			)
 			return nil
@@ -149,14 +149,14 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 
-		admin, err := m.IsChatAdmin(ctx, tx, event.BehalfUserId, event.ChatId)
+		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !admin {
 			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot delete chat",
-				"user_id", event.BehalfUserId,
+				"user_id", event.AdditionalData.BehalfUserId,
 				"chat_id", event.ChatId,
 			)
 			return nil
@@ -197,12 +197,12 @@ func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted
 
 func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
+		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping ChatPinned because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping ChatPinned because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -210,7 +210,7 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) 
 		update chat_user_view
 		set pinned = $3
 		where (id, user_id) = ($1, $2)
-	`, event.ChatId, event.ParticipantId, event.Pinned)
+	`, event.ChatId, event.AdditionalData.BehalfUserId, event.Pinned)
 		if err != nil {
 			return err
 		}
@@ -222,7 +222,7 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) 
 
 	m.lgr.InfoContext(ctx,
 		"Chat pinned",
-		"user_id", event.ParticipantId,
+		"user_id", event.AdditionalData.BehalfUserId,
 		"chat_id", event.ChatId,
 		"pinned", event.Pinned,
 	)
@@ -233,12 +233,12 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) 
 func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context, event *ChatNotificationSettingsSetted) error {
 
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		participant, err := m.IsParticipant(ctx, tx, event.ParticipantId, event.ChatId)
+		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
 		}
 		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping ChatNotificationSettingsSetted because participant isn't participant", "user_id", event.ParticipantId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping ChatNotificationSettingsSetted because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
 			return nil
 		}
 
@@ -246,19 +246,19 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 		update chat_user_view 
 		set consider_messages_as_unread = $3
 		where id = $1 and user_id = $2 
-	`, event.ChatId, event.ParticipantId, event.Setted)
+	`, event.ChatId, event.AdditionalData.BehalfUserId, event.Setted)
 		if err != nil {
 			return err
 		}
 
 		m.lgr.InfoContext(ctx,
 			"Chat notification settings setted",
-			"user_id", event.ParticipantId,
+			"user_id", event.AdditionalData.BehalfUserId,
 			"chat_id", event.ChatId,
 			"setted", event.Setted,
 		)
 
-		err = m.updateHasUnreads(ctx, tx, []int64{event.ParticipantId})
+		err = m.updateHasUnreads(ctx, tx, []int64{event.AdditionalData.BehalfUserId})
 		if err != nil {
 			return err
 		}
