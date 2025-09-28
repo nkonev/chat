@@ -13,6 +13,7 @@ const maxSize = 100
 const DefaultSize = 20
 const DefaultPage = 0
 const DefaultOffset = 0
+const HeaderUserId = "X-Auth-Userid"
 
 func ToString(in any) string {
 	return fmt.Sprintf("%v", in)

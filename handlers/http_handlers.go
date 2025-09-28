@@ -19,7 +19,6 @@ import (
 )
 
 const headerTraceId = "trace-id"
-const headerUserId = "X-UserId"
 const headerCorrelationId = "X-CorrelationId"
 
 func CreateHttpRouter(
@@ -79,7 +78,7 @@ func CreateHttpRouter(
 }
 
 func getUserId(g *gin.Context) (int64, error) {
-	uh := g.Request.Header.Get(headerUserId)
+	uh := g.Request.Header.Get(utils.HeaderUserId)
 	return utils.ParseInt64(uh)
 }
 

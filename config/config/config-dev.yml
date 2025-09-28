@@ -31,7 +31,7 @@ postgresql:
     migrationTable: "go_migrate"
     statementDuration: 15m
 server:
-  address: ":8080"
+  address: ":1235"
   readTimeout: "10s"
   writeTimeout: "10s"
   maxHeaderBytes: 20000000

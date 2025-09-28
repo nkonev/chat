@@ -41,7 +41,7 @@ func queryRawResponse[ReqDto any](ctx context.Context, rc *restClient, behalfUse
 	}
 
 	if behalfUserId != dto.NonExistentUser {
-		requestHeaders["X-UserId"] = []string{utils.ToString(behalfUserId)}
+		requestHeaders[utils.HeaderUserId] = []string{utils.ToString(behalfUserId)}
 	}
 
 	httpReq := &http.Request{

@@ -17,7 +17,7 @@ go run . serve
 
 # or
 make package
-./chat serve --server.address=:8080
+./chat serve --server.address=:1235
 ./chat serve --server.address=:8082
 ./chat serve --server.address=:8083
 ```
@@ -25,73 +25,73 @@ make package
 # Play with
 ```bash
 # create a chat
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat' -d '{"title": "new chat"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat' -d '{"title": "new chat"}'
 
 # create a chat with extra participants
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat' -d '{"title": "new chat", "participantIds":[2,3,4]}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat' -d '{"title": "new chat", "participantIds":[2,3,4]}'
 
 # rename the chat
-curl -i -X PUT -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat' -d '{"id": 1, "title": "super new chat"}'
+curl -i -X PUT -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat' -d '{"id": 1, "title": "super new chat"}'
 
 # show chats
-curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/search' | jq
+curl -Ss -X GET -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/search' | jq
 # show chats with pagination
-curl -Ss -X GET --url 'http://localhost:8080/api/chat/search?size=40&pinned=false&lastUpdateDateTime=2024-10-31T22:37:34.643937Z&id=477&reverse=true&includeStartingFrom=true' -H 'Accept: application/json' -H 'X-UserId: 1' | jq
-curl -Ss -X GET --url 'http://localhost:8080/api/chat/search?size=40reverse=false&includeStartingFrom=true' -H 'Accept: application/json' -H 'X-UserId: 1' | jq
+curl -Ss -X GET --url 'http://localhost:1235/api/chat/search?size=40&pinned=false&lastUpdateDateTime=2024-10-31T22:37:34.643937Z&id=477&reverse=true&includeStartingFrom=true' -H 'Accept: application/json' -H 'X-Auth-Userid: 1' | jq
+curl -Ss -X GET --url 'http://localhost:1235/api/chat/search?size=40reverse=false&includeStartingFrom=true' -H 'Accept: application/json' -H 'X-Auth-Userid: 1' | jq
 # search chats
-curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/search?searchString=new' | jq
+curl -Ss -X GET -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/search?searchString=new' | jq
 # pin chat
-curl -i -X PUT -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/pin?pin=true'
+curl -i -X PUT -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/pin?pin=true'
 
 # create a message
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message' -d '{"content": "new message"}'
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message' -d '{"content": "new message 2"}'
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message' -d '{"content": "new message 3"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message' -d '{"content": "new message"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message' -d '{"content": "new message 2"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message' -d '{"content": "new message 3"}'
 
 # show messages
-curl -Ss -X GET -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message/search' | jq
+curl -Ss -X GET -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message/search' | jq
 
 # add a reaction
-curl -i -X PUT -H 'X-UserId: 1' -H 'Content-Type: application/json' --url 'http://localhost:8080/api/chat/1/message/1/reaction' -d '{"reaction": "😀"}'
+curl -i -X PUT -H 'X-Auth-Userid: 1' -H 'Content-Type: application/json' --url 'http://localhost:1235/api/chat/1/message/1/reaction' -d '{"reaction": "😀"}'
 
 # read message
-curl -i -X PUT -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message/2/read'
+curl -i -X PUT -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message/2/read'
 
 # add participant into chat
-curl -i -X PUT -H 'X-UserId: 1' -H 'Content-Type: application/json' --url 'http://localhost:8080/api/chat/1/participant' -d '{"participantIds": [2, 3]}'
+curl -i -X PUT -H 'X-Auth-Userid: 1' -H 'Content-Type: application/json' --url 'http://localhost:1235/api/chat/1/participant' -d '{"participantIds": [2, 3]}'
 
 # remove participant from chat
-curl -i -X DELETE -H 'X-UserId: 1' -H 'Content-Type: application/json' --url 'http://localhost:8080/api/chat/1/participant' -d '{"participantIds": [3]}'
+curl -i -X DELETE -H 'X-Auth-Userid: 1' -H 'Content-Type: application/json' --url 'http://localhost:1235/api/chat/1/participant' -d '{"participantIds": [3]}'
 
 # show participants
-curl -Ss -X GET --url 'http://localhost:8080/api/chat/1/participants' | jq
+curl -Ss -X GET --url 'http://localhost:1235/api/chat/1/participants' | jq
 
 # get his chats - show unreads
-curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/api/chat/search' | jq
+curl -Ss -X GET -H 'X-Auth-Userid: 2' --url 'http://localhost:1235/api/chat/search' | jq
 
 # remove message from chat
-curl -i -X DELETE  -H 'X-UserId: 1' --url 'http://localhost:8080/api/chat/1/message/1'
+curl -i -X DELETE  -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message/1'
 
 # show has new messages (unreads)
-curl -Ss -X GET -H 'X-UserId: 2' --url 'http://localhost:8080/api/chat/has-new-messages' | jq
+curl -Ss -X GET -H 'X-Auth-Userid: 2' --url 'http://localhost:1235/api/chat/has-new-messages' | jq
 
 # read
-curl -i -X PUT -H 'X-UserId: 2' --url 'http://localhost:8080/api/chat/1/message/500/read'
+curl -i -X PUT -H 'X-Auth-Userid: 2' --url 'http://localhost:1235/api/chat/1/message/500/read'
 
 # ... or set to consider (contribute)
-curl -i -X PUT -H 'Content-Type: application/json' -H 'X-UserId: 2' --url 'http://localhost:8080/api/chat/2/notification' -d '{"considerMessagesOfThisChatAsUnread": false}'
+curl -i -X PUT -H 'Content-Type: application/json' -H 'X-Auth-Userid: 2' --url 'http://localhost:1235/api/chat/2/notification' -d '{"considerMessagesOfThisChatAsUnread": false}'
 
 # make blog
-curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:8080/api/chat' -d '{"id": 1, "title": "new chat", "blog": true}'
-curl -i -X PUT --url 'http://localhost:8080/api/chat/1/message/1/blog-post'
+curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:1235/api/chat' -d '{"id": 1, "title": "new chat", "blog": true}'
+curl -i -X PUT --url 'http://localhost:1235/api/chat/1/message/1/blog-post'
 
 # show blog
-curl -Ss -X GET --url 'http://localhost:8080/api/blog/search' | jq
-curl -Ss -X GET --url 'http://localhost:8080/api/blog/1' | jq
-curl -Ss -X GET --url 'http://localhost:8080/api/blog/1/comment/search' | jq
+curl -Ss -X GET --url 'http://localhost:1235/api/blog/search' | jq
+curl -Ss -X GET --url 'http://localhost:1235/api/blog/1' | jq
+curl -Ss -X GET --url 'http://localhost:1235/api/blog/1/comment/search' | jq
 
 # with correlation id
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-UserId: 1' -H 'X-CorrelationId: 9e49b4dd-4068-4c6a-ada0-da78f44bdeba' --url 'http://localhost:8080/api/chat' -d '{"title": "new chat"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' -H 'X-CorrelationId: 9e49b4dd-4068-4c6a-ada0-da78f44bdeba' --url 'http://localhost:1235/api/chat' -d '{"title": "new chat"}'
 # then see kafka
 
 # reset offsets for consumer groups
