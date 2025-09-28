@@ -459,7 +459,7 @@ func (r *ParticipantGetOptionWithSearch) Apply(queryParams *url.Values) *url.Val
 	return queryParams
 }
 
-func (rc *TestRestClient) GetChatParticipants(ctx context.Context, chatId int64, participantGetOptions ...ParticipantGetOption) ([]dto.UserWithAdmin, error) {
+func (rc *TestRestClient) GetChatParticipants(ctx context.Context, behalfUserId int64, chatId int64, participantGetOptions ...ParticipantGetOption) ([]dto.UserWithAdmin, error) {
 	var queryParams *url.Values
 	for _, opt := range participantGetOptions {
 		if opt != nil {
@@ -467,7 +467,7 @@ func (rc *TestRestClient) GetChatParticipants(ctx context.Context, chatId int64,
 		}
 	}
 
-	return query[any, []dto.UserWithAdmin](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, queryParams)
+	return query[any, []dto.UserWithAdmin](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, queryParams)
 }
 
 func (rc *TestRestClient) ReadMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {

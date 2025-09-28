@@ -84,7 +84,7 @@ func TestImport(t *testing.T) {
 		assert.Equal(t, chat1Name, chat1OfUser1.Title)
 		assert.Equal(t, int64(0), chat1OfUser1.UnreadMessages)
 
-		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
+		chat1Participants, err := testRestClient.GetChatParticipants(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in char participants")
 		require.Equal(t, 1, len(chat1Participants))
 		assert.Equal(t, user1, chat1Participants[0].Id)
@@ -171,7 +171,7 @@ func TestImport(t *testing.T) {
 		assert.Equal(t, chat1Name, chat1OfUser1.Title)
 		assert.Equal(t, int64(0), chat1OfUser1.UnreadMessages)
 
-		chat1Participants, err := testRestClient.GetChatParticipants(ctx, chat1Id)
+		chat1Participants, err := testRestClient.GetChatParticipants(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in char participants")
 		require.Equal(t, 1, len(chat1Participants))
 		assert.Equal(t, user1, chat1Participants[0].Id)

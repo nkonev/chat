@@ -183,7 +183,15 @@ func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *Part
 	})
 }
 
-func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, chatId int64, size int32, offset int64, searchString string) ([]*dto.UserWithAdmin, error) {
+func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behalfUserId int64, chatId int64, size int32, offset int64, searchString string) ([]*dto.UserWithAdmin, error) {
+	participant, err := m.cp.IsParticipant(ctx, m.cp.db, behalfUserId, chatId)
+	if err != nil {
+		return nil, err
+	}
+	if !participant {
+		return nil, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", behalfUserId, chatId))
+	}
+
 	searchString = services.TrimAmdSanitize(m.policy, searchString)
 	const reverse = true
 

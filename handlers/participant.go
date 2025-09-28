@@ -189,13 +189,24 @@ func (ch *ParticipantHandler) SearchParticipants(g *gin.Context) {
 		return
 	}
 
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	participantsPage := utils.FixPageString(g.Query(dto.PageParam))
 	participantsSize := utils.FixSizeString(g.Query(dto.SizeParam))
 	participantsOffset := utils.GetOffset(participantsPage, participantsSize)
 	searchString := g.Query(dto.SearchStringParam)
 
-	participants, err := ch.enrichingProjection.GetParticipantsEnriched(g.Request.Context(), chatId, participantsSize, participantsOffset, searchString)
+	participants, err := ch.enrichingProjection.GetParticipantsEnriched(g.Request.Context(), userId, chatId, participantsSize, participantsOffset, searchString)
 	if err != nil {
+		if translateParticipantError(g, err) {
+			return
+		}
+
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participants", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return

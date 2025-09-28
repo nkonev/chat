@@ -370,7 +370,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	// TODO NotifyNewMessageBrowserNotification browser_notification_add_message
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.Id)
+		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.Id)
 		if errInn != nil {
 			return errInn
 		}
@@ -410,7 +410,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.Id)
+		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.Id)
 		if errInn != nil {
 			return errInn
 		}

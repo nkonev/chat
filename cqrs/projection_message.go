@@ -497,8 +497,22 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 	return maxMessageId, nil
 }
 
-func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageViewEnrichedDto, error) {
+func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, needCheckAuth bool, authForUserId *int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageViewEnrichedDto, error) {
 	return db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) ([]dto.MessageViewEnrichedDto, error) {
+		if needCheckAuth {
+			if authForUserId != nil {
+				participant, err := m.cp.IsParticipant(ctx, m.cp.db, *authForUserId, chatId)
+				if err != nil {
+					return nil, err
+				}
+				if !participant {
+					return nil, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", *authForUserId, chatId))
+				}
+			} else {
+				return nil, errors.New("Unknown invariant")
+			}
+		}
+
 		searchString = services.TrimAmdSanitize(m.policy, searchString)
 
 		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, messageId)

@@ -444,8 +444,12 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 	includeStartingFrom := utils.GetBoolean(g.Query(dto.IncludeStartingFromParam))
 	searchString := g.Query(dto.SearchStringParam)
 
-	messages, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
+	messages, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, true, &userId, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
 	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
 		mc.lgr.ErrorContext(g.Request.Context(), "Error getting messages", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
