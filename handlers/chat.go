@@ -377,7 +377,50 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 		return
 	}
 
-	g.JSON(http.StatusOK, chats)
+	g.JSON(http.StatusOK, dto.GetChatsResponseDto{
+		Items:   chats,
+		HasNext: int32(len(chats)) == size,
+	})
+}
+
+func (ch *ChatHandler) GetChat(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	size := int32(1)
+	reverse := false
+
+	var startingFromItemId *dto.ChatId = nil
+	includeStartingFrom := true
+	searchString := ""
+
+	chats, _, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
+	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting chats", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	if len(chats) == 0 {
+		g.Status(http.StatusNoContent)
+		return
+	} else if len(chats) > 1 {
+		ch.lgr.ErrorContext(g.Request.Context(), "Wrong invariant - More than 1 chats got")
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	chat := chats[0]
+
+	g.JSON(http.StatusOK, chat)
 }
 
 func (ch *ChatHandler) convertChatId(pinned *bool, lastUpdateDateTime *time.Time, id *int64) *dto.ChatId {

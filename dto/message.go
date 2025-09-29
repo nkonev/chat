@@ -37,6 +37,7 @@ type EmbedMessageResponse struct {
 
 type MessageViewEnrichedDto struct {
 	Id             int64                 `json:"id"`
+	ChatId         int64                 `json:"chatId"`
 	OwnerId        int64                 `json:"ownerId"`
 	Content        string                `json:"text"` // for sake compatibility
 	BlogPost       bool                  `json:"blogPost"`
@@ -53,6 +54,11 @@ type MessageViewEnrichedDto struct {
 	CanPin     bool `json:"canPin"`
 
 	UserId int64 `json:"-"` // behalf user id
+}
+
+type MessagesResponseDto struct {
+	Items   []MessageViewEnrichedDto `json:"items"`
+	HasNext bool                     `json:"hasNext"`
 }
 
 type MessageDeletedDto struct {

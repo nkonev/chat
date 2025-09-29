@@ -455,7 +455,10 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 		return
 	}
 
-	g.JSON(http.StatusOK, messages)
+	g.JSON(http.StatusOK, dto.MessagesResponseDto{
+		Items:   messages,
+		HasNext: int32(len(messages)) == size,
+	})
 }
 
 // returns should exit

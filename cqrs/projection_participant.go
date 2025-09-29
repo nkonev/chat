@@ -2,6 +2,7 @@ package cqrs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/db"
@@ -183,42 +184,64 @@ func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *Part
 	})
 }
 
-func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behalfUserId int64, chatId int64, size int32, offset int64, searchString string) ([]*dto.UserWithAdmin, error) {
+func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behalfUserId int64, chatId int64, size int32, offset int64, searchString string) ([]*dto.UserWithAdmin, int64, error) {
 	participant, err := m.cp.IsParticipant(ctx, m.cp.db, behalfUserId, chatId)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if !participant {
-		return nil, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", behalfUserId, chatId))
+		return nil, 0, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", behalfUserId, chatId))
 	}
 
 	searchString = services.TrimAmdSanitize(m.policy, searchString)
 	const reverse = true
 
 	if len(searchString) > 0 {
-		usersWithAdmin, _, err := m.searchUsersContaining(ctx, m.cp.db, searchString, chatId, size, offset, reverse)
+		usersWithAdmin, count, err := m.searchUsersContaining(ctx, m.cp.db, searchString, chatId, size, offset, reverse)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
-			return nil, err
+			return nil, 0, err
 		}
-		return usersWithAdmin, nil
+		return usersWithAdmin, count, nil
 	} else {
-		participants, err := getParticipantsCommon(ctx, m.cp.db, chatId, nil, size, offset, reverse)
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
-
-			return nil, err
+		type participantsWithCount struct {
+			participants []*ParticipantWithAdmin
+			count        int64
 		}
-		participantIds := GetParticipantIdsP(participants)
+
+		pwc, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*participantsWithCount, error) {
+			participants, err := getParticipantsCommon(ctx, m.cp.db, chatId, nil, size, offset, reverse)
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error getting participants", "err", err)
+
+				return nil, err
+			}
+			count, err := getParticipantsCount(ctx, m.cp.db, chatId)
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error getting participant count", "err", err)
+
+				return nil, err
+			}
+
+			return &participantsWithCount{
+				participants: participants,
+				count:        count,
+			}, nil
+		})
+		if errOuter != nil {
+			return nil, 0, errors.New("Error getting participants")
+		}
+
+		participantIds := GetParticipantIdsP(pwc.participants)
 
 		users, err := m.aaaRestClient.GetUsers(ctx, participantIds)
 		if err != nil {
 			m.lgr.WarnContext(ctx, "unable to get users")
 		}
 
-		orderedEnrichedParticipants := makeParticipantsWithAdmin(participants, utils.ToMap(users))
+		orderedEnrichedParticipants := makeParticipantsWithAdmin(pwc.participants, utils.ToMap(users))
 
-		return orderedEnrichedParticipants, nil
+		return orderedEnrichedParticipants, pwc.count, nil
 	}
 }
 
@@ -397,6 +420,22 @@ func getParticipantChatAdmins(participants []ParticipantWithAdmin) []bool {
 		res = append(res, pa.ChatAdmin)
 	}
 	return res
+}
+
+func getParticipantsCount(ctx context.Context, co db.CommonOperations, chatId int64) (int64, error) {
+	var res int64
+
+	sqlQuery := `
+		SELECT 
+		    count(*)
+		FROM chat_participant
+		WHERE chat_id = $1
+	`
+	err := sqlscan.Select(ctx, co, &res, sqlQuery, chatId)
+	if err != nil {
+		return 0, fmt.Errorf("error during interacting with db: %w", err)
+	}
+	return res, nil
 }
 
 func getParticipantsCommon(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]*ParticipantWithAdmin, error) {

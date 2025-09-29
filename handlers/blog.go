@@ -47,6 +47,7 @@ func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
 		return
 	}
 
+	// TODO BlogPostsDTO
 	g.JSON(http.StatusOK, blogs)
 }
 
@@ -96,5 +97,6 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 		return
 	}
 
+	// TODO introduce a dto
 	g.JSON(http.StatusOK, comments)
 }

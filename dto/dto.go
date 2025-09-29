@@ -11,7 +11,7 @@ type ErrorMessageDto struct {
 }
 
 type ChatCreateDto struct {
-	Title          string  `json:"title"`
+	Title          string  `json:"name"`
 	ParticipantIds []int64 `json:"participantIds"`
 	CanResend      bool    `json:"canResend"`
 	Blog           bool    `json:"blog"`
@@ -36,7 +36,7 @@ type EmbedMessageRequest struct {
 }
 
 type MessageCreateDto struct {
-	Content             string               `json:"content"`
+	Content             string               `json:"text"`
 	EmbedMessageRequest *EmbedMessageRequest `json:"embedMessage"`
 }
 

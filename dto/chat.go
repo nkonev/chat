@@ -52,6 +52,11 @@ type ChatViewEnrichedDto struct {
 	CanWriteMessage     bool    `json:"canWriteMessage"`
 }
 
+type GetChatsResponseDto struct {
+	Items   []ChatViewEnrichedDto `json:"items"`
+	HasNext bool                  `json:"hasNext"`
+}
+
 type ChatBasic struct {
 	Id        int64  `db:"id"`
 	Title     string `db:"title"`

@@ -45,6 +45,7 @@ func CreateHttpRouter(
 	ginRouter.PUT("/api/chat", chatHandler.EditChat)
 	ginRouter.DELETE("/api/chat/:id", chatHandler.DeleteChat)
 	ginRouter.PUT("/api/chat/:id/pin", chatHandler.PinChat)
+	ginRouter.GET("/api/chat/:id", chatHandler.GetChat)
 	ginRouter.GET("/api/chat/search", chatHandler.SearchChats)
 
 	ginRouter.PUT("/api/chat/:id/notification", chatHandler.PutUserChatNotificationSettings)

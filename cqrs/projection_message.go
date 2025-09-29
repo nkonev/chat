@@ -648,6 +648,7 @@ func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, maxDispla
 func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool) dto.MessageViewEnrichedDto {
 	me := dto.MessageViewEnrichedDto{
 		Id:             m.Id,
+		ChatId:         chatId,
 		OwnerId:        m.OwnerId,
 		Content:        m.Content,
 		BlogPost:       m.BlogPost,
