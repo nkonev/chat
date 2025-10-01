@@ -77,20 +77,20 @@ func TestReset(t *testing.T) {
 
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		user1Chats, err := testRestClient.GetChats(ctx, user1)
+		user1Chats, _, err := testRestClient.GetChats(ctx, user1)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 1, len(user1Chats))
 		chat1OfUser1 := user1Chats[0]
 		assert.Equal(t, chat1Name, chat1OfUser1.Title)
 		assert.Equal(t, int64(0), chat1OfUser1.UnreadMessages)
 
-		chat1Participants, err := testRestClient.GetChatParticipants(ctx, user1, chat1Id)
+		chat1Participants, _, err := testRestClient.GetChatParticipants(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in char participants")
 		require.Equal(t, 1, len(chat1Participants))
 		assert.Equal(t, user1, chat1Participants[0].Id)
 		assert.Equal(t, user1Login, chat1Participants[0].Login)
 
-		chat1Messages, err := testRestClient.GetMessages(ctx, user1, chat1Id)
+		chat1Messages, _, err := testRestClient.GetMessages(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in getting messages")
 		assert.Equal(t, 1, len(chat1Messages))
 		message1 := chat1Messages[0]
@@ -144,20 +144,20 @@ func TestReset(t *testing.T) {
 
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		user1Chats, err := testRestClient.GetChats(ctx, user1)
+		user1Chats, _, err := testRestClient.GetChats(ctx, user1)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 1, len(user1Chats))
 		chat1OfUser1 := user1Chats[0]
 		assert.Equal(t, chat1Name, chat1OfUser1.Title)
 		assert.Equal(t, int64(0), chat1OfUser1.UnreadMessages)
 
-		chat1Participants, err := testRestClient.GetChatParticipants(ctx, user1, chat1Id)
+		chat1Participants, _, err := testRestClient.GetChatParticipants(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in char participants")
 		require.Equal(t, 1, len(chat1Participants))
 		assert.Equal(t, user1, chat1Participants[0].Id)
 		assert.Equal(t, user1Login, chat1Participants[0].Login)
 
-		chat1Messages, err := testRestClient.GetMessages(ctx, user1, chat1Id)
+		chat1Messages, _, err := testRestClient.GetMessages(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in getting messages")
 		assert.Equal(t, 1, len(chat1Messages))
 		message1 := chat1Messages[0]

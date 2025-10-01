@@ -431,7 +431,7 @@ func getParticipantsCount(ctx context.Context, co db.CommonOperations, chatId in
 		FROM chat_participant
 		WHERE chat_id = $1
 	`
-	err := sqlscan.Select(ctx, co, &res, sqlQuery, chatId)
+	err := sqlscan.Get(ctx, co, &res, sqlQuery, chatId)
 	if err != nil {
 		return 0, fmt.Errorf("error during interacting with db: %w", err)
 	}

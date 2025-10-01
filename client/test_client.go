@@ -229,7 +229,7 @@ func (r *ChatGetOptionWithSearch) Apply(queryParams *url.Values) *url.Values {
 	return queryParams
 }
 
-func (rc *TestRestClient) GetChats(ctx context.Context, behalfUserId int64, chatGetOptions ...ChatGetOption) ([]dto.ChatViewEnrichedDto, error) {
+func (rc *TestRestClient) GetChats(ctx context.Context, behalfUserId int64, chatGetOptions ...ChatGetOption) ([]dto.ChatViewEnrichedDto, bool, error) {
 	var queryParams *url.Values
 	for _, opt := range chatGetOptions {
 		if opt != nil {
@@ -237,7 +237,11 @@ func (rc *TestRestClient) GetChats(ctx context.Context, behalfUserId int64, chat
 		}
 	}
 
-	return query[any, []dto.ChatViewEnrichedDto](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/search", "chat.Search", nil, queryParams)
+	res, err := query[any, dto.GetChatsResponseDto](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/search", "chat.Search", nil, queryParams)
+	if err != nil {
+		return []dto.ChatViewEnrichedDto{}, false, err
+	}
+	return res.Items, res.HasNext, nil
 }
 
 func (rc *TestRestClient) GetHasUnreadMessages(ctx context.Context, behalfUserId int64) (bool, error) {
@@ -398,7 +402,7 @@ func (r *MessageGetOptionWithSearch) Apply(queryParams *url.Values) *url.Values 
 	return queryParams
 }
 
-func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, chatId int64, messageGetOptions ...MessageGetOption) ([]dto.MessageViewEnrichedDto, error) {
+func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, chatId int64, messageGetOptions ...MessageGetOption) ([]dto.MessageViewEnrichedDto, bool, error) {
 	var queryParams *url.Values
 	for _, opt := range messageGetOptions {
 		if opt != nil {
@@ -406,7 +410,11 @@ func (rc *TestRestClient) GetMessages(ctx context.Context, behalfUserId int64, c
 		}
 	}
 
-	return query[any, []dto.MessageViewEnrichedDto](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/message/search", "message.Search", nil, queryParams)
+	res, err := query[any, dto.MessagesResponseDto](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/message/search", "message.Search", nil, queryParams)
+	if err != nil {
+		return []dto.MessageViewEnrichedDto{}, false, err
+	}
+	return res.Items, res.HasNext, nil
 }
 
 func (rc *TestRestClient) MakeMessageBlogPost(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
@@ -459,7 +467,7 @@ func (r *ParticipantGetOptionWithSearch) Apply(queryParams *url.Values) *url.Val
 	return queryParams
 }
 
-func (rc *TestRestClient) GetChatParticipants(ctx context.Context, behalfUserId int64, chatId int64, participantGetOptions ...ParticipantGetOption) ([]dto.UserWithAdmin, error) {
+func (rc *TestRestClient) GetChatParticipants(ctx context.Context, behalfUserId int64, chatId int64, participantGetOptions ...ParticipantGetOption) ([]*dto.UserWithAdmin, int64, error) {
 	var queryParams *url.Values
 	for _, opt := range participantGetOptions {
 		if opt != nil {
@@ -467,7 +475,11 @@ func (rc *TestRestClient) GetChatParticipants(ctx context.Context, behalfUserId 
 		}
 	}
 
-	return query[any, []dto.UserWithAdmin](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, queryParams)
+	res, err := query[any, dto.ParticipantsWithAdminWrapper](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, queryParams)
+	if err != nil {
+		return []*dto.UserWithAdmin{}, 0, err
+	}
+	return res.Data, res.Count, nil
 }
 
 func (rc *TestRestClient) ReadMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
