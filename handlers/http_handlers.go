@@ -75,7 +75,7 @@ func CreateHttpRouter(
 		g.Status(http.StatusOK)
 	})
 
-	// access: "/internal/access"
+	ginRouter.GET("/internal/access", chatHandler.CheckAccess)
 
 	return ginRouter
 }

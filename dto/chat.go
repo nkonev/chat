@@ -62,6 +62,7 @@ type ChatBasic struct {
 	Title     string `db:"title"`
 	CanResend bool   `db:"can_resend"`
 	TetATet   bool   `db:"tet_a_tet"`
+	IsBlog    bool   `db:"blog"`
 }
 
 type BasicChatDtoExtended struct {

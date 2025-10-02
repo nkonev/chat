@@ -6,6 +6,7 @@ import (
 	"go-cqrs-chat-example/logger"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -185,4 +186,12 @@ func ToMap[T WithId](sliceInput []T) map[int64]T {
 func GetType(aDto interface{}) string {
 	strName := fmt.Sprintf("%T", aDto)
 	return strName
+}
+
+func UrlEncode(input string) string {
+	params := url.Values{}
+	params.Add("prefix", input)
+	tmp := params.Encode()
+	after, _ := strings.CutPrefix(tmp, "prefix=")
+	return after
 }

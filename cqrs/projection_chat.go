@@ -862,8 +862,10 @@ func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperati
 		    ch.id,
 		    ch.title,
 		    ch.can_resend,
-		    ch.tet_a_tet
+		    ch.tet_a_tet,
+			b.id is not null as blog
 		from chat_common ch 
+		left join blog b on ch.id = b.id
 		where ch.id = $1
 	`, chatId)
 
@@ -892,10 +894,11 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 			c.can_resend,
 			c.regular_participant_can_publish_message,
 			c.regular_participant_can_pin_message,
-			c.regular_participant_can_write_message
+			c.regular_participant_can_write_message,
+			b.id is not null as blog
 		FROM chat_common c 
-		    LEFT JOIN chat_participant cp 
-		        ON (c.id = cp.chat_id AND cp.user_id = any($1)) 
+		LEFT JOIN chat_participant cp ON (c.id = cp.chat_id AND cp.user_id = any($1))
+		left join blog b on c.id = b.id
 		WHERE c.id = any($2)`,
 		behalfParticipantIds, chatIds)
 	if err != nil {

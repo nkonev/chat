@@ -38,6 +38,8 @@ create unlogged table message(
     embed_chat_id bigint,
     embed_owner_id bigint,
     embed_message_type varchar(16),
+    file_item_uuid varchar(36),
+    published boolean not null default false,
     create_date_time timestamp not null,
     update_date_time timestamp,
     primary key (chat_id, id)

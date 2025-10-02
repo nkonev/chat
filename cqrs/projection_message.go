@@ -859,7 +859,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 func (m *CommonProjection) GetMessageBasic(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.MessageBasic, error) {
 	var msg dto.MessageBasic
 	err := sqlscan.Get(ctx, co, &msg, `
-	select m.id, m.owner_id, m.content
+	select m.id, m.owner_id, m.content, m.blog_post, m.published, m.file_item_uuid
 	from message m where m.chat_id = $1 and m.id = $2
 	`, chatId, messageId)
 	if errors.Is(err, sql.ErrNoRows) {

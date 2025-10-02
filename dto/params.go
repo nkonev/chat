@@ -11,6 +11,8 @@ const StartingFromItemId = "startingFromItemId"
 const PinParam = "pin"
 const AdminParam = "admin"
 const SearchStringParam = "searchString"
+const OverrideMessageId = "overrideMessageId"
+const OverrideChatId = "overrideChatId"
 
 // path
 const ChatIdParam = "id"
