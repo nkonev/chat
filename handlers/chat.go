@@ -391,6 +391,15 @@ func (ch *ChatHandler) GetChat(g *gin.Context) {
 		return
 	}
 
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	size := int32(1)
 	reverse := false
 
@@ -398,7 +407,7 @@ func (ch *ChatHandler) GetChat(g *gin.Context) {
 	includeStartingFrom := true
 	searchString := ""
 
-	chats, _, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
+	chats, _, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, &chatId)
 	if err != nil {
 		if translateChatError(g, err) {
 			return
