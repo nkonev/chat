@@ -475,7 +475,7 @@ func (rc *TestRestClient) GetChatParticipants(ctx context.Context, behalfUserId 
 		}
 	}
 
-	res, err := query[any, dto.ParticipantsWithAdminWrapper](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/participants", "participants.Get", nil, queryParams)
+	res, err := query[any, dto.ParticipantsWithAdminWrapper](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/participant/search", "participants.Get", nil, queryParams)
 	if err != nil {
 		return []*dto.UserWithAdmin{}, 0, err
 	}
