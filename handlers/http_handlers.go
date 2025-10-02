@@ -60,7 +60,7 @@ func CreateHttpRouter(
 	ginRouter.POST("/api/chat/:id/message", messageHandler.CreateMessage)
 	ginRouter.PUT("/api/chat/:id/message", messageHandler.EditMessage)
 	ginRouter.DELETE("/api/chat/:id/message/:messageId", messageHandler.DeleteMessage)
-	ginRouter.PUT("/api/chat/:id/message/:messageId/read", messageHandler.ReadMessage)
+	ginRouter.PUT("/api/chat/:id/message/read/:messageId", messageHandler.ReadMessage)
 	ginRouter.PUT("/api/chat/:id/read", messageHandler.MarkChatAsRead)
 	ginRouter.PUT("/api/chat/read", messageHandler.MarkAsReadAllChats)
 	ginRouter.GET("/api/chat/:id/message/search", messageHandler.SearchMessages)
@@ -74,6 +74,8 @@ func CreateHttpRouter(
 	ginRouter.GET("/internal/health", func(g *gin.Context) {
 		g.Status(http.StatusOK)
 	})
+
+	// access: "/internal/access"
 
 	return ginRouter
 }

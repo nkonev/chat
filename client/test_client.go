@@ -483,7 +483,7 @@ func (rc *TestRestClient) GetChatParticipants(ctx context.Context, behalfUserId 
 }
 
 func (rc *TestRestClient) ReadMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
-	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/read", "message.Read", nil, nil)
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/read/"+utils.ToString(messageId), "message.Read", nil, nil)
 }
 
 func (rc *TestRestClient) MarkAllChatsAsRead(ctx context.Context, behalfUserId int64) error {
