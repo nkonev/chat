@@ -533,6 +533,34 @@ func (ch *ChatHandler) CheckAccess(g *gin.Context) {
 	return
 }
 
+func (ch *ChatHandler) IsAdmin(g *gin.Context) {
+	chatId, err := utils.ParseInt64(g.Query("chatId"))
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error checking access", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+	userId, err := utils.ParseInt64(g.Query("userId"))
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error checking access", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+	isAdmin, err := ch.commonProjection.IsChatAdmin(g.Request.Context(), ch.dbWrapper, userId, chatId)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error checking access", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+	if isAdmin {
+		g.Status(http.StatusOK)
+		return
+	} else {
+		g.Status(http.StatusUnauthorized)
+		return
+	}
+}
+
 func (ch *ChatHandler) convertChatId(pinned *bool, lastUpdateDateTime *time.Time, id *int64) *dto.ChatId {
 	if pinned == nil || lastUpdateDateTime == nil || id == nil {
 		return nil

@@ -365,6 +365,14 @@ func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
+func (mc *MessageHandler) TypeMessage(g *gin.Context) {
+	g.Status(http.StatusOK) // TODO implement
+}
+
+func (mc *MessageHandler) BroadcastMessage(g *gin.Context) {
+	g.Status(http.StatusOK) // TODO implement
+}
+
 func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
