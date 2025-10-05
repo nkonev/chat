@@ -11,6 +11,7 @@ import (
 	"go-cqrs-chat-example/otel"
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/rabbitmq"
+	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/type_registry"
 	"log/slog"
@@ -63,8 +64,9 @@ func RunServe(args []string) {
 			handlers.ConfigureHttpServer,
 			kafka.ConfigureSaramaClient,
 			client.NewAAARestClient,
-			services.CreateSanitizer,
-			services.CreateStripTags,
+			sanitizer.CreateSanitizer,
+			sanitizer.CreateStripTags,
+			services.NewAuthorizationService,
 			producer.NewRabbitEventsPublisher,
 			rabbitmq.CreateRabbitMqConnection,
 			cqrs.NewEventHandler,

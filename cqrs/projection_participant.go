@@ -7,7 +7,7 @@ import (
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
-	"go-cqrs-chat-example/services"
+	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
 )
 
@@ -193,7 +193,7 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 		return nil, 0, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", behalfUserId, chatId))
 	}
 
-	searchString = services.TrimAmdSanitize(m.policy, searchString)
+	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
 	const reverse = true
 
 	if len(searchString) > 0 {

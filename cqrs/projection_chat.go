@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
-	"go-cqrs-chat-example/services"
+	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
 	"slices"
 	"time"
@@ -471,7 +471,7 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 		return nil, nil, errors.New("Wrong invariant")
 	}
 
-	searchString = services.TrimAmdSanitize(m.policy, searchString)
+	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
 
 	additionalFoundUserIds := m.searchForUsers(ctx, searchString)
 

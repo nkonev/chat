@@ -7,7 +7,7 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
-	"go-cqrs-chat-example/services"
+	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
 	"net/http"
 
@@ -21,7 +21,7 @@ type MessageHandler struct {
 	eventBus            *cqrs.PartitionAwareEventBus
 	dbWrapper           *db.DB
 	commonProjection    *cqrs.CommonProjection
-	policy              *services.SanitizerPolicy
+	policy              *sanitizer.SanitizerPolicy
 	cfg                 *config.AppConfig
 	enrichingProjection *cqrs.EnrichingProjection
 }
@@ -31,7 +31,7 @@ func NewMessageHandler(
 	eventBus *cqrs.PartitionAwareEventBus,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
-	policy *services.SanitizerPolicy,
+	policy *sanitizer.SanitizerPolicy,
 	cfg *config.AppConfig,
 	enrichingProjection *cqrs.EnrichingProjection,
 ) *MessageHandler {
@@ -474,8 +474,8 @@ func translateMessageError(g *gin.Context, err error) bool {
 	if err == nil {
 		return false
 	}
-	var mediaError *services.MediaUrlErr
-	var mediaOverflowError *services.MediaOverflowErr
+	var mediaError *sanitizer.MediaUrlErr
+	var mediaOverflowError *sanitizer.MediaOverflowErr
 	var validationError *cqrs.ValidationError
 	var chatStillNotExistsError *cqrs.ChatStillNotExistsError
 	var unauthError *cqrs.UnauthorizedError

@@ -16,7 +16,7 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
-	"go-cqrs-chat-example/services"
+	"go-cqrs-chat-example/sanitizer"
 	"slices"
 )
 
@@ -222,7 +222,7 @@ type MessageReactionFlip struct {
 	Reaction       string
 }
 
-func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy, cfg *config.AppConfig) (int64, error) {
+func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *sanitizer.StripTagsPolicy, cfg *config.AppConfig) (int64, error) {
 	var copyCommand *ChatCreate
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -237,7 +237,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		return 0, fmt.Errorf("Max allowed participants %d, got %d", cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand, copyCommand.ParticipantIds)
 	}
 
-	copyCommand.Title = services.TrimAmdSanitizeChatTitle(stripTagsPolicy, copyCommand.Title)
+	copyCommand.Title = sanitizer.TrimAmdSanitizeChatTitle(stripTagsPolicy, copyCommand.Title)
 
 	if copyCommand.IsValidatabale() {
 		if err = copyCommand.Validate(); err != nil {
@@ -300,7 +300,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 	return chatId, nil
 }
 
-func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *services.StripTagsPolicy, cfg *config.AppConfig) error {
+func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *sanitizer.StripTagsPolicy, cfg *config.AppConfig) error {
 	var copyCommand *ChatEdit
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -319,7 +319,7 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		return fmt.Errorf("Max allowed participants %d, got %d", cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand, copyCommand.ParticipantIdsToAdd)
 	}
 
-	copyCommand.Title = services.TrimAmdSanitizeChatTitle(stripTagsPolicy, copyCommand.Title)
+	copyCommand.Title = sanitizer.TrimAmdSanitizeChatTitle(stripTagsPolicy, copyCommand.Title)
 
 	if copyCommand.IsValidatabale() {
 		if err = copyCommand.Validate(); err != nil {
@@ -570,7 +570,7 @@ func (s *ChatNotificationSettingsSet) Handle(ctx context.Context, eventBus Event
 	return eventBus.Publish(ctx, cp)
 }
 
-func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *services.SanitizerPolicy) (int64, error) {
+func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy) (int64, error) {
 	var copyCommand *MessageCreate
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -586,7 +586,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		return 0, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", sp.AdditionalData.BehalfUserId, sp.ChatId))
 	}
 
-	trimmedAndSanitized, err := services.TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
+	trimmedAndSanitized, err := sanitizer.TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
 	if err != nil {
 		return 0, err
 	}
@@ -760,7 +760,7 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 	return nil
 }
 
-func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *services.SanitizerPolicy) error {
+func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy) error {
 	var copyCommand *MessageEdit
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -784,7 +784,7 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 		return NewUnauthorizedError(fmt.Sprintf("User %v is not an owner of message %v in chat %v", copyCommand.AdditionalData.BehalfUserId, copyCommand.MessageId, copyCommand.ChatId))
 	}
 
-	trimmedAndSanitized, err := services.TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
+	trimmedAndSanitized, err := sanitizer.TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
 	if err != nil {
 		return err
 	}

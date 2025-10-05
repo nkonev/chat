@@ -14,6 +14,7 @@ import (
 	"go-cqrs-chat-example/otel"
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/rabbitmq"
+	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/type_registry"
 	"log/slog"
@@ -114,8 +115,9 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 			kafka.ConfigureSaramaClient,
 			client.NewTestRestClient,
 			aaaClientFactory(t),
-			services.CreateSanitizer,
-			services.CreateStripTags,
+			sanitizer.CreateSanitizer,
+			sanitizer.CreateStripTags,
+			services.NewAuthorizationService,
 			producer.NewRabbitEventsPublisher,
 			rabbitmq.CreateRabbitMqConnection,
 			cqrs.NewEventHandler,

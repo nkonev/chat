@@ -8,10 +8,10 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,9 +22,10 @@ type ChatHandler struct {
 	eventBus            *cqrs.PartitionAwareEventBus
 	dbWrapper           *db.DB
 	commonProjection    *cqrs.CommonProjection
-	stripTagsPolicy     *services.StripTagsPolicy
+	stripTagsPolicy     *sanitizer.StripTagsPolicy
 	enrichingProjection *cqrs.EnrichingProjection
 	cfg                 *config.AppConfig
+	authorizeService    *services.AuthorizationService
 }
 
 func NewChatHandler(
@@ -32,9 +33,10 @@ func NewChatHandler(
 	eventBus *cqrs.PartitionAwareEventBus,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
-	stripTagsPolicy *services.StripTagsPolicy,
+	stripTagsPolicy *sanitizer.StripTagsPolicy,
 	enrichingProjection *cqrs.EnrichingProjection,
 	cfg *config.AppConfig,
+	authorizeService *services.AuthorizationService,
 ) *ChatHandler {
 	return &ChatHandler{
 		lgr:                 lgr,
@@ -44,6 +46,7 @@ func NewChatHandler(
 		stripTagsPolicy:     stripTagsPolicy,
 		enrichingProjection: enrichingProjection,
 		cfg:                 cfg,
+		authorizeService:    authorizeService,
 	}
 }
 
@@ -434,102 +437,15 @@ func (ch *ChatHandler) GetChat(g *gin.Context) {
 }
 
 func (ch *ChatHandler) CheckAccess(g *gin.Context) {
-	chatId, err := utils.ParseInt64(g.Query("chatId"))
+	m := map[string]string{}
+	err := g.BindQuery(&m)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error checking access", "err", err)
-		g.Status(http.StatusInternalServerError)
-		return
-	}
-	originalChat, err := ch.commonProjection.GetChatBasic(g.Request.Context(), ch.dbWrapper, chatId) // chat where the file is stored
-	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error checking access", "err", err)
-		g.Status(http.StatusInternalServerError)
-		return
-	}
-	if originalChat == nil {
-		g.Status(http.StatusUnauthorized)
-		return
-	}
-
-	// this branch is for "public"
-	// overrideChatId and overrideMessageId come together
-	// in general, they can be crafted by an intruder ...
-	overrideMessageId, _ := utils.ParseInt64(g.Query(dto.OverrideMessageId))
-	if overrideMessageId > 0 {
-		overrideChatId, err := utils.ParseInt64(g.Query(dto.OverrideChatId))
-		if err != nil {
-			ch.lgr.ErrorContext(g.Request.Context(), "Error checking access", "err", err)
-			g.Status(http.StatusInternalServerError)
-			return
-		}
-
-		overrideMessage, err := ch.commonProjection.GetMessageBasic(g.Request.Context(), ch.dbWrapper, overrideChatId, overrideMessageId)
-		if err != nil {
-			ch.lgr.ErrorContext(g.Request.Context(), "Error checking access", "err", err)
-			g.Status(http.StatusInternalServerError)
-			return
-		}
-		overrideChat, err := ch.commonProjection.GetChatBasic(g.Request.Context(), ch.dbWrapper, overrideChatId) // chat where the embedded message is stored
-		if err != nil {
-			ch.lgr.ErrorContext(g.Request.Context(), "Error checking access", "err", err)
-			g.Status(http.StatusInternalServerError)
-			return
-		}
-		if overrideChat == nil {
-			g.Status(http.StatusUnauthorized)
-			return
-		}
-
-		fileItemUuid := g.Query("fileItemUuid")
-		if overrideMessage != nil && (overrideChat.IsBlog || overrideMessage.Published || overrideMessage.BlogPost) {
-
-			// ... here we check that the message which we found by potentially crafted overrideMessageId / overrideChatId with malicious intent
-			// really contains this fileItemUuid
-			encodedFileItemUuid := utils.UrlEncode(fileItemUuid)
-			if len(fileItemUuid) != 0 {
-				if strings.Contains(overrideMessage.Content, encodedFileItemUuid) {
-					g.Status(http.StatusOK)
-					return
-				} else if overrideMessage.FileItemUuid != nil && *overrideMessage.FileItemUuid == fileItemUuid {
-					g.Status(http.StatusOK)
-					return
-				}
-			}
-		}
-		g.Status(http.StatusUnauthorized)
-		return
-	}
-
-	// this branch is for "regular" and resent
-	userId, err := utils.ParseInt64(g.Query("userId"))
-	if err != nil {
-		ch.lgr.InfoContext(g.Request.Context(), "Unable to get userId", "err", err) // it can be error when overrideChatId and overrideMessageId are missed
-		g.Status(http.StatusUnauthorized)
-		return
-	}
-	useCanResend := utils.GetBoolean(g.Query("considerCanResend"))
-	participant, err := ch.commonProjection.IsParticipant(g.Request.Context(), ch.dbWrapper, userId, chatId)
-	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error checking access", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding query", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
-	if participant {
-		g.Status(http.StatusOK)
-		return
-	} else {
-		if useCanResend {
-			if originalChat.CanResend {
-				g.Status(http.StatusOK)
-				return
-			} else {
-				g.Status(http.StatusUnauthorized)
-				return
-			}
-		}
-	}
-	g.Status(http.StatusUnauthorized)
+	g.Status(ch.authorizeService.CheckAccess(g.Request.Context(), m))
 	return
 }
 

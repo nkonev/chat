@@ -8,7 +8,7 @@ import (
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
-	"go-cqrs-chat-example/services"
+	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
 )
 
@@ -513,7 +513,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			}
 		}
 
-		searchString = services.TrimAmdSanitize(m.policy, searchString)
+		searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
 
 		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, messageId)
 		if err != nil {
