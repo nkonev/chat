@@ -5,6 +5,7 @@ package cqrs
 // The best place to perform checks against database is the projection side.
 // In sake optimization here we have as an exception a few db calls.
 // See comments about it in TestUnreads()
+// Also, in order to keep these command's response times fast we should avoid iterations over db rows here. The best place for it is event_handler, projection.
 
 import (
 	"context"
