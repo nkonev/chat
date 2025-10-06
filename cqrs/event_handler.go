@@ -13,18 +13,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const EventTypeChatCreated = "chat_created"
-const EventTypeChatEdited = "chat_edited"
-const EventTypeChatDeleted = "chat_deleted"
-const EventTypeParticipantAdded = "participant_added"
-const EventTypeParticipantDeleted = "participant_deleted"
-const EventTypeParticipantChanged = "participant_edited"
-const EventTypeMessageCreated = "message_created"
-const EventTypeHasUnreadMessagesChanged = "has_unread_messages_changed"
-const EventTypeChatUnreadMessagesChanged = "chat_unread_messages_changed"
-const EventTypeMessageEdited = "message_edited"
-const EventTypeMessageDeleted = "message_deleted"
-
 type EventHandler struct {
 	commonProjection       *CommonProjection
 	enrichingProjection    *EnrichingProjection
@@ -50,10 +38,10 @@ func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *En
 }
 
 func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) error {
-	eventTypeChatCreated := EventTypeChatCreated
-	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
+	eventTypeChatCreated := dto.EventTypeChatCreated
+	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
 
-	eventTypeParticipantAdded := EventTypeParticipantAdded
+	eventTypeParticipantAdded := dto.EventTypeParticipantAdded
 	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("participant.%s", eventTypeParticipantAdded))
 	defer participantAddSpan.End()
 
@@ -127,7 +115,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 }
 
 func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *ParticipantDeleted) error {
-	eventTypeParticipantDeleted := EventTypeParticipantDeleted
+	eventTypeParticipantDeleted := dto.EventTypeParticipantDeleted
 	ctx, participantSpan := m.tr.Start(ctx, fmt.Sprintf("participant.%s", eventTypeParticipantDeleted))
 	defer participantSpan.End()
 
@@ -145,10 +133,10 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64) error {
 	userIds := participantIds
 
-	eventType := EventTypeChatDeleted
-	eventTypeParticipantDeleted := EventTypeParticipantDeleted
+	eventType := dto.EventTypeChatDeleted
+	eventTypeParticipantDeleted := dto.EventTypeParticipantDeleted
 
-	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
+	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
 	m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantDeleted, "user_ids", userIds)
 
 	var pseudoUsers = []*dto.UserWithAdmin{}
@@ -217,7 +205,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 }
 
 func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *ParticipantChanged) error {
-	eventTypeParticipantChanged := EventTypeParticipantChanged
+	eventTypeParticipantChanged := dto.EventTypeParticipantChanged
 	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("participant.%s", eventTypeParticipantChanged))
 	defer participantAddSpan.End()
 
@@ -258,8 +246,8 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 }
 
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
-	eventType := EventTypeChatEdited
-	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
+	eventType := dto.EventTypeChatEdited
+	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
 
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
 	defer messageSpan.End()
@@ -355,7 +343,7 @@ func (m *EventHandler) buildUserWithAdminBasedOnUserIds(ctx context.Context, use
 }
 
 func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreated) error {
-	eventType := EventTypeMessageCreated
+	eventType := dto.EventTypeMessageCreated
 
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
 	defer messageSpan.End()
@@ -397,7 +385,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 }
 
 func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
-	eventType := EventTypeMessageEdited
+	eventType := dto.EventTypeMessageEdited
 
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
 	defer messageSpan.End()
@@ -437,7 +425,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 }
 
 func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDeleted) error {
-	eventType := EventTypeMessageDeleted
+	eventType := dto.EventTypeMessageDeleted
 
 	// mc.notificator.NotifyAboutDeleteMessage(c.Request().Context(), participantIds, chatId, cd)
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
@@ -478,8 +466,8 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
 	userIds := []int64{event.AdditionalData.BehalfUserId}
 
-	eventTypeUnreadMessagesChanged := EventTypeHasUnreadMessagesChanged
-	eventTypeChatUnreadMessagesChanged := EventTypeChatUnreadMessagesChanged
+	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
+	eventTypeChatUnreadMessagesChanged := dto.EventTypeChatUnreadMessagesChanged
 
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventTypeChatUnreadMessagesChanged))
 	defer messageSpan.End()

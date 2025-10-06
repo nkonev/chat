@@ -1,0 +1,15 @@
+package dto
+
+const EventTypeChatCreated = "chat_created"
+const EventTypeChatEdited = "chat_edited"
+const EventTypeChatDeleted = "chat_deleted"
+const EventTypeParticipantAdded = "participant_added"
+const EventTypeParticipantDeleted = "participant_deleted"
+const EventTypeParticipantChanged = "participant_edited"
+const EventTypeMessageCreated = "message_created"
+const EventTypeHasUnreadMessagesChanged = "has_unread_messages_changed"
+const EventTypeChatUnreadMessagesChanged = "chat_unread_messages_changed"
+const EventTypeMessageEdited = "message_edited"
+const EventTypeMessageDeleted = "message_deleted"
+const EventTypeMessageBroadCast = "user_broadcast"
+const EventTypeMessageType = "user_typing"

@@ -15,6 +15,7 @@ const DefaultSize = 20
 const DefaultPage = 0
 const DefaultOffset = 0
 const HeaderUserId = "X-Auth-Userid"
+const HeaderUserLogin = "X-Auth-Username"
 
 func ToString(in any) string {
 	return fmt.Sprintf("%v", in)
@@ -194,4 +195,11 @@ func UrlEncode(input string) string {
 	tmp := params.Encode()
 	after, _ := strings.CutPrefix(tmp, "prefix=")
 	return after
+}
+
+func Min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

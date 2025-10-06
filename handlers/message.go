@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/sanitizer"
+	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 	"net/http"
 
@@ -24,6 +26,7 @@ type MessageHandler struct {
 	policy              *sanitizer.SanitizerPolicy
 	cfg                 *config.AppConfig
 	enrichingProjection *cqrs.EnrichingProjection
+	messageService      *services.MessageService
 }
 
 func NewMessageHandler(
@@ -34,6 +37,7 @@ func NewMessageHandler(
 	policy *sanitizer.SanitizerPolicy,
 	cfg *config.AppConfig,
 	enrichingProjection *cqrs.EnrichingProjection,
+	messageService *services.MessageService,
 ) *MessageHandler {
 	return &MessageHandler{
 		lgr:                 lgr,
@@ -43,6 +47,7 @@ func NewMessageHandler(
 		policy:              policy,
 		cfg:                 cfg,
 		enrichingProjection: enrichingProjection,
+		messageService:      messageService,
 	}
 }
 
@@ -366,11 +371,103 @@ func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
 }
 
 func (mc *MessageHandler) TypeMessage(g *gin.Context) {
-	g.Status(http.StatusOK) // TODO implement
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userLogin, err := getUserLogin(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing userLogin", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	participant, err := mc.commonProjection.IsParticipant(g.Request.Context(), mc.dbWrapper, userId, chatId)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error checking is participant", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+	if !participant {
+		mc.lgr.InfoContext(g.Request.Context(), fmt.Sprintf("User %v is not participant of chat %v, skipping", userId, chatId))
+		g.Status(http.StatusOK)
+		return
+	}
+
+	d := new(dto.BroadcastDto)
+
+	err = g.Bind(d)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding BroadcastDto", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mc.messageService.TypeMessage(g.Request.Context(), getCorrelationId(g), chatId, userId, userLogin)
+
+	g.Status(http.StatusOK)
+	return
 }
 
 func (mc *MessageHandler) BroadcastMessage(g *gin.Context) {
-	g.Status(http.StatusOK) // TODO implement
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userLogin, err := getUserLogin(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing userLogin", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	participant, err := mc.commonProjection.IsParticipant(g.Request.Context(), mc.dbWrapper, userId, chatId)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error checking is participant", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+	if !participant {
+		mc.lgr.InfoContext(g.Request.Context(), fmt.Sprintf("User %v is not participant of chat %v, skipping", userId, chatId))
+		g.Status(http.StatusOK)
+		return
+	}
+
+	d := new(dto.BroadcastDto)
+
+	err = g.Bind(d)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding BroadcastDto", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mc.messageService.BroadcastMessage(g.Request.Context(), getCorrelationId(g), d.Text, chatId, userId, userLogin)
+
+	g.Status(http.StatusOK)
+	return
 }
 
 func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {

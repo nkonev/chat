@@ -140,7 +140,7 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+				return ok && e.EventType == dto.EventTypeChatCreated &&
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -154,7 +154,7 @@ func TestUnreads(t *testing.T) {
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.HasUnreadMessagesChanged.HasUnreadMessages == true
 			},
@@ -201,7 +201,7 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeChatUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.UnreadMessagesNotification.ChatId == chat1Id &&
 					e.UnreadMessagesNotification.UnreadMessages == 0
@@ -209,7 +209,7 @@ func TestUnreads(t *testing.T) {
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.HasUnreadMessagesChanged.HasUnreadMessages == false
 			},
@@ -245,7 +245,7 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -261,7 +261,7 @@ func TestUnreads(t *testing.T) {
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.HasUnreadMessagesChanged.HasUnreadMessages == true
 			},
@@ -302,7 +302,7 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeMessageDeleted &&
+				return ok && e.EventType == dto.EventTypeMessageDeleted &&
 					e.UserId == user1 &&
 					e.ChatId == chat1Id &&
 					e.MessageDeletedNotification.Id == messageId3 &&
@@ -310,7 +310,7 @@ func TestUnreads(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeMessageDeleted &&
+				return ok && e.EventType == dto.EventTypeMessageDeleted &&
 					e.UserId == user2 &&
 					e.ChatId == chat1Id &&
 					e.MessageDeletedNotification.Id == messageId3 &&
@@ -318,7 +318,7 @@ func TestUnreads(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeMessageDeleted &&
+				return ok && e.EventType == dto.EventTypeMessageDeleted &&
 					e.UserId == user3 &&
 					e.ChatId == chat1Id &&
 					e.MessageDeletedNotification.Id == messageId3 &&
@@ -501,14 +501,14 @@ func TestReadAllChats(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeChatUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.UnreadMessagesNotification.ChatId == chat1Id &&
 					e.UnreadMessagesNotification.UnreadMessages == 0
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeChatUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.UnreadMessagesNotification.ChatId == chat2Id &&
 					e.UnreadMessagesNotification.UnreadMessages == 0
@@ -516,7 +516,7 @@ func TestReadAllChats(t *testing.T) {
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.HasUnreadMessagesChanged.HasUnreadMessages == false
 			},
@@ -628,7 +628,7 @@ func TestReadOneChat(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeChatUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.UnreadMessagesNotification.ChatId == chat1Id &&
 					e.UnreadMessagesNotification.UnreadMessages == 0
@@ -636,7 +636,7 @@ func TestReadOneChat(t *testing.T) {
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.HasUnreadMessagesChanged.HasUnreadMessages == true
 			},
@@ -662,7 +662,7 @@ func TestReadOneChat(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeChatUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.UnreadMessagesNotification.ChatId == chat2Id &&
 					e.UnreadMessagesNotification.UnreadMessages == 0
@@ -670,7 +670,7 @@ func TestReadOneChat(t *testing.T) {
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.HasUnreadMessagesChanged.HasUnreadMessages == false
 			},
@@ -1251,7 +1251,7 @@ func TestCreateChat(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+				return ok && e.EventType == dto.EventTypeChatCreated &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -1314,7 +1314,7 @@ func TestCreateChatWithMultipleParticipants(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+				return ok && e.EventType == dto.EventTypeChatCreated &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -1326,7 +1326,7 @@ func TestCreateChatWithMultipleParticipants(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+				return ok && e.EventType == dto.EventTypeChatCreated &&
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -1397,7 +1397,7 @@ func TestEditChatWithAddingParticipants(t *testing.T) {
 			// caused by CreateChat()
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+				return ok && e.EventType == dto.EventTypeChatCreated &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -1409,7 +1409,7 @@ func TestEditChatWithAddingParticipants(t *testing.T) {
 			// caused by EditChat
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+				return ok && e.EventType == dto.EventTypeChatCreated &&
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1NewName &&
@@ -1421,7 +1421,7 @@ func TestEditChatWithAddingParticipants(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1NewName &&
@@ -1486,7 +1486,7 @@ func TestDeleteChat(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+				return ok && e.EventType == dto.EventTypeChatCreated &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -1498,7 +1498,7 @@ func TestDeleteChat(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+				return ok && e.EventType == dto.EventTypeChatCreated &&
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -1566,13 +1566,13 @@ func TestDeleteChat(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatDeleted &&
+				return ok && e.EventType == dto.EventTypeChatDeleted &&
 					e.UserId == user1 &&
 					e.ChatDeletedDto.Id == chat1Id
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatDeleted &&
+				return ok && e.EventType == dto.EventTypeChatDeleted &&
 					e.UserId == user2 &&
 					e.ChatDeletedDto.Id == chat1Id
 			},
@@ -1900,7 +1900,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+				return ok && e.EventType == dto.EventTypeChatCreated &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -1920,7 +1920,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			// caused by AddChatParticipants
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatCreated &&
+				return ok && e.EventType == dto.EventTypeChatCreated &&
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -1932,7 +1932,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeParticipantAdded &&
+				return ok && e.EventType == dto.EventTypeParticipantAdded &&
 					e.UserId == user1 &&
 					e.ChatId == chat1Id &&
 					len(*e.Participants) == 1 &&
@@ -1941,7 +1941,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeParticipantAdded &&
+				return ok && e.EventType == dto.EventTypeParticipantAdded &&
 					e.UserId == user2 &&
 					e.ChatId == chat1Id &&
 					len(*e.Participants) == 1 &&
@@ -1950,7 +1950,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -2000,7 +2000,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeParticipantChanged &&
+				return ok && e.EventType == dto.EventTypeParticipantChanged &&
 					e.UserId == user1 &&
 					e.ChatId == chat1Id &&
 					len(*e.Participants) == 1 &&
@@ -2010,7 +2010,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeParticipantChanged &&
+				return ok && e.EventType == dto.EventTypeParticipantChanged &&
 					e.UserId == user2 &&
 					e.ChatId == chat1Id &&
 					len(*e.Participants) == 1 &&
@@ -2021,7 +2021,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -2033,7 +2033,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -2054,7 +2054,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeParticipantDeleted &&
+				return ok && e.EventType == dto.EventTypeParticipantDeleted &&
 					e.UserId == user1 &&
 					e.ChatId == chat1Id &&
 					len(*e.Participants) == 1 &&
@@ -2062,7 +2062,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeParticipantDeleted &&
+				return ok && e.EventType == dto.EventTypeParticipantDeleted &&
 					e.UserId == user2 &&
 					e.ChatId == chat1Id &&
 					len(*e.Participants) == 1 &&
@@ -2071,13 +2071,13 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatDeleted &&
+				return ok && e.EventType == dto.EventTypeChatDeleted &&
 					e.UserId == user2 &&
 					e.ChatDeletedDto.Id == chat1Id
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -2148,7 +2148,7 @@ func TestCreateMessage(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeMessageCreated &&
+				return ok && e.EventType == dto.EventTypeMessageCreated &&
 					e.UserId == user1 &&
 					e.ChatId == chat1Id &&
 					e.MessageNotification.Id == message1Id &&
@@ -2158,7 +2158,7 @@ func TestCreateMessage(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeMessageCreated &&
+				return ok && e.EventType == dto.EventTypeMessageCreated &&
 					e.UserId == user2 &&
 					e.ChatId == chat1Id &&
 					e.MessageNotification.Id == message1Id &&
@@ -2169,7 +2169,7 @@ func TestCreateMessage(t *testing.T) {
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -2185,13 +2185,13 @@ func TestCreateMessage(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
 					e.UserId == user1 &&
 					e.HasUnreadMessagesChanged.HasUnreadMessages == false // it's not being change for himself
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -2207,7 +2207,7 @@ func TestCreateMessage(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeHasUnreadMessagesChanged &&
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
 					e.UserId == user2 &&
 					e.HasUnreadMessagesChanged.HasUnreadMessages == true // a cumulative indicator representing unreads in all the chats, user dor the red dot
 			},
@@ -2325,7 +2325,7 @@ func TestEditMessage(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeMessageEdited &&
+				return ok && e.EventType == dto.EventTypeMessageEdited &&
 					e.UserId == user1 &&
 					e.ChatId == chat1Id &&
 					e.MessageNotification.Id == message2Id &&
@@ -2335,7 +2335,7 @@ func TestEditMessage(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == cqrs.EventTypeMessageEdited &&
+				return ok && e.EventType == dto.EventTypeMessageEdited &&
 					e.UserId == user2 &&
 					e.ChatId == chat1Id &&
 					e.MessageNotification.Id == message2Id &&
@@ -2346,7 +2346,7 @@ func TestEditMessage(t *testing.T) {
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user1 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -2362,7 +2362,7 @@ func TestEditMessage(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == cqrs.EventTypeChatEdited &&
+				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&

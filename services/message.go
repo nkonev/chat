@@ -1,0 +1,138 @@
+package services
+
+import (
+	"context"
+	"fmt"
+	"go-cqrs-chat-example/config"
+	"go-cqrs-chat-example/cqrs"
+	"go-cqrs-chat-example/db"
+	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/producer"
+	"go-cqrs-chat-example/sanitizer"
+	"go-cqrs-chat-example/utils"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+)
+
+type MessageService struct {
+	lgr                    *logger.LoggerWrapper
+	dbWrapper              *db.DB
+	commonProjection       *cqrs.CommonProjection
+	stripAllTags           *sanitizer.StripTagsPolicy
+	cfg                    *config.AppConfig
+	tr                     trace.Tracer
+	rabbitmqEventPublisher *producer.RabbitEventsPublisher
+}
+
+func NewMessageService(
+	lgr *logger.LoggerWrapper,
+	dbWrapper *db.DB,
+	commonProjection *cqrs.CommonProjection,
+	stripAllTags *sanitizer.StripTagsPolicy,
+	cfg *config.AppConfig,
+	rabbitmqEventPublisher *producer.RabbitEventsPublisher,
+) *MessageService {
+	tr := otel.Tracer("event")
+
+	return &MessageService{
+		lgr:                    lgr,
+		dbWrapper:              dbWrapper,
+		commonProjection:       commonProjection,
+		stripAllTags:           stripAllTags,
+		cfg:                    cfg,
+		tr:                     tr,
+		rabbitmqEventPublisher: rabbitmqEventPublisher,
+	}
+}
+
+func (p *MessageService) BroadcastMessage(ctx context.Context, correlationId *string, messageText string, chatId, userId int64, userLogin string) {
+	preview := createMessagePreview(p.stripAllTags, p.cfg.Message.BroadcastPreviewMaxTextSize, messageText, userLogin)
+	if preview == loginPrefix(userLogin) {
+		preview = ""
+	}
+
+	eventType := dto.EventTypeMessageBroadCast
+	ctx, messageSpan := p.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
+	defer messageSpan.End()
+
+	ut := dto.MessageBroadcastNotification{
+		Login:  userLogin,
+		UserId: userId,
+		Text:   preview,
+	}
+
+	err := p.commonProjection.IterateOverChatParticipantIds(ctx, p.dbWrapper, chatId, []int64{userId}, func(participantIds []int64) error {
+		for _, participantId := range participantIds {
+			err := p.rabbitmqEventPublisher.Publish(ctx, correlationId, dto.ChatEvent{
+				EventType:                    eventType,
+				MessageBroadcastNotification: &ut,
+				UserId:                       participantId,
+				ChatId:                       chatId,
+			})
+			if err != nil {
+				p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		p.lgr.ErrorContext(ctx, "Error during getting chat participants", "err", err)
+		return
+	}
+}
+
+func (p *MessageService) TypeMessage(ctx context.Context, correlationId *string, chatId, userId int64, userLogin string) {
+	eventType := dto.EventTypeMessageType
+	ctx, messageSpan := p.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
+	defer messageSpan.End()
+
+	ut := dto.UserTypingNotification{
+		Login:         userLogin,
+		ParticipantId: userId,
+		ChatId:        chatId,
+	}
+
+	err := p.commonProjection.IterateOverChatParticipantIds(ctx, p.dbWrapper, chatId, []int64{userId}, func(participantIds []int64) error {
+		for _, participantId := range participantIds {
+			err := p.rabbitmqEventPublisher.Publish(ctx, correlationId, dto.GlobalUserEvent{
+				UserId:                 participantId,
+				EventType:              eventType,
+				UserTypingNotification: &ut,
+			})
+			if err != nil {
+				p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		p.lgr.ErrorContext(ctx, "Error during getting chat participants", "err", err)
+		return
+	}
+}
+
+func loginPrefix(login string) string {
+	return login + ": "
+}
+
+func createMessagePreview(cleanTagsPolicy *sanitizer.StripTagsPolicy, previewMaxTextSize int, text, login string) string {
+	input := loginPrefix(login) + text
+	return createMessagePreviewWithoutLogin(cleanTagsPolicy, previewMaxTextSize, input)
+}
+
+func createMessagePreviewWithoutLogin(cleanTagsPolicy *sanitizer.StripTagsPolicy, previewMaxTextSize int, text string) string {
+	return stripTagsAndCut(cleanTagsPolicy, previewMaxTextSize, text)
+}
+
+func stripTagsAndCut(cleanTagsPolicy *sanitizer.StripTagsPolicy, sizeToCut int, text string) string {
+	tmp := cleanTagsPolicy.Sanitize(text)
+	runes := []rune(tmp)
+	textLen := len(runes)
+	size := utils.Min(sizeToCut, textLen)
+	ret := string(runes[:size])
+	if textLen > sizeToCut {
+		ret += "..."
+	}
+	return ret
+}

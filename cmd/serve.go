@@ -67,6 +67,7 @@ func RunServe(args []string) {
 			sanitizer.CreateSanitizer,
 			sanitizer.CreateStripTags,
 			services.NewAuthorizationService,
+			services.NewMessageService,
 			producer.NewRabbitEventsPublisher,
 			rabbitmq.CreateRabbitMqConnection,
 			cqrs.NewEventHandler,

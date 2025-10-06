@@ -85,6 +85,7 @@ message:
   # should be aligned with viewList.maxSize in storage
   maxMedias: 100 # image, video, audio, iframe
   maxDisplayableReactionUsers: 10
+  broadcastPreviewMaxTextSize: 256
 
 rabbitmq:
   url: "amqp://chat:chatPazZw0rd@127.0.0.1:5672"

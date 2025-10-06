@@ -681,13 +681,11 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 		if err != nil {
 			return err
 		}
-
 		messageIdToMark := s.MessageId
-
 		if s.MessageId > maxMessageId {
 			messageIdToMark = maxMessageId
 		}
-
+		// Optimizations in order to not send useless messages in Kafka
 		if (lastMessgeReadedExists && messageIdToMark > lastMessageReadedId) || (!lastMessgeReadedExists && lastMessageReadedId == 0) {
 			cp := &MessageReaded{
 				AdditionalData:     s.AdditionalData,

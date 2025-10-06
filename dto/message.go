@@ -148,3 +148,13 @@ type ChatUnreadMessageChanged struct {
 	UnreadMessages     int64     `json:"unreadMessages"`
 	LastUpdateDateTime time.Time `json:"lastUpdateDateTime"` // it's need to lift the chat in case adding new unread messages
 }
+
+type BroadcastDto struct {
+	Text string `json:"text"`
+}
+
+type UserTypingNotification struct {
+	Login         string `json:"login"`
+	ParticipantId int64  `json:"participantId"`
+	ChatId        int64  `json:"chatId"`
+}

@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -87,6 +88,15 @@ func CreateHttpRouter(
 func getUserId(g *gin.Context) (int64, error) {
 	uh := g.Request.Header.Get(utils.HeaderUserId)
 	return utils.ParseInt64(uh)
+}
+
+func getUserLogin(g *gin.Context) (string, error) {
+	decodedStringBytes, err := base64.StdEncoding.DecodeString(g.Request.Header.Get(utils.HeaderUserLogin))
+	if err != nil {
+		return "", err
+	}
+
+	return string(decodedStringBytes), nil
 }
 
 func getCorrelationId(g *gin.Context) *string {

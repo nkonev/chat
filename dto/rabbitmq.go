@@ -7,6 +7,7 @@ type GlobalUserEvent struct {
 	ChatDeletedDto             *ChatDeletedDto           `json:"chatDeletedNotification"`
 	HasUnreadMessagesChanged   *HasUnreadMessagesChanged `json:"hasUnreadMessagesChanged"`
 	UnreadMessagesNotification *ChatUnreadMessageChanged `json:"unreadMessagesNotification"`
+	UserTypingNotification     *UserTypingNotification   `json:"userTypingNotification"`
 }
 
 type ChatEvent struct {
