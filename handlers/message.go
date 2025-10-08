@@ -470,6 +470,25 @@ func (mc *MessageHandler) BroadcastMessage(g *gin.Context) {
 	return
 }
 
+func (mc *MessageHandler) PinPromoted(g *gin.Context) {
+	g.Status(http.StatusOK) // TODO implement pinned
+	return
+}
+
+func (mc *MessageHandler) MessagesFresh(g *gin.Context) {
+	g.JSON(http.StatusOK, dto.FreshDto{ // TODO implement fresh
+		Ok: true,
+	})
+	return
+}
+
+func (mc *MessageHandler) MessagesFilter(g *gin.Context) {
+	g.JSON(http.StatusOK, dto.FilterDto{ // TODO implement filter
+		Found: true,
+	})
+	return
+}
+
 func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {

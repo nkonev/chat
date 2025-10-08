@@ -41,3 +41,7 @@ type CommentViewEnrichedDto struct {
 	CommentViewDto
 	Owner *User `json:"owner"`
 }
+
+type CanCreateBlogDto struct {
+	CanCreateBlog bool `json:"canCreateBlog"`
+}

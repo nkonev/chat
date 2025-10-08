@@ -73,3 +73,11 @@ type SearchUsersResponseDto struct {
 	Users []*User `json:"users"`
 	Count int64   `json:"count"`
 }
+
+type FreshDto struct {
+	Ok bool `json:"ok"`
+}
+
+type FilterDto struct {
+	Found bool `json:"found"`
+}

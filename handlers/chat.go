@@ -436,6 +436,20 @@ func (ch *ChatHandler) GetChat(g *gin.Context) {
 	g.JSON(http.StatusOK, chat)
 }
 
+func (ch *ChatHandler) ChatsFresh(g *gin.Context) {
+	g.JSON(http.StatusOK, dto.FreshDto{ // TODO implement fresh
+		Ok: true,
+	})
+	return
+}
+
+func (ch *ChatHandler) ChatsFilter(g *gin.Context) {
+	g.JSON(http.StatusOK, dto.FilterDto{ // TODO implement filter
+		Found: true,
+	})
+	return
+}
+
 func (ch *ChatHandler) CheckAccess(g *gin.Context) {
 	m := map[string]string{}
 	err := g.BindQuery(&m)

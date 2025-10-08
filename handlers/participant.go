@@ -179,6 +179,13 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
+func (ch *ParticipantHandler) ParticipantsFilter(g *gin.Context) {
+	g.JSON(http.StatusOK, dto.FilterDto{ // TODO implement filter
+		Found: true,
+	})
+	return
+}
+
 func (ch *ParticipantHandler) SearchParticipants(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 

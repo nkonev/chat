@@ -100,3 +100,7 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 	// TODO wrap with a dto
 	g.JSON(http.StatusOK, comments)
 }
+
+func (ch *BlogHandler) CanCreateBlog(g *gin.Context) {
+	g.JSON(http.StatusOK, dto.CanCreateBlogDto{}) // TODO implement
+}

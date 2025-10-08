@@ -48,6 +48,8 @@ func CreateHttpRouter(
 	ginRouter.PUT("/api/chat/:id/pin", chatHandler.PinChat)
 	ginRouter.GET("/api/chat/:id", chatHandler.GetChat)
 	ginRouter.GET("/api/chat/search", chatHandler.SearchChats)
+	ginRouter.POST("/api/chat/fresh", chatHandler.ChatsFresh)
+	ginRouter.POST("/api/chat/filter", chatHandler.ChatsFilter)
 
 	ginRouter.PUT("/api/chat/:id/notification", chatHandler.PutUserChatNotificationSettings)
 	ginRouter.GET("/api/chat/:id/notification", chatHandler.GetUserChatNotificationSettings)
@@ -57,6 +59,7 @@ func CreateHttpRouter(
 	ginRouter.DELETE("/api/chat/:id/participant", participantHandler.DeleteParticipant)
 	ginRouter.GET("/api/chat/:id/participant/search", participantHandler.SearchParticipants)
 	ginRouter.PUT("/api/chat/:id/participant/:participantId", participantHandler.ChangeParticipant)
+	ginRouter.POST("/api/chat/:id/participant/filter", participantHandler.ParticipantsFilter)
 
 	ginRouter.POST("/api/chat/:id/message", messageHandler.CreateMessage)
 	ginRouter.PUT("/api/chat/:id/message", messageHandler.EditMessage)
@@ -67,6 +70,9 @@ func CreateHttpRouter(
 	ginRouter.GET("/api/chat/:id/message/search", messageHandler.SearchMessages)
 	ginRouter.PUT("/api/chat/:id/message/:messageId/blog-post", messageHandler.MakeBlogPost)
 	ginRouter.PUT("/api/chat/:id/message/:messageId/reaction", messageHandler.ReactionMessage)
+	ginRouter.GET("/api/chat/:id/message/pin/promoted", messageHandler.PinPromoted)
+	ginRouter.POST("/api/chat/:id/message/fresh", messageHandler.MessagesFresh)
+	ginRouter.POST("/api/chat/:id/message/filter", messageHandler.MessagesFilter)
 
 	ginRouter.PUT("/api/chat/:id/typing", messageHandler.TypeMessage)
 	ginRouter.PUT("/api/chat/:id/broadcast", messageHandler.BroadcastMessage)
@@ -74,6 +80,7 @@ func CreateHttpRouter(
 	ginRouter.GET("/api/blog/search", blogHandler.SearchBlogs)
 	ginRouter.GET("/api/blog/:id", blogHandler.GetBlog)
 	ginRouter.GET("/api/blog/:id/comment/search", blogHandler.SearchComments)
+	ginRouter.GET("/api/chat/can-create-blog", blogHandler.CanCreateBlog)
 
 	ginRouter.GET("/internal/health", func(g *gin.Context) {
 		g.Status(http.StatusOK)
