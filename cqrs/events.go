@@ -145,6 +145,12 @@ const (
 	ParticipantsActionRefresh = iota + 1
 )
 
+type ChatAction int16
+
+const (
+	ChatActionRefresh = iota + 1
+)
+
 type ReadMessagesAction int16
 
 const (
@@ -161,6 +167,7 @@ type ChatViewRefreshed struct {
 	LastMessageAction          LastMessageAction    `json:"lastMessageAction"`
 	ParticipantsAction         ParticipantsAction   `json:"participantsAction"`
 	IncreaseOn                 int                  `json:"increaseOn"`
+	ChatAction                 ChatAction           `json:"chatAction"`
 }
 
 type MessageReaded struct {

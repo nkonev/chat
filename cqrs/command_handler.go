@@ -373,21 +373,21 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		}
 	}
 
-	if len(copyCommand.ParticipantIdsToAdd) > 0 {
+	ui := &ChatViewRefreshed{
+		AdditionalData: copyCommand.AdditionalData,
 		// excluding => s.ParticipantIds is an optimization in order not to re-refresh views for the recently added
-		ui := &ChatViewRefreshed{
-			AdditionalData:             copyCommand.AdditionalData,
-			AllParticipantIdsExcepting: copyCommand.ParticipantIdsToAdd,
-			ChatId:                     copyCommand.ChatId,
-			ParticipantsAction:         ParticipantsActionRefresh,
-		}
+		AllParticipantIdsExcepting: copyCommand.ParticipantIdsToAdd,
+		ChatId:                     copyCommand.ChatId,
+		ChatAction:                 ChatActionRefresh,
+	}
 
-		errInner := eventBus.Publish(ctx, ui)
-		if errInner != nil {
-			return errInner
-		}
-		return nil
+	if len(copyCommand.ParticipantIdsToAdd) > 0 {
+		ui.ParticipantsAction = ParticipantsActionRefresh
+	}
 
+	errInner := eventBus.Publish(ctx, ui)
+	if errInner != nil {
+		return errInner
 	}
 
 	return nil
