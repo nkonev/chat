@@ -12,6 +12,7 @@ import (
 	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -489,6 +490,44 @@ func (ch *ChatHandler) IsAdmin(g *gin.Context) {
 		g.Status(http.StatusUnauthorized)
 		return
 	}
+}
+
+func (ch *ChatHandler) IsExists(g *gin.Context) {
+	chatIdsStr := g.Query("chatId")
+	chatIds := []int64{}
+	chatIdsStrs := strings.Split(chatIdsStr, ",")
+	for _, paramString := range chatIdsStrs {
+		param, err := utils.ParseInt64(paramString)
+		if err != nil {
+			ch.lgr.ErrorContext(g.Request.Context(), "Error getting chatId slice", "err", err)
+			g.Status(http.StatusInternalServerError)
+			return
+		}
+		chatIds = append(chatIds, param)
+	}
+
+	responseList := make([]dto.ChatExists, 0)
+	if len(chatIds) == 0 {
+		g.JSON(http.StatusOK, responseList)
+		return
+	}
+
+	existsFromDb, err := ch.commonProjection.GetExistingChatIds(g.Request.Context(), ch.dbWrapper, chatIds)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting chatId slice", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	for _, ce := range chatIds {
+		responseList = append(responseList, dto.ChatExists{
+			ChatId: ce,
+			Exists: utils.Contains(existsFromDb, ce),
+		})
+	}
+
+	g.JSON(http.StatusOK, responseList)
+	return
 }
 
 func (ch *ChatHandler) convertChatId(pinned *bool, lastUpdateDateTime *time.Time, id *int64) *dto.ChatId {

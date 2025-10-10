@@ -88,6 +88,7 @@ func CreateHttpRouter(
 
 	ginRouter.GET("/internal/access", chatHandler.CheckAccess)
 	ginRouter.GET("/internal/is-admin", chatHandler.IsAdmin)
+	ginRouter.GET("/internal/does-chats-exist", chatHandler.IsExists)
 
 	return ginRouter
 }

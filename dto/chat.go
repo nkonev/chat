@@ -82,3 +82,8 @@ type ChatUserViewBasic struct {
 	UpdateDateTime time.Time `db:"update_date_time"`
 	UnreadMessages int64     `db:"unread_messages"`
 }
+
+type ChatExists struct {
+	Exists bool  `json:"exists"`
+	ChatId int64 `json:"chatId"`
+}

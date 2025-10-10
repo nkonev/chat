@@ -930,3 +930,15 @@ func (m *CommonProjection) GetChatNotificationSettings(ctx context.Context, beha
 
 	return &value, err
 }
+
+func (m *CommonProjection) GetExistingChatIds(ctx context.Context, co db.CommonOperations, chatIds []int64) ([]int64, error) {
+	list := []int64{}
+	err := sqlscan.Select(ctx, co, &list, `
+	select id from chat_common
+	where id = any($1)
+	`, chatIds)
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
