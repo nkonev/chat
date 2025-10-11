@@ -26,7 +26,7 @@ type MessageHandler struct {
 	policy              *sanitizer.SanitizerPolicy
 	cfg                 *config.AppConfig
 	enrichingProjection *cqrs.EnrichingProjection
-	messageService      *services.AsyncMessageService
+	asyncMessageService *services.AsyncMessageService
 }
 
 func NewMessageHandler(
@@ -47,7 +47,7 @@ func NewMessageHandler(
 		policy:              policy,
 		cfg:                 cfg,
 		enrichingProjection: enrichingProjection,
-		messageService:      messageService,
+		asyncMessageService: messageService,
 	}
 }
 
@@ -414,7 +414,7 @@ func (mc *MessageHandler) TypeMessage(g *gin.Context) {
 		return
 	}
 
-	mc.messageService.TypeMessage(g.Request.Context(), chatId, userId, userLogin)
+	mc.asyncMessageService.TypeMessage(g.Request.Context(), chatId, userId, userLogin)
 
 	g.Status(http.StatusOK)
 	return
@@ -464,7 +464,7 @@ func (mc *MessageHandler) BroadcastMessage(g *gin.Context) {
 		return
 	}
 
-	mc.messageService.BroadcastMessage(g.Request.Context(), d.Text, chatId, userId, userLogin)
+	mc.asyncMessageService.BroadcastMessage(g.Request.Context(), d.Text, chatId, userId, userLogin)
 
 	g.Status(http.StatusOK)
 	return
