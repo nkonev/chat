@@ -14,26 +14,26 @@ import (
 )
 
 type EventHandler struct {
-	commonProjection       *CommonProjection
-	enrichingProjection    *EnrichingProjection
-	rabbitmqEventPublisher *producer.RabbitEventsPublisher
-	db                     *db.DB
-	lgr                    *logger.LoggerWrapper
-	tr                     trace.Tracer
-	aaaRestClient          client.AaaRestClient
+	commonProjection             *CommonProjection
+	enrichingProjection          *EnrichingProjection
+	rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher
+	db                           *db.DB
+	lgr                          *logger.LoggerWrapper
+	tr                           trace.Tracer
+	aaaRestClient                client.AaaRestClient
 }
 
-func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *EnrichingProjection, rabbitmqEventPublisher *producer.RabbitEventsPublisher, db *db.DB, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient) *EventHandler {
+func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *EnrichingProjection, rabbitmqEventPublisher *producer.RabbitOutputEventsPublisher, db *db.DB, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient) *EventHandler {
 	tr := otel.Tracer("event")
 
 	return &EventHandler{
-		commonProjection:       commonProjection,
-		enrichingProjection:    enrichingProjection,
-		rabbitmqEventPublisher: rabbitmqEventPublisher,
-		db:                     db,
-		lgr:                    lgr,
-		tr:                     tr,
-		aaaRestClient:          aaaRestClient,
+		commonProjection:             commonProjection,
+		enrichingProjection:          enrichingProjection,
+		rabbitmqOutputEventPublisher: rabbitmqEventPublisher,
+		db:                           db,
+		lgr:                          lgr,
+		tr:                           tr,
+		aaaRestClient:                aaaRestClient,
 	}
 }
 
@@ -66,7 +66,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	}
 
 	for _, cv := range chatViews {
-		err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 			UserId:           cv.UserId,
 			EventType:        eventTypeChatCreated,
 			ChatNotification: &cv,
@@ -75,7 +75,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 		}
 
-		err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 			UserId:    cv.UserId,
 			EventType: eventTypeUnreadMessagesChanged,
 			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
@@ -95,7 +95,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	err = m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		// for every participant of chat we send an info about the newly added participants
 		for _, participantId := range participantIdsPortion {
-			errInn := m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:    eventTypeParticipantAdded,
 				UserId:       participantId,
 				ChatId:       event.ChatId,
@@ -151,7 +151,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 	err := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, chatId, nil, func(participantIdsPortion []int64) error {
 		// for every participant of chat we send an info about the newly added participants
 		for _, participantId := range participantIdsPortion {
-			errInn := m.rabbitmqEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.ChatEvent{
+			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:    eventTypeParticipantDeleted,
 				UserId:       participantId,
 				ChatId:       chatId,
@@ -181,7 +181,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 	}
 
 	for _, participantId := range userIds {
-		err := m.rabbitmqEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		err := m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
 			UserId:         participantId,
 			EventType:      eventType,
 			ChatDeletedDto: &dto.ChatDeletedDto{Id: chatId},
@@ -190,7 +190,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 		}
 
-		err = m.rabbitmqEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
 			UserId:    participantId,
 			EventType: eventTypeUnreadMessagesChanged,
 			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
@@ -225,7 +225,7 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		for _, participantId := range participantIdsPortion {
-			errInn := m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:    eventTypeParticipantChanged,
 				UserId:       participantId,
 				ChatId:       event.ChatId,
@@ -276,7 +276,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 		}
 
 		for _, cv := range chatViews {
-			err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 				UserId:           cv.UserId,
 				EventType:        eventType,
 				ChatNotification: &cv,
@@ -286,7 +286,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 			}
 
 			if event.UnreadMessagesAction != 0 {
-				err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+				err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 					UserId:    cv.UserId,
 					EventType: eventTypeUnreadMessagesChanged,
 					HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
@@ -364,7 +364,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 		}
 
 		for _, messageView := range messageViews {
-			errInn = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:           eventType,
 				UserId:              messageView.UserId,
 				ChatId:              event.ChatId,
@@ -404,7 +404,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		}
 
 		for _, messageView := range messageViews {
-			errInn = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:           eventType,
 				UserId:              messageView.UserId,
 				ChatId:              event.ChatId,
@@ -440,7 +440,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		for _, participantId := range participantIdsPortion {
-			errInn := m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType: eventType,
 				UserId:    participantId,
 				ChatId:    event.ChatId,
@@ -479,7 +479,7 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 		}
 
 		for _, cvb := range updatedChatsPortion {
-			err := m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 				UserId:    event.AdditionalData.BehalfUserId,
 				EventType: eventTypeChatUnreadMessagesChanged,
 				UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
@@ -509,7 +509,7 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during getting chat UserViewBasic", "err", err)
 		} else {
-			err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 				UserId:    event.AdditionalData.BehalfUserId,
 				EventType: eventTypeChatUnreadMessagesChanged,
 				UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
@@ -528,7 +528,7 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 		return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
 	}
 
-	err = m.rabbitmqEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 		UserId:    event.AdditionalData.BehalfUserId,
 		EventType: eventTypeUnreadMessagesChanged,
 		HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{

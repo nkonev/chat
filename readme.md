@@ -1,4 +1,4 @@
-# Example Golang CQRS chat application
+# chat application
 
 This application is using [Watermill CQRS](http://watermill.io/docs/cqrs) component.
 

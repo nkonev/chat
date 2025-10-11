@@ -16,8 +16,14 @@ func NewTypeRegistryInstance() *TypeRegistryInstance {
 		typeRegistry: typeRegistry,
 	}
 
+	// output events
 	res.AddToRegistryIfNeed(dto.GlobalUserEvent{})
 	res.AddToRegistryIfNeed(dto.ChatEvent{})
+
+	// internal events
+	res.AddToRegistryIfNeed(dto.PublishBroadcastMessage{})
+	res.AddToRegistryIfNeed(dto.PublishUserTyping{})
+
 	return res
 }
 

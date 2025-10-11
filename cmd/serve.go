@@ -7,6 +7,7 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/handlers"
 	"go-cqrs-chat-example/kafka"
+	"go-cqrs-chat-example/listener"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
 	"go-cqrs-chat-example/producer"
@@ -68,13 +69,17 @@ func RunServe(args []string) {
 			sanitizer.CreateStripTags,
 			services.NewAuthorizationService,
 			services.NewMessageService,
-			producer.NewRabbitEventsPublisher,
+			services.NewAsyncMessageService,
+			producer.NewRabbitOutputEventsPublisher,
+			producer.NewRabbitInternalEventsPublisher,
 			rabbitmq.CreateRabbitMqConnection,
 			cqrs.NewEventHandler,
+			listener.CreateInternalEventsListener,
 			type_registry.NewTypeRegistryInstance,
 		),
 		fx.Invoke(
 			db.RunMigrations,
+			listener.CreateAndListenInternalEventsChannel,
 			kafka.RunCreateTopic,
 			cqrs.RunCqrsRouter,
 			kafka.WaitForAllEventsProcessed,

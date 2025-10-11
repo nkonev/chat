@@ -27,7 +27,7 @@ func (p *TestEventAccumulator) OnEvent(ctx context.Context, e any) {
 	p.eventsBuffer = append(p.eventsBuffer, e)
 }
 
-func NewTetsEventAccumulator(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestEventAccumulator {
+func NewTestEventAccumulator(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestEventAccumulator {
 	return &TestEventAccumulator{
 		cfg:          cfg,
 		lgr:          lgr,
@@ -139,7 +139,7 @@ func CreateTestEventListener(service *TestEventAccumulator, lgr *logger.LoggerWr
 		lgr.DebugContext(ctx, "Received", "data", strData, "type", aType)
 
 		if !typeRegistry.HasType(aType) {
-			lgr.ErrorContext(ctx, "Unexpected type in rabbit notifications", "type", aType)
+			lgr.ErrorContext(ctx, "Unexpected type in rabbit test_listener", "type", aType)
 			return nil
 		}
 

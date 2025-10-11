@@ -14,6 +14,7 @@ const ChatExchange = producer.EventsFanoutExchange
 const testQueueName = "chat-event-test"
 
 type ChatChannel struct{ *rabbitmq.Channel }
+type InternalEventChannel struct{ *rabbitmq.Channel }
 
 func create(lgr *logger.LoggerWrapper, name string, consumeCh *rabbitmq.Channel) (*amqp.Queue, error) {
 	var err error
@@ -105,6 +106,48 @@ func CreateAndListenTestEventChannel(lgr *logger.LoggerWrapper, connection *rabb
 	}
 
 	return &ChatChannel{ch}, nil
+}
+
+func CreateAndListenInternalEventsChannel(
+	lgr *logger.LoggerWrapper,
+	connection *rabbitmq.Connection,
+	onMessage InternalEventsListener,
+	sh fx.Shutdowner,
+	lc fx.Lifecycle,
+) (*InternalEventChannel, error) {
+	var internalQueueName = "chat-internal"
+
+	ch, err := myRabbit.CreateRabbitMqChannelWithCallback(
+		lgr,
+		connection,
+		func(channel *rabbitmq.Channel) error {
+			lc.Append(fx.Hook{
+				OnStop: func(ctx context.Context) error {
+					lgr.Info("Stopping queue listening", "queue", internalQueueName)
+					return channel.Close()
+				},
+			})
+
+			err := channel.ExchangeDeclare(producer.ChatInternalExchange, "direct", true, false, false, false, nil)
+			if err != nil {
+				return err
+			}
+
+			aQueue, err := createAndBind(lgr, internalQueueName, "", producer.ChatInternalExchange, channel)
+			if err != nil {
+				return err
+			}
+
+			listen(lgr, channel, aQueue, onMessage, sh)
+			return nil
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &InternalEventChannel{ch}, nil
 }
 
 func listen(

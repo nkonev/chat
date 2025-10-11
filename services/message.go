@@ -15,14 +15,55 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+type AsyncMessageService struct {
+	lgr                          *logger.LoggerWrapper
+	tr                           trace.Tracer
+	rabbitmqOutputEventPublisher *producer.RabbitInternalEventsPublisher
+}
+
+func NewAsyncMessageService(
+	lgr *logger.LoggerWrapper,
+	rabbitmqEventPublisher *producer.RabbitInternalEventsPublisher,
+) *AsyncMessageService {
+	tr := otel.Tracer("event")
+
+	return &AsyncMessageService{
+		lgr:                          lgr,
+		tr:                           tr,
+		rabbitmqOutputEventPublisher: rabbitmqEventPublisher,
+	}
+}
+func (p *AsyncMessageService) BroadcastMessage(ctx context.Context, messageText string, chatId, userId int64, userLogin string) {
+	err := p.rabbitmqOutputEventPublisher.Publish(ctx, dto.PublishBroadcastMessage{
+		MessageText: messageText,
+		ChatId:      chatId,
+		UserId:      userId,
+		UserLogin:   userLogin,
+	})
+	if err != nil {
+		p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+	}
+}
+
+func (p *AsyncMessageService) TypeMessage(ctx context.Context, chatId, userId int64, userLogin string) {
+	err := p.rabbitmqOutputEventPublisher.Publish(ctx, dto.PublishUserTyping{
+		ChatId:    chatId,
+		UserId:    userId,
+		UserLogin: userLogin,
+	})
+	if err != nil {
+		p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+	}
+}
+
 type MessageService struct {
-	lgr                    *logger.LoggerWrapper
-	dbWrapper              *db.DB
-	commonProjection       *cqrs.CommonProjection
-	stripAllTags           *sanitizer.StripTagsPolicy
-	cfg                    *config.AppConfig
-	tr                     trace.Tracer
-	rabbitmqEventPublisher *producer.RabbitEventsPublisher
+	lgr                          *logger.LoggerWrapper
+	dbWrapper                    *db.DB
+	commonProjection             *cqrs.CommonProjection
+	stripAllTags                 *sanitizer.StripTagsPolicy
+	cfg                          *config.AppConfig
+	tr                           trace.Tracer
+	rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher
 }
 
 func NewMessageService(
@@ -31,22 +72,22 @@ func NewMessageService(
 	commonProjection *cqrs.CommonProjection,
 	stripAllTags *sanitizer.StripTagsPolicy,
 	cfg *config.AppConfig,
-	rabbitmqEventPublisher *producer.RabbitEventsPublisher,
+	rabbitmqEventPublisher *producer.RabbitOutputEventsPublisher,
 ) *MessageService {
 	tr := otel.Tracer("event")
 
 	return &MessageService{
-		lgr:                    lgr,
-		dbWrapper:              dbWrapper,
-		commonProjection:       commonProjection,
-		stripAllTags:           stripAllTags,
-		cfg:                    cfg,
-		tr:                     tr,
-		rabbitmqEventPublisher: rabbitmqEventPublisher,
+		lgr:                          lgr,
+		dbWrapper:                    dbWrapper,
+		commonProjection:             commonProjection,
+		stripAllTags:                 stripAllTags,
+		cfg:                          cfg,
+		tr:                           tr,
+		rabbitmqOutputEventPublisher: rabbitmqEventPublisher,
 	}
 }
 
-func (p *MessageService) BroadcastMessage(ctx context.Context, correlationId *string, messageText string, chatId, userId int64, userLogin string) {
+func (p *MessageService) BroadcastMessage(ctx context.Context, messageText string, chatId, userId int64, userLogin string) {
 	preview := createMessagePreview(p.stripAllTags, p.cfg.Message.BroadcastPreviewMaxTextSize, messageText, userLogin)
 	if preview == loginPrefix(userLogin) {
 		preview = ""
@@ -62,9 +103,9 @@ func (p *MessageService) BroadcastMessage(ctx context.Context, correlationId *st
 		Text:   preview,
 	}
 
-	err := p.commonProjection.IterateOverChatParticipantIds(ctx, p.dbWrapper, chatId, []int64{userId}, func(participantIds []int64) error {
+	err := p.commonProjection.IterateOverChatParticipantIds(ctx, p.dbWrapper, chatId, []int64{}, func(participantIds []int64) error {
 		for _, participantId := range participantIds {
-			err := p.rabbitmqEventPublisher.Publish(ctx, correlationId, dto.ChatEvent{
+			err := p.rabbitmqOutputEventPublisher.Publish(ctx, nil, dto.ChatEvent{
 				EventType:                    eventType,
 				MessageBroadcastNotification: &ut,
 				UserId:                       participantId,
@@ -82,7 +123,7 @@ func (p *MessageService) BroadcastMessage(ctx context.Context, correlationId *st
 	}
 }
 
-func (p *MessageService) TypeMessage(ctx context.Context, correlationId *string, chatId, userId int64, userLogin string) {
+func (p *MessageService) TypeMessage(ctx context.Context, chatId, userId int64, userLogin string) {
 	eventType := dto.EventTypeMessageType
 	ctx, messageSpan := p.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
 	defer messageSpan.End()
@@ -95,7 +136,7 @@ func (p *MessageService) TypeMessage(ctx context.Context, correlationId *string,
 
 	err := p.commonProjection.IterateOverChatParticipantIds(ctx, p.dbWrapper, chatId, []int64{userId}, func(participantIds []int64) error {
 		for _, participantId := range participantIds {
-			err := p.rabbitmqEventPublisher.Publish(ctx, correlationId, dto.GlobalUserEvent{
+			err := p.rabbitmqOutputEventPublisher.Publish(ctx, nil, dto.GlobalUserEvent{
 				UserId:                 participantId,
 				EventType:              eventType,
 				UserTypingNotification: &ut,
