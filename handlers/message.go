@@ -37,7 +37,7 @@ func NewMessageHandler(
 	policy *sanitizer.SanitizerPolicy,
 	cfg *config.AppConfig,
 	enrichingProjection *cqrs.EnrichingProjection,
-	messageService *services.AsyncMessageService,
+	messageService *services.AsyncMessageService, // we use async message service in order not to perform potentially heavyweight iterations in user-facing handles
 ) *MessageHandler {
 	return &MessageHandler{
 		lgr:                 lgr,
