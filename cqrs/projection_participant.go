@@ -207,7 +207,7 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 	const reverse = true
 
 	if len(searchString) > 0 {
-		usersWithAdmin, count, err := m.searchUsersContaining(ctx, m.cp.db, searchString, chatId, size, offset, reverse)
+		usersWithAdmin, count, err := m.SearchUsersContaining(ctx, m.cp.db, searchString, chatId, size, offset, reverse)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
 			return nil, 0, err
@@ -255,7 +255,7 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 	}
 }
 
-func (m *EnrichingProjection) searchUsersContaining(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, pageSize int32, requestOffset int64, reverse bool) ([]*dto.UserWithAdmin, int64, error) {
+func (m *EnrichingProjection) SearchUsersContaining(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, pageSize int32, requestOffset int64, reverse bool) ([]*dto.UserWithAdmin, int64, error) {
 	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
 
 	var resUsers = make([]*dto.UserWithAdmin, 0)
@@ -418,6 +418,15 @@ func (m *CommonProjection) IterateOverParticipantsChatIds(ctx context.Context, c
 		}
 	}
 	return lastError
+}
+
+func (m *CommonProjection) GetParticipantsCount(ctx context.Context, co db.CommonOperations, chatId int64) (int64, error) {
+	var count int64
+	err := sqlscan.Get(ctx, co, &count, "SELECT count(*) FROM chat_participant WHERE chat_id = $1", chatId)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (m *CommonProjection) IsChatAdmin(ctx context.Context, co db.CommonOperations, userId, chatId int64) (bool, error) {

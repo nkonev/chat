@@ -265,6 +265,56 @@ func (ch *ParticipantHandler) SearchForUsersToAdd(g *gin.Context) {
 	return
 }
 
+func (ch *ParticipantHandler) CountParticipants(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	_, err = getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	bindTo := new(dto.CountRequestDto)
+	err = g.Bind(bindTo)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding CountRequestDto", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+	userSearchString := bindTo.SearchString
+
+	totalFoundUserCount := int64(0)
+
+	if userSearchString != "" {
+		_, aCount, err := ch.enrichingProjection.SearchUsersContaining(g.Request.Context(), ch.dbWrapper, userSearchString, chatId, utils.DefaultSize, utils.DefaultOffset, true)
+		if err != nil {
+			ch.lgr.ErrorContext(g.Request.Context(), "Error searchUsersContaining", "err", err)
+			g.Status(http.StatusInternalServerError)
+			return
+		}
+		totalFoundUserCount = aCount
+	} else {
+		count, err := ch.commonProjection.GetParticipantsCount(g.Request.Context(), ch.dbWrapper, chatId)
+		if err != nil {
+			ch.lgr.ErrorContext(g.Request.Context(), "Error GetParticipantsCount", "err", err)
+			g.Status(http.StatusInternalServerError)
+			return
+		}
+		totalFoundUserCount = count
+	}
+
+	g.JSON(http.StatusOK, &utils.H{"count": totalFoundUserCount})
+	return
+}
+
 // returns should exit
 func translateParticipantError(g *gin.Context, err error) bool {
 	if err == nil {

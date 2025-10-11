@@ -39,3 +39,7 @@ type ParticipantsWithAdminWrapper struct {
 	Data  []*UserWithAdmin `json:"items"`
 	Count int64            `json:"count"` // for paginating purposes
 }
+
+type CountRequestDto struct {
+	SearchString string `json:"searchString"`
+}
