@@ -325,7 +325,7 @@ func (m *EventHandler) buildUserWithAdminBasedOnUserIds(ctx context.Context, use
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
 	usersMap := utils.ToMap(users)
-	areAdmins, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, chatId)
+	areAdmins, err := m.commonProjection.GetAreAdminsOfUserIds(ctx, m.db, userIds, chatId)
 	if err != nil {
 		return nil, err
 	}
@@ -474,7 +474,7 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 
 	err := m.commonProjection.OnUnreadMessageReaded(ctx, event, func(updatedChatsPortion []dto.ChatUserViewBasic) {
 		if event.ReadMessagesAction != ReadMessagesActionAllChats {
-			m.lgr.ErrorContext(ctx, "wrong invariant, an logic error in commonProjection.OnUnreadMessageReaded")
+			m.lgr.ErrorContext(ctx, "wrong invariant: a logical error in commonProjection.OnUnreadMessageReaded")
 			return
 		}
 

@@ -427,7 +427,7 @@ func (ch *ChatHandler) GetChat(g *gin.Context) {
 		g.Status(http.StatusNoContent)
 		return
 	} else if len(chats) > 1 {
-		ch.lgr.ErrorContext(g.Request.Context(), "Wrong invariant - More than 1 chats got")
+		ch.lgr.ErrorContext(g.Request.Context(), "Wrong invariant: More than 1 chats got")
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -549,6 +549,7 @@ func translateChatError(g *gin.Context, err error) bool {
 	var validationError *cqrs.ValidationError
 	var unauthError *cqrs.UnauthorizedError
 	var chatStillNotExistsError *cqrs.ChatStillNotExistsError
+	var participantsError *cqrs.ParticipantsError
 	if errors.As(err, &validationError) {
 		g.JSON(http.StatusBadRequest, &dto.ErrorMessageDto{validationError.Error()})
 		return true
@@ -557,6 +558,9 @@ func translateChatError(g *gin.Context, err error) bool {
 		return true
 	} else if errors.As(err, &chatStillNotExistsError) {
 		g.Status(http.StatusTeapot)
+		return true
+	} else if errors.As(err, &participantsError) {
+		g.Status(http.StatusBadRequest)
 		return true
 	}
 	return false

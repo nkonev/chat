@@ -412,6 +412,10 @@ func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOper
 	return chatExists, nil
 }
 
+func (m *CommonProjection) GetAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64) (map[int64]bool, error) {
+	return m.getAreAdminsOfUserIds(ctx, co, participantIds, chatId)
+}
+
 // returns [userId]isAdmin
 func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64) (map[int64]bool, error) {
 	res := map[int64]bool{}
@@ -471,11 +475,11 @@ func (m *CommonProjection) areAdminsCommon(ctx context.Context, co db.CommonOper
 // or one chatId != nil
 func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfParticipantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, chatId *int64) ([]dto.ChatViewEnrichedDto, map[int64]*dto.User, error) {
 	if len(behalfParticipantIds) == 0 {
-		return nil, nil, errors.New("Wrong invariant")
+		return nil, nil, errors.New("Wrong invariant: len(behalfParticipantIds) == 0")
 	}
 	multipleBehalfUserId := len(behalfParticipantIds) > 1
 	if multipleBehalfUserId && chatId == nil {
-		return nil, nil, errors.New("Wrong invariant")
+		return nil, nil, errors.New("Wrong invariant: multipleBehalfUserId is true and null chatId")
 	}
 
 	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)

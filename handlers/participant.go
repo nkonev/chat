@@ -103,18 +103,16 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 		return
 	}
 
-	ccd := new(dto.ParticipantDeleteDto)
-
-	err = g.Bind(ccd)
+	interestingUserId, err := utils.ParseInt64(g.Param(dto.ParticipantIdParam))
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding ParticipantDeleteDto", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding participantId", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	cc := cqrs.ParticipantDelete{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
-		ParticipantIds: ccd.ParticipantIds,
+		ParticipantIds: []int64{interestingUserId},
 		ChatId:         chatId,
 	}
 
@@ -225,6 +223,48 @@ func (ch *ParticipantHandler) SearchParticipants(g *gin.Context) {
 	})
 }
 
+func (ch *ParticipantHandler) SearchForUsersToAdd(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	areAdmins, err := ch.commonProjection.GetAreAdminsOfUserIds(g.Request.Context(), ch.dbWrapper, []int64{userId}, chatId)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error checking is admin", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+	admin := areAdmins[userId]
+	if !admin {
+		g.JSON(http.StatusUnauthorized, &utils.H{"message": "You have no access to this chat"})
+		return
+	}
+
+	searchString := g.Query(dto.SearchStringParam)
+
+	users, err := ch.enrichingProjection.SearchUsersNotContaining(g.Request.Context(), ch.dbWrapper, searchString, chatId, utils.DefaultSize)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing searching", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, users)
+	return
+}
+
 // returns should exit
 func translateParticipantError(g *gin.Context, err error) bool {
 	if err == nil {
@@ -232,11 +272,15 @@ func translateParticipantError(g *gin.Context, err error) bool {
 	}
 	var unauthError *cqrs.UnauthorizedError
 	var chatStillNotExistsError *cqrs.ChatStillNotExistsError
+	var participantsError *cqrs.ParticipantsError
 	if errors.As(err, &unauthError) {
 		g.JSON(http.StatusUnauthorized, &dto.ErrorMessageDto{unauthError.Error()})
 		return true
 	} else if errors.As(err, &chatStillNotExistsError) {
 		g.Status(http.StatusTeapot)
+		return true
+	} else if errors.As(err, &participantsError) {
+		g.Status(http.StatusBadRequest)
 		return true
 	}
 	return false

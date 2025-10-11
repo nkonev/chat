@@ -46,11 +46,7 @@ type MessageEditDto struct {
 }
 
 type ParticipantAddDto struct {
-	ParticipantIds []int64 `json:"participantIds"`
-}
-
-type ParticipantDeleteDto struct {
-	ParticipantIds []int64 `json:"participantIds"`
+	ParticipantIds []int64 `json:"addParticipantIds"`
 }
 
 type HasUnreadMessages struct {

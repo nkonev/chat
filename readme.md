@@ -58,10 +58,10 @@ curl -i -X PUT -H 'X-Auth-Userid: 1' -H 'Content-Type: application/json' --url '
 curl -i -X PUT -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message/2/read'
 
 # add participant into chat
-curl -i -X PUT -H 'X-Auth-Userid: 1' -H 'Content-Type: application/json' --url 'http://localhost:1235/api/chat/1/participant' -d '{"participantIds": [2, 3]}'
+curl -i -X PUT -H 'X-Auth-Userid: 1' -H 'Content-Type: application/json' --url 'http://localhost:1235/api/chat/1/participant' -d '{"addParticipantIds": [2, 3]}'
 
 # remove participant from chat
-curl -i -X DELETE -H 'X-Auth-Userid: 1' -H 'Content-Type: application/json' --url 'http://localhost:1235/api/chat/1/participant' -d '{"participantIds": [3]}'
+curl -i -X DELETE -H 'X-Auth-Userid: 1' -H 'Content-Type: application/json' --url 'http://localhost:1235/api/chat/1/participant/3'
 
 # show participants
 curl -Ss -X GET -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/participants' | jq

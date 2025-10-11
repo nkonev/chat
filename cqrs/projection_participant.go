@@ -184,6 +184,16 @@ func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *Part
 	})
 }
 
+func (m *CommonProjection) ParticipantsExistence(ctx context.Context, co db.CommonOperations, chatId int64, participantIds []int64) ([]int64, error) {
+	list := make([]int64, 0)
+
+	err := sqlscan.Select(ctx, co, &list, "SELECT user_id FROM chat_participant WHERE chat_id = $1 AND user_id = ANY ($2)", chatId, participantIds)
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behalfUserId int64, chatId int64, size int32, offset int64, searchString string) ([]*dto.UserWithAdmin, int64, error) {
 	participant, err := m.cp.IsParticipant(ctx, m.cp.db, behalfUserId, chatId)
 	if err != nil {
@@ -246,6 +256,8 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 }
 
 func (m *EnrichingProjection) searchUsersContaining(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, pageSize int32, requestOffset int64, reverse bool) ([]*dto.UserWithAdmin, int64, error) {
+	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
+
 	var resUsers = make([]*dto.UserWithAdmin, 0)
 	shouldContinue := true
 	processedItems := int64(0)
@@ -304,6 +316,47 @@ func (m *EnrichingProjection) searchUsersContaining(ctx context.Context, co db.C
 	}
 
 	return resUsers, totalCountInChat, nil
+}
+
+func (m *EnrichingProjection) SearchUsersNotContaining(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, pageSize int32) ([]*dto.User, error) {
+	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
+
+	var notFoundUsers []*dto.User = make([]*dto.User, 0)
+	shouldContinueSearch := true
+	for page := int64(0); shouldContinueSearch; page++ {
+		ignoredInAaa := false
+		usersPortion, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, ignoredInAaa, []int64{}, page, pageSize)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error get resUsers from aaa", "err", err)
+			break
+		}
+		if int32(len(usersPortion)) < pageSize {
+			shouldContinueSearch = false
+		}
+
+		var portionUserIds = []int64{}
+		for _, u := range usersPortion {
+			portionUserIds = append(portionUserIds, u.Id)
+		}
+
+		foundParticipantIds, err := m.cp.ParticipantsExistence(ctx, co, chatId, portionUserIds)
+		if err != nil {
+			m.lgr.WarnContext(ctx, "Got error during getting ParticipantsNonExistence", "err", err)
+			break
+		}
+		for _, u := range usersPortion {
+			if int32(len(notFoundUsers)) < pageSize {
+				if !utils.Contains(foundParticipantIds, u.Id) {
+					notFoundUsers = append(notFoundUsers, u)
+				}
+			} else {
+				shouldContinueSearch = false // break outer
+				break                        // inner
+			}
+		}
+	}
+
+	return notFoundUsers, nil
 }
 
 // you cannot use it in command handler

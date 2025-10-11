@@ -1854,7 +1854,7 @@ func TestDeleteParticipant(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user2HasUnreadMessages)
 
-		err = testRestClient.DeleteChatParticipants(ctx, user1, chat1Id, []int64{user2})
+		err = testRestClient.DeleteChatParticipants(ctx, user1, chat1Id, user2)
 		require.NoError(t, err, "error in removing chat participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
@@ -2079,7 +2079,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 
 		testEventsAccumulator.Clean()
 
-		err = testRestClient.DeleteChatParticipants(ctx, user1, chat1Id, []int64{user2})
+		err = testRestClient.DeleteChatParticipants(ctx, user1, chat1Id, user2)
 		require.NoError(t, err, "error in removing chat participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 

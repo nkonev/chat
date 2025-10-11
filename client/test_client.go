@@ -433,11 +433,8 @@ func (rc *TestRestClient) AddChatParticipants(ctx context.Context, behalfUserId 
 	return queryNoResponse[dto.ParticipantAddDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/participant", "participants.Add", &req, nil)
 }
 
-func (rc *TestRestClient) DeleteChatParticipants(ctx context.Context, behalfUserId int64, chatId int64, participantIds []int64) error {
-	req := dto.ParticipantDeleteDto{
-		ParticipantIds: participantIds,
-	}
-	return queryNoResponse[dto.ParticipantDeleteDto](ctx, &rc.restClient, behalfUserId, http.MethodDelete, "/api/chat/"+utils.ToString(chatId)+"/participant", "participants.Delete", &req, nil)
+func (rc *TestRestClient) DeleteChatParticipants(ctx context.Context, behalfUserId int64, chatId int64, participantId int64) error {
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodDelete, "/api/chat/"+utils.ToString(chatId)+"/participant/"+utils.ToString(participantId), "participants.Delete", nil, nil)
 }
 
 func (rc *TestRestClient) ChangeChatParticipant(ctx context.Context, behalfUserId int64, chatId int64, participantId int64, newAdmin bool) error {

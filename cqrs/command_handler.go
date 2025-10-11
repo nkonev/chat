@@ -75,6 +75,18 @@ func NewMessageStillNotExistsError(info string) *MessageStillNotExistsError {
 	return &MessageStillNotExistsError{info: info}
 }
 
+type ParticipantsError struct {
+	info string
+}
+
+func (u *ParticipantsError) Error() string {
+	return u.info
+}
+
+func NewParticipantsError(info string) *ParticipantsError {
+	return &ParticipantsError{info: info}
+}
+
 type ChatCreate struct {
 	AdditionalData *AdditionalData
 	Title          string
@@ -293,6 +305,10 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		})
 	}
 
+	if len(pa.Participants) == 0 {
+		return dto.NoId, NewParticipantsError("Cannot add 0 participants")
+	}
+
 	err = eventBus.Publish(ctx, pa)
 	if err != nil {
 		return 0, err
@@ -365,6 +381,9 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 				ParticipantId: participantId,
 				ChatAdmin:     false,
 			})
+		}
+		if len(pa.Participants) == 0 {
+			return NewParticipantsError("Cannot add 0 participants")
 		}
 
 		err = eventBus.Publish(ctx, pa)
@@ -456,6 +475,10 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 			ChatAdmin:     false,
 		})
 	}
+	if len(pa.Participants) == 0 {
+		return NewParticipantsError("Cannot add 0 participants")
+	}
+
 	err = eventBus.Publish(ctx, pa)
 	if err != nil {
 		return err
