@@ -412,48 +412,6 @@ func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOper
 	return chatExists, nil
 }
 
-func (m *CommonProjection) GetAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64) (map[int64]bool, error) {
-	return m.getAreAdminsOfUserIds(ctx, co, participantIds, chatId)
-}
-
-// returns [userId]isAdmin
-func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64) (map[int64]bool, error) {
-	res := map[int64]bool{}
-
-	list, err := m.areAdminsCommon(ctx, co, participantIds, []int64{chatId})
-	if err != nil {
-		return res, err
-	}
-
-	for _, pa := range list {
-		res[pa.UserId] = pa.Admin
-	}
-
-	return res, nil
-}
-
-// returns [chatId]isAdmin
-func (m *CommonProjection) getAreAdminsOfChatIds(ctx context.Context, co db.CommonOperations, participantId int64, chatIds []int64) (map[int64]bool, error) {
-	res := map[int64]bool{}
-
-	list, err := m.areAdminsCommon(ctx, co, []int64{participantId}, chatIds)
-	if err != nil {
-		return res, err
-	}
-
-	for _, pa := range list {
-		res[pa.ChatId] = pa.Admin
-	}
-
-	return res, nil
-}
-
-type ParticipantAdmin struct {
-	UserId int64 `db:"user_id"`
-	ChatId int64 `db:"chat_id"`
-	Admin  bool  `db:"chat_admin"`
-}
-
 func (m *CommonProjection) areAdminsCommon(ctx context.Context, co db.CommonOperations, participantIds []int64, chatIds []int64) ([]ParticipantAdmin, error) {
 	list := []ParticipantAdmin{}
 	err := sqlscan.Select(ctx, co, &list, `

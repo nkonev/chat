@@ -870,3 +870,25 @@ func (m *CommonProjection) GetMessageBasic(ctx context.Context, co db.CommonOper
 	}
 	return &msg, nil
 }
+
+func (m *EnrichingProjection) MessageFilter(ctx context.Context, co db.CommonOperations, behalfUserId, chatId int64, searchString string, messageId int64) (bool, error) {
+	participant, err := m.cp.IsParticipant(ctx, co, behalfUserId, chatId)
+	if err != nil {
+		return false, err
+	}
+	if !participant {
+		return false, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", behalfUserId, chatId))
+	}
+
+	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
+
+	searchStringWithPercents := "%" + searchString + "%"
+
+	var found bool
+	err = sqlscan.Get(ctx, co, &found, "SELECT EXISTS (SELECT * FROM message m WHERE m.chat_id = $1 AND m.id = $2 AND strip_tags(m.content) ILIKE $3)", chatId, messageId, searchStringWithPercents)
+	if err != nil {
+		return false, err
+	}
+
+	return found, nil
+}

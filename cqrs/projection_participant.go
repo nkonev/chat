@@ -486,6 +486,48 @@ func (m *CommonProjection) IsParticipant(ctx context.Context, co db.CommonOperat
 	return participant, nil
 }
 
+func (m *CommonProjection) GetAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64) (map[int64]bool, error) {
+	return m.getAreAdminsOfUserIds(ctx, co, participantIds, chatId)
+}
+
+// returns [userId]isAdmin
+func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64) (map[int64]bool, error) {
+	res := map[int64]bool{}
+
+	list, err := m.areAdminsCommon(ctx, co, participantIds, []int64{chatId})
+	if err != nil {
+		return res, err
+	}
+
+	for _, pa := range list {
+		res[pa.UserId] = pa.Admin
+	}
+
+	return res, nil
+}
+
+// returns [chatId]isAdmin
+func (m *CommonProjection) getAreAdminsOfChatIds(ctx context.Context, co db.CommonOperations, participantId int64, chatIds []int64) (map[int64]bool, error) {
+	res := map[int64]bool{}
+
+	list, err := m.areAdminsCommon(ctx, co, []int64{participantId}, chatIds)
+	if err != nil {
+		return res, err
+	}
+
+	for _, pa := range list {
+		res[pa.ChatId] = pa.Admin
+	}
+
+	return res, nil
+}
+
+type ParticipantAdmin struct {
+	UserId int64 `db:"user_id"`
+	ChatId int64 `db:"chat_id"`
+	Admin  bool  `db:"chat_admin"`
+}
+
 type ParticipantWithAdmin struct {
 	ParticipantId int64 `json:"participantId" db:"user_id"`
 	ChatAdmin     bool  `json:"chatAdmin" db:"chat_admin"`

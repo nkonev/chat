@@ -271,13 +271,12 @@ func (ch *ParticipantHandler) SearchForUsersToAdd(g *gin.Context) {
 		return
 	}
 
-	areAdmins, err := ch.commonProjection.GetAreAdminsOfUserIds(g.Request.Context(), ch.dbWrapper, []int64{userId}, chatId)
+	admin, err := ch.commonProjection.IsChatAdmin(g.Request.Context(), ch.dbWrapper, userId, chatId)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error checking is admin", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
-	admin := areAdmins[userId]
 	if !admin {
 		g.JSON(http.StatusUnauthorized, &utils.H{"message": "You have no access to this chat"})
 		return

@@ -158,3 +158,8 @@ type UserTypingNotification struct {
 	ParticipantId int64  `json:"participantId"`
 	ChatId        int64  `json:"chatId"`
 }
+
+type MessageFilterDto struct {
+	SearchString string `json:"searchString"`
+	MessageId    int64  `json:"messageId"`
+}

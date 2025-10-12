@@ -483,8 +483,45 @@ func (mc *MessageHandler) MessagesFresh(g *gin.Context) {
 }
 
 func (mc *MessageHandler) MessagesFilter(g *gin.Context) {
-	g.JSON(http.StatusOK, dto.FilterDto{ // TODO implement filter
-		Found: true,
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	d := new(dto.MessageFilterDto)
+	err = g.Bind(d)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding MessageFilterDto", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	searchString := d.SearchString
+	messageId := d.MessageId
+
+	found, err := mc.enrichingProjection.MessageFilter(g.Request.Context(), mc.dbWrapper, userId, chatId, searchString, messageId)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking MessageFilter", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, dto.FilterDto{
+		Found: found,
 	})
 	return
 }
