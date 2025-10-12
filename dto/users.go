@@ -43,3 +43,12 @@ type ParticipantsWithAdminWrapper struct {
 type CountRequestDto struct {
 	SearchString string `json:"searchString"`
 }
+
+type FilteredParticipantsRequestDto struct {
+	SearchString string  `json:"searchString"`
+	UserId       []int64 `json:"userId"`
+}
+
+type FilteredParticipantItemResponse struct {
+	Id int64 `json:"id"`
+}

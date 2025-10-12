@@ -178,9 +178,40 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 }
 
 func (ch *ParticipantHandler) ParticipantsFilter(g *gin.Context) {
-	g.JSON(http.StatusOK, dto.FilterDto{ // TODO implement filter
-		Found: true,
-	})
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	_, err = getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	bindTo := new(dto.FilteredParticipantsRequestDto)
+	err = g.Bind(bindTo)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error during unmarshalling", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+	requestedParticipantIds := bindTo.UserId
+	userSearchString := bindTo.SearchString
+
+	response, err := ch.enrichingProjection.ParticipantsFilter(g.Request.Context(), ch.dbWrapper, userSearchString, chatId, requestedParticipantIds)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error during ParticipantsFilter", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, response)
 	return
 }
 
