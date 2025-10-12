@@ -87,3 +87,7 @@ type ChatExists struct {
 	Exists bool  `json:"exists"`
 	ChatId int64 `json:"chatId"`
 }
+type ChatFilterDto struct {
+	SearchString string `json:"searchString"`
+	ChatId       int64  `json:"chatId"` // id of probe element
+}

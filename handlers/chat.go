@@ -445,8 +445,37 @@ func (ch *ChatHandler) ChatsFresh(g *gin.Context) {
 }
 
 func (ch *ChatHandler) ChatsFilter(g *gin.Context) {
-	g.JSON(http.StatusOK, dto.FilterDto{ // TODO implement filter
-		Found: true,
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	d := new(dto.ChatFilterDto)
+	err = g.Bind(d)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding MessageFilterDto", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	searchString := d.SearchString
+	chatId := d.ChatId
+
+	found, err := ch.enrichingProjection.ChatFilter(g.Request.Context(), ch.dbWrapper, userId, chatId, searchString)
+	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
+		ch.lgr.ErrorContext(g.Request.Context(), "Error invoking MessageFilter", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, dto.FilterDto{
+		Found: found,
 	})
 	return
 }

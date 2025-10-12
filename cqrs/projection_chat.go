@@ -412,21 +412,69 @@ func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOper
 	return chatExists, nil
 }
 
-func (m *CommonProjection) areAdminsCommon(ctx context.Context, co db.CommonOperations, participantIds []int64, chatIds []int64) ([]ParticipantAdmin, error) {
-	list := []ParticipantAdmin{}
-	err := sqlscan.Select(ctx, co, &list, `
-		select 
-			user_id,
-			chat_id,
-			chat_admin
-		from chat_participant
-		where user_id = any($1) and chat_id = any($2)
-		order by create_date_time
-	`, participantIds, chatIds)
+func (m *EnrichingProjection) ChatFilter(ctx context.Context, co db.CommonOperations, behalfUserId, chatId int64, searchString string) (bool, error) {
+	participant, err := m.cp.IsParticipant(ctx, co, behalfUserId, chatId)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-	return list, nil
+	if !participant {
+		return false, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", behalfUserId, chatId))
+	}
+
+	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
+
+	additionalFoundUserIds := m.searchForUsers(ctx, searchString)
+
+	queryArgs := []any{behalfUserId, chatId}
+
+	var searchClause = ""
+	var searchCte = ""
+	if len(searchString) > 0 {
+		searchClause, searchCte, queryArgs = processAdditionalUserIds(queryArgs, additionalFoundUserIds, searchString)
+	}
+
+	var found bool
+	err = sqlscan.Get(ctx, co, &found, fmt.Sprintf(`
+		%s
+		SELECT EXISTS (
+			select 1
+			from chat_user_view ch
+			left join blog b on ch.id = b.id
+			join chat_common cc on cc.id = ch.id
+			where ch.id = $2 and ch.user_id = $1 
+			%s
+		)
+	`, searchCte, searchClause), queryArgs...)
+	if err != nil {
+		return false, err
+	}
+
+	return found, nil
+}
+
+func processAdditionalUserIds(queryArgsInput []any, additionalFoundUserIds []int64, searchString string) (searchClause string, searchCte string, queryArgs []any) {
+	queryArgs = queryArgsInput
+	var additionalUserIdsClause = ""
+	if len(additionalFoundUserIds) > 0 {
+		queryArgs = append(queryArgs, additionalFoundUserIds)
+		searchCte = fmt.Sprintf(`
+			with tet_a_tet_chats_ids as materialized (
+				SELECT distinct (cp.chat_id) as chat_id
+				FROM chat_common cc 
+				join chat_participant cp
+				on cc.id = cp.chat_id
+				WHERE cc.tet_a_tet IS true AND cp.user_id = any($%d)
+			)
+			`, len(queryArgs))
+		additionalUserIdsClause = fmt.Sprintf(" ( cc.id = any(array(SELECT chat_id FROM tet_a_tet_chats_ids)) ) or ")
+	}
+	// TODO available_to_search
+	searchClause = fmt.Sprintf("and ( ( %s cc.title ILIKE $%d ) OR ( (cc.available_to_search = TRUE OR b.id is not null) AND $%d = '%s' ) )", additionalUserIdsClause, len(queryArgs)+1, len(queryArgs)+2, dto.ReservedPublicallyAvailableForSearchChats)
+	searchStringPercents := "%" + searchString + "%"
+	queryArgs = append(queryArgs, searchStringPercents)
+	queryArgs = append(queryArgs, searchString)
+
+	return
 }
 
 // contract: either multiple chats
@@ -678,25 +726,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 	var searchClause = ""
 	var searchCte = ""
 	if len(searchString) > 0 {
-		var additionalUserIdsClause = ""
-		if len(additionalFoundUserIds) > 0 {
-			queryArgs = append(queryArgs, additionalFoundUserIds)
-			searchCte = fmt.Sprintf(`
-			with tet_a_tet_chats_ids as materialized (
-				SELECT distinct (cp.chat_id) as chat_id
-				FROM chat_common cc 
-				join chat_participant cp
-				on cc.id = cp.chat_id
-				WHERE cc.tet_a_tet IS true AND cp.user_id = any($%d)
-			)
-			`, len(queryArgs))
-			additionalUserIdsClause = fmt.Sprintf(" ( cc.id = any(array(SELECT chat_id FROM tet_a_tet_chats_ids)) ) or ")
-		}
-		// TODO available_to_search
-		searchClause = fmt.Sprintf("and ( ( %s cc.title ILIKE $%d ) OR ( (cc.available_to_search = TRUE OR b.id is not null) AND $%d = '%s' ) )", additionalUserIdsClause, len(queryArgs)+1, len(queryArgs)+2, dto.ReservedPublicallyAvailableForSearchChats)
-		searchStringPercents := "%" + searchString + "%"
-		queryArgs = append(queryArgs, searchStringPercents)
-		queryArgs = append(queryArgs, searchString)
+		searchClause, searchCte, queryArgs = processAdditionalUserIds(queryArgs, additionalFoundUserIds, searchString)
 	}
 
 	if chatId != nil {

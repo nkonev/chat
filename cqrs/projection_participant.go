@@ -486,6 +486,23 @@ func (m *CommonProjection) IsParticipant(ctx context.Context, co db.CommonOperat
 	return participant, nil
 }
 
+func (m *CommonProjection) areAdminsCommon(ctx context.Context, co db.CommonOperations, participantIds []int64, chatIds []int64) ([]ParticipantAdmin, error) {
+	list := []ParticipantAdmin{}
+	err := sqlscan.Select(ctx, co, &list, `
+		select 
+			user_id,
+			chat_id,
+			chat_admin
+		from chat_participant
+		where user_id = any($1) and chat_id = any($2)
+		order by create_date_time
+	`, participantIds, chatIds)
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func (m *CommonProjection) GetAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64) (map[int64]bool, error) {
 	return m.getAreAdminsOfUserIds(ctx, co, participantIds, chatId)
 }
