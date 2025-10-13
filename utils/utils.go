@@ -216,3 +216,13 @@ func GetIndexOf(ids []int64, elem int64) int {
 func Contains(ids []int64, elem int64) bool {
 	return GetIndexOf(ids, elem) != -1
 }
+
+func CompareStringPointers(p1, p2 *string) bool {
+	if p1 == p2 {
+		return true
+	} else if p1 != nil && p2 != nil {
+		return *p1 == *p2
+	} else {
+		return false
+	}
+}

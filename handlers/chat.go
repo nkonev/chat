@@ -438,8 +438,83 @@ func (ch *ChatHandler) GetChat(g *gin.Context) {
 }
 
 func (ch *ChatHandler) ChatsFresh(g *gin.Context) {
-	g.JSON(http.StatusOK, dto.FreshDto{ // TODO implement fresh
-		Ok: true,
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
+	reverse := false
+
+	var startingFromItemId *dto.ChatId = nil
+
+	includeStartingFrom := false
+
+	searchString := g.Query(dto.SearchStringParam)
+
+	var bindTo = make([]*dto.ChatViewEnrichedDto, 0)
+	if err = g.Bind(&bindTo); err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error during binding to dto", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	chatDtos, _, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
+	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting chats", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	edge := true
+
+	aLen := min(len(chatDtos), len(bindTo))
+	if len(bindTo) == 0 && len(chatDtos) != 0 {
+		edge = false
+	}
+
+	for i := range aLen {
+		currentChat := chatDtos[i]
+		gottenChat := bindTo[i]
+		if currentChat.Id != gottenChat.Id {
+			edge = false
+			break
+		}
+		if currentChat.Title != gottenChat.Title {
+			edge = false
+			break
+		}
+		if currentChat.UnreadMessages != gottenChat.UnreadMessages {
+			edge = false
+			break
+		}
+		if !utils.CompareStringPointers(currentChat.Avatar, gottenChat.Avatar) {
+			edge = false
+			break
+		}
+		if currentChat.TetATet != gottenChat.TetATet {
+			edge = false
+			break
+		}
+		if currentChat.Blog != gottenChat.Blog {
+			edge = false
+			break
+		}
+
+		if currentChat.ParticipantsCount != gottenChat.ParticipantsCount {
+			edge = false
+			break
+		}
+	}
+
+	g.JSON(http.StatusOK, dto.FreshDto{
+		Ok: edge,
 	})
 	return
 }
