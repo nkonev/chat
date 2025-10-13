@@ -84,6 +84,7 @@ func RunServe(args []string) {
 			cqrs.RunCqrsRouter,
 			kafka.WaitForAllEventsProcessed,
 			cqrs.RunSequenceFastforwarder,
+			producer.EnableOutputEvents,
 			handlers.RunHttpServer,
 		),
 	)

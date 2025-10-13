@@ -16,6 +16,10 @@ const ChatInternalExchange = "chat-internal-exchange"
 const correlationIdName = "correlationId"
 
 func (rp *RabbitOutputEventsPublisher) Publish(ctx context.Context, correlationId *string, aDto interface{}) error {
+	if !rp.enabled {
+		return nil
+	}
+
 	headers := myRabbitmq.InjectAMQPHeaders(ctx)
 	if correlationId != nil {
 		headers[correlationIdName] = *correlationId
@@ -50,6 +54,7 @@ type RabbitOutputEventsPublisher struct {
 	channel      *rabbitmq.Channel
 	lgr          *logger.LoggerWrapper
 	typeRegistry *type_registry.TypeRegistryInstance
+	enabled      bool // events are disabled during fast-forwarding
 }
 
 func NewRabbitOutputEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, typeRegistry *type_registry.TypeRegistryInstance) (*RabbitOutputEventsPublisher, error) {
@@ -62,6 +67,10 @@ func NewRabbitOutputEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbi
 		lgr:          lgr,
 		typeRegistry: typeRegistry,
 	}, nil
+}
+
+func EnableOutputEvents(p *RabbitOutputEventsPublisher) {
+	p.enabled = true
 }
 
 func (rp *RabbitInternalEventsPublisher) Publish(ctx context.Context, aDto interface{}) error {
