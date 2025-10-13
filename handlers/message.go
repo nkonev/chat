@@ -24,6 +24,7 @@ type MessageHandler struct {
 	dbWrapper           *db.DB
 	commonProjection    *cqrs.CommonProjection
 	policy              *sanitizer.SanitizerPolicy
+	stripAllTags        *sanitizer.StripTagsPolicy
 	cfg                 *config.AppConfig
 	enrichingProjection *cqrs.EnrichingProjection
 	asyncMessageService *services.AsyncMessageService
@@ -35,6 +36,7 @@ func NewMessageHandler(
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	policy *sanitizer.SanitizerPolicy,
+	stripAllTags *sanitizer.StripTagsPolicy,
 	cfg *config.AppConfig,
 	enrichingProjection *cqrs.EnrichingProjection,
 	messageService *services.AsyncMessageService, // we use async message service in order not to perform potentially heavyweight iterations in user-facing handles
@@ -45,6 +47,7 @@ func NewMessageHandler(
 		dbWrapper:           dbWrapper,
 		commonProjection:    commonProjection,
 		policy:              policy,
+		stripAllTags:        stripAllTags,
 		cfg:                 cfg,
 		enrichingProjection: enrichingProjection,
 		asyncMessageService: messageService,
@@ -476,8 +479,82 @@ func (mc *MessageHandler) PinPromoted(g *gin.Context) {
 }
 
 func (mc *MessageHandler) MessagesFresh(g *gin.Context) {
-	g.JSON(http.StatusOK, dto.FreshDto{ // TODO implement fresh
-		Ok: true,
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
+	reverse := true // true for edge
+	var startingFromItemId *int64 = nil
+	includeStartingFrom := false
+	searchString := g.Query(dto.SearchStringParam)
+
+	var bindTo = make([]dto.MessageViewEnrichedDto, 0)
+	if err := g.Bind(&bindTo); err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error during binding to dto", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	messageDtos, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, true, &userId, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error getting messages", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	edge := true
+
+	aLen := min(len(messageDtos), len(bindTo))
+	if len(bindTo) == 0 && len(messageDtos) != 0 {
+		edge = false
+	}
+
+	for i := range aLen {
+		currentMessage := messageDtos[i]
+		gottenMessage := bindTo[i]
+		if currentMessage.Id != gottenMessage.Id {
+			edge = false
+			break
+		}
+
+		// we strip tags because a (public) video link has "live" time parameter, which is changed between requests
+		// it leads us to the false comparison
+		// so we remove all the tags to mitigate this issue
+		currentMsgText := mc.stripAllTags.Sanitize(currentMessage.Content)
+		gottenMsgText := mc.stripAllTags.Sanitize(gottenMessage.Content)
+		if currentMsgText != gottenMsgText {
+			edge = false
+			break
+		}
+		if len(currentMessage.Reactions) != len(gottenMessage.Reactions) {
+			edge = false
+			break
+		}
+		if currentMessage.BlogPost != gottenMessage.BlogPost {
+			edge = false
+			break
+		}
+	}
+
+	g.JSON(http.StatusOK, dto.FreshDto{
+		Ok: edge,
 	})
 	return
 }
