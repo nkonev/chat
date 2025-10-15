@@ -388,6 +388,20 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 	return nil
 }
 
+func (m *CommonProjection) GetLastNReactionParticipantsIds(ctx context.Context, co db.CommonOperations, chatId, messageId int64, reaction string, limit int32) ([]int64, error) {
+	list := make([]int64, 0)
+
+	sqlArgs := []any{chatId, messageId, reaction, limit}
+	sqlQuery := `
+		SELECT user_id FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND reaction = $3 order by create_date_time desc limit $4
+		`
+	err := sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("error during interacting with db: %w", err)
+	}
+	return list, nil
+}
+
 func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
@@ -593,7 +607,7 @@ func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, lis
 		SELECT user_id, message_id, reaction 
 		FROM message_reaction 
 		WHERE chat_id = $2 AND message_id = ANY ($1)
-		order by create_date_time desc
+		order by create_date_time asc
 		`, messageIds, chatId)
 	if err != nil {
 		return ret, fmt.Errorf("error during interacting with db: %w", err)

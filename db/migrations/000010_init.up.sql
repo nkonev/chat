@@ -16,7 +16,8 @@ create unlogged table chat_common(
     avatar_big text,
     regular_participant_can_write_message BOOLEAN NOT NULL DEFAULT TRUE,
     regular_participant_can_publish_message boolean not null default false,
-    regular_participant_can_pin_message BOOLEAN NOT NULL DEFAULT FALSE
+    regular_participant_can_pin_message BOOLEAN NOT NULL DEFAULT FALSE,
+    can_react BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 create unlogged table chat_participant(

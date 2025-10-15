@@ -686,6 +686,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		AvatarBig                         *string          `db:"avatar_big"`
 		ConsiderMessagesAsUnread          bool             `db:"consider_messages_as_unread"`
 		RegularParticipantCanWriteMessage bool             `db:"regular_participant_can_write_message"`
+		CanReact                          bool             `db:"can_react"`
 	}
 
 	list := []chatDto{}
@@ -760,7 +761,8 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			cc.avatar,
 			cc.avatar_big,
 			coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread,
-			cc.regular_participant_can_write_message
+			cc.regular_participant_can_write_message,
+			cc.can_react
 		from chat_user_view ch
 		left join blog b on ch.id = b.id
 		join chat_common cc on cc.id = ch.id
@@ -793,6 +795,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			AvatarBig:                         de.AvatarBig,
 			ConsiderMessagesAsUnread:          de.ConsiderMessagesAsUnread,
 			RegularParticipantCanWriteMessage: de.RegularParticipantCanWriteMessage,
+			CanReact:                          &de.CanReact,
 		}
 		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {

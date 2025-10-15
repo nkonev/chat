@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go-cqrs-chat-example/client"
+	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
@@ -21,9 +22,10 @@ type EventHandler struct {
 	lgr                          *logger.LoggerWrapper
 	tr                           trace.Tracer
 	aaaRestClient                client.AaaRestClient
+	chatUserViewConfig           *config.ChatUserViewConfig
 }
 
-func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *EnrichingProjection, rabbitmqEventPublisher *producer.RabbitOutputEventsPublisher, db *db.DB, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient) *EventHandler {
+func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *EnrichingProjection, rabbitmqEventPublisher *producer.RabbitOutputEventsPublisher, db *db.DB, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient, cfg *config.AppConfig) *EventHandler {
 	tr := otel.Tracer("event")
 
 	return &EventHandler{
@@ -34,6 +36,7 @@ func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *En
 		lgr:                          lgr,
 		tr:                           tr,
 		aaaRestClient:                aaaRestClient,
+		chatUserViewConfig:           &cfg.Cqrs.Projections.ChatUserView,
 	}
 }
 
@@ -537,6 +540,80 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 	})
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error during IterateOverParticipantsChatIds", "err", err)
+	}
+	return nil
+}
+
+func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) error {
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.reaction"))
+	defer messageSpan.End()
+
+	err := m.commonProjection.OnMessageReactionFlipped(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	lastNReactionParticipantsIds, err := m.commonProjection.GetLastNReactionParticipantsIds(ctx, m.db, event.ChatId, event.MessageId, event.Reaction, m.chatUserViewConfig.MaxViewableParticipants)
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during IterateOverReactionParticipantsIds", "err", err)
+		return nil
+	}
+
+	var wasChanged bool
+	var count = len(lastNReactionParticipantsIds)
+	if count > 0 {
+		wasChanged = true // false means removed
+	}
+	users, err := m.aaaRestClient.GetUsers(ctx, lastNReactionParticipantsIds)
+	if err != nil {
+		m.lgr.WarnContext(ctx, "unable to get users")
+	}
+	reactionUserMap := utils.ToMap(users)
+
+	reactionUsers := make([]*dto.User, 0)
+	for _, userId := range lastNReactionParticipantsIds {
+		user := reactionUserMap[userId]
+		if user != nil {
+			reactionUsers = append(reactionUsers, user)
+		} else {
+			reactionUsers = append(reactionUsers, getDeletedUser(userId)) // fallback
+		}
+	}
+
+	var eventType string
+	if wasChanged {
+		eventType = dto.EventTypeReactionChanged
+	} else {
+		eventType = dto.EventTypeReactionRemoved
+	}
+
+	aReaction := dto.Reaction{
+		Count:    int64(count),
+		Reaction: event.Reaction,
+		Users:    reactionUsers,
+	}
+
+	reactionChangedEvent := dto.ReactionChangedEvent{
+		MessageId: event.MessageId,
+		Reaction:  aReaction,
+	}
+
+	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, []int64{}, func(participantIds []int64) error {
+		for _, participantId := range participantIds {
+			err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+				EventType:            eventType,
+				ReactionChangedEvent: &reactionChangedEvent,
+				UserId:               participantId,
+				ChatId:               event.ChatId,
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
 	}
 	return nil
 }

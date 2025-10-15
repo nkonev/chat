@@ -25,6 +25,7 @@ type ChatViewDto struct {
 	AvatarBig                         *string    `json:"avatarBig"`
 	ConsiderMessagesAsUnread          bool       `json:"considerMessagesAsUnread"`
 	RegularParticipantCanWriteMessage bool       `json:"regularParticipantCanWriteMessage"`
+	CanReact                          *bool      `json:"canReact"`
 }
 
 type ChatId struct {
