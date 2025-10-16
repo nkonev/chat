@@ -28,6 +28,7 @@ type MessageHandler struct {
 	cfg                 *config.AppConfig
 	enrichingProjection *cqrs.EnrichingProjection
 	asyncMessageService *services.AsyncMessageService
+	messageService      *services.MessageService
 }
 
 func NewMessageHandler(
@@ -39,7 +40,8 @@ func NewMessageHandler(
 	stripAllTags *sanitizer.StripTagsPolicy,
 	cfg *config.AppConfig,
 	enrichingProjection *cqrs.EnrichingProjection,
-	messageService *services.AsyncMessageService, // we use async message service in order not to perform potentially heavyweight iterations in user-facing handles
+	asyncMessageService *services.AsyncMessageService, // we use async message service in order not to perform potentially heavyweight iterations in user-facing handles
+	messageService *services.MessageService,
 ) *MessageHandler {
 	return &MessageHandler{
 		lgr:                 lgr,
@@ -50,7 +52,8 @@ func NewMessageHandler(
 		stripAllTags:        stripAllTags,
 		cfg:                 cfg,
 		enrichingProjection: enrichingProjection,
-		asyncMessageService: messageService,
+		asyncMessageService: asyncMessageService,
+		messageService:      messageService,
 	}
 }
 
@@ -697,6 +700,22 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 		Items:   messages,
 		HasNext: int32(len(messages)) == size,
 	})
+}
+
+func (mc *MessageHandler) MessagePreview(g *gin.Context) {
+	bindTo := new(dto.CleanHtmlTagsRequestDto)
+	err := g.Bind(bindTo)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding CleanHtmlTagsRequestDto", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	preview := mc.messageService.CreatePreview(g.Request.Context(), bindTo.Text, bindTo.Login)
+	response := dto.CleanHtmlTagsResponseDto{
+		Text: preview,
+	}
+	g.JSON(http.StatusOK, response)
 }
 
 // returns should exit

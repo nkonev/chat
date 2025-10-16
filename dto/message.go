@@ -163,3 +163,12 @@ type MessageFilterDto struct {
 	SearchString string `json:"searchString"`
 	MessageId    int64  `json:"messageId"`
 }
+
+type CleanHtmlTagsRequestDto struct {
+	Text  string `json:"text"`
+	Login string `json:"login"`
+}
+
+type CleanHtmlTagsResponseDto struct {
+	Text string `json:"text"`
+}

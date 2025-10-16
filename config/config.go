@@ -145,7 +145,7 @@ type MessageConfig struct {
 	AllowedIframeUrls           string // comma-separated
 	MaxMedias                   int
 	MaxDisplayableReactionUsers int
-	BroadcastPreviewMaxTextSize int
+	PreviewMaxTextSize          int
 }
 
 type RabbitMQConfig struct {

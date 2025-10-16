@@ -88,7 +88,7 @@ func NewMessageService(
 }
 
 func (p *MessageService) BroadcastMessage(ctx context.Context, messageText string, chatId, userId int64, userLogin string) {
-	preview := createMessagePreview(p.stripAllTags, p.cfg.Message.BroadcastPreviewMaxTextSize, messageText, userLogin)
+	preview := createMessagePreview(p.stripAllTags, p.cfg.Message.PreviewMaxTextSize, messageText, userLogin)
 	if preview == loginPrefix(userLogin) {
 		preview = ""
 	}
@@ -151,6 +151,11 @@ func (p *MessageService) TypeMessage(ctx context.Context, chatId, userId int64, 
 		p.lgr.ErrorContext(ctx, "Error during getting chat participants", "err", err)
 		return
 	}
+}
+
+func (p *MessageService) CreatePreview(ctx context.Context, messageText, userLogin string) string {
+	input := loginPrefix(userLogin) + messageText
+	return createMessagePreviewWithoutLogin(p.stripAllTags, p.cfg.Message.PreviewMaxTextSize, input)
 }
 
 func loginPrefix(login string) string {
