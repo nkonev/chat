@@ -698,6 +698,7 @@ func TestReaction(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -753,9 +754,67 @@ func TestReaction(t *testing.T) {
 		// both users add the reaction
 		err = testRestClient.Reaction(ctx, user1, chat1Id, message1Id, reaction)
 		require.NoError(t, err, "error in reacting on message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeReactionChanged &&
+					e.UserId == user1 &&
+					e.ReactionChangedEvent.MessageId == message1Id &&
+					len(e.ReactionChangedEvent.Reaction.Users) == 1 &&
+					e.ReactionChangedEvent.Reaction.Users[0].Id == user1 &&
+					e.ReactionChangedEvent.Reaction.Users[0].Login == user1Login &&
+					e.ReactionChangedEvent.Reaction.Count == 1 &&
+					e.ReactionChangedEvent.Reaction.Reaction == reaction
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeReactionChanged &&
+					e.UserId == user2 &&
+					e.ReactionChangedEvent.MessageId == message1Id &&
+					len(e.ReactionChangedEvent.Reaction.Users) == 1 &&
+					e.ReactionChangedEvent.Reaction.Users[0].Id == user1 &&
+					e.ReactionChangedEvent.Reaction.Users[0].Login == user1Login &&
+					e.ReactionChangedEvent.Reaction.Count == 1 &&
+					e.ReactionChangedEvent.Reaction.Reaction == reaction
+			},
+		}))
+
+		testEventsAccumulator.Clean()
+
 		err = testRestClient.Reaction(ctx, user2, chat1Id, message1Id, reaction)
 		require.NoError(t, err, "error in reacting on message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeReactionChanged &&
+					e.UserId == user1 &&
+					e.ReactionChangedEvent.MessageId == message1Id &&
+					len(e.ReactionChangedEvent.Reaction.Users) == 2 &&
+					e.ReactionChangedEvent.Reaction.Users[0].Id == user2 &&
+					e.ReactionChangedEvent.Reaction.Users[0].Login == user2Login &&
+					e.ReactionChangedEvent.Reaction.Users[1].Id == user1 &&
+					e.ReactionChangedEvent.Reaction.Users[1].Login == user1Login &&
+					e.ReactionChangedEvent.Reaction.Count == 2 &&
+					e.ReactionChangedEvent.Reaction.Reaction == reaction
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeReactionChanged &&
+					e.UserId == user2 &&
+					e.ReactionChangedEvent.MessageId == message1Id &&
+					len(e.ReactionChangedEvent.Reaction.Users) == 2 &&
+					e.ReactionChangedEvent.Reaction.Users[0].Id == user2 &&
+					e.ReactionChangedEvent.Reaction.Users[0].Login == user2Login &&
+					e.ReactionChangedEvent.Reaction.Users[1].Id == user1 &&
+					e.ReactionChangedEvent.Reaction.Users[1].Login == user1Login &&
+					e.ReactionChangedEvent.Reaction.Count == 2 &&
+					e.ReactionChangedEvent.Reaction.Reaction == reaction
+			},
+		}))
 
 		chat1Messages, _, err := testRestClient.GetMessages(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in getting messages")
@@ -766,10 +825,10 @@ func TestReaction(t *testing.T) {
 		assert.Equal(t, int64(2), message.Reactions[0].Count)
 		assert.Equal(t, reaction, message.Reactions[0].Reaction)
 		assert.Equal(t, 2, len(message.Reactions[0].Users))
-		assert.Equal(t, user2, message.Reactions[0].Users[0].Id)
-		assert.Equal(t, user1, message.Reactions[0].Users[1].Id)
+		assert.Equal(t, user1, message.Reactions[0].Users[0].Id)
+		assert.Equal(t, user2, message.Reactions[0].Users[1].Id)
 
-		// user 2 flips - removes the reaction
+		// user 2 flips - decreases reaction's count
 		err = testRestClient.Reaction(ctx, user2, chat1Id, message1Id, reaction)
 		require.NoError(t, err, "error in reacting on message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
@@ -784,6 +843,33 @@ func TestReaction(t *testing.T) {
 		assert.Equal(t, reaction, messageNew.Reactions[0].Reaction)
 		assert.Equal(t, 1, len(messageNew.Reactions[0].Users))
 		assert.Equal(t, user1, messageNew.Reactions[0].Users[0].Id)
+
+		testEventsAccumulator.Clean()
+
+		// user 1 flips - removes the reaction
+		err = testRestClient.Reaction(ctx, user1, chat1Id, message1Id, reaction)
+		require.NoError(t, err, "error in reacting on message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeReactionRemoved &&
+					e.UserId == user1 &&
+					e.ReactionChangedEvent.MessageId == message1Id &&
+					e.ReactionChangedEvent.Reaction.Count == 0 &&
+					e.ReactionChangedEvent.Reaction.Reaction == reaction
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeReactionRemoved &&
+					e.UserId == user2 &&
+					e.ReactionChangedEvent.MessageId == message1Id &&
+					e.ReactionChangedEvent.Reaction.Count == 0 &&
+					e.ReactionChangedEvent.Reaction.Reaction == reaction
+			},
+		}))
 	})
 }
 
