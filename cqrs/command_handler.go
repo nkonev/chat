@@ -875,7 +875,7 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 	return nil
 }
 
-func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, policy *sanitizer.SanitizerPolicy) error {
 	participant, err := commonProjection.IsParticipant(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
@@ -885,7 +885,9 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInter
 		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
-	if len(s.Reaction) > 8 || len(s.Reaction) < 1 {
+	sanitizedReaction := sanitizer.TrimAmdSanitize(policy, s.Reaction)
+
+	if len(sanitizedReaction) > 8 || len(sanitizedReaction) < 1 {
 		return NewValidationError("Wrong length of reaction")
 	}
 
@@ -893,7 +895,7 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInter
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
 		MessageId:      s.MessageId,
-		Reaction:       s.Reaction,
+		Reaction:       sanitizedReaction,
 	}
 
 	err = eventBus.Publish(ctx, cp)

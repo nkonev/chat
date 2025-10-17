@@ -362,7 +362,7 @@ func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
 		Reaction:       ccd.Reaction,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
+	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, mc.policy)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
