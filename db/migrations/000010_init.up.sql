@@ -9,15 +9,15 @@ create unlogged table chat_common(
     title varchar(512) not null,
     last_generated_message_id bigint not null default 0,
     create_date_time timestamp not null,
-    tet_a_tet boolean not null default false,
-    available_to_search boolean not null default false,
+    tet_a_tet boolean not null,
+    available_to_search boolean not null,
     avatar text,
     avatar_big text,
-    can_resend boolean not null default false,
-    can_react BOOLEAN NOT NULL DEFAULT TRUE, -- see also dto.DefaultCanReact
-    regular_participant_can_publish_message boolean not null default false,
-    regular_participant_can_pin_message BOOLEAN NOT NULL DEFAULT FALSE,
-    regular_participant_can_write_message BOOLEAN NOT NULL DEFAULT TRUE -- see also dto.DefaultRegularParticipantCanWriteMessage
+    can_resend boolean not null,
+    can_react BOOLEAN NOT NULL,
+    regular_participant_can_publish_message boolean not null,
+    regular_participant_can_pin_message BOOLEAN NOT NULL,
+    regular_participant_can_write_message BOOLEAN NOT NULL
 );
 
 create unlogged table chat_participant(
