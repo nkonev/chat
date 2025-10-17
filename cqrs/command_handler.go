@@ -885,7 +885,7 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInter
 		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
-	if len(s.Reaction) > 4 || len(s.Reaction) < 1 {
+	if len(s.Reaction) > 8 || len(s.Reaction) < 1 {
 		return NewValidationError("Wrong length of reaction")
 	}
 
