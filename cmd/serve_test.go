@@ -793,10 +793,10 @@ func TestReaction(t *testing.T) {
 					e.UserId == user1 &&
 					e.ReactionChangedEvent.MessageId == message1Id &&
 					len(e.ReactionChangedEvent.Reaction.Users) == 2 &&
-					e.ReactionChangedEvent.Reaction.Users[0].Id == user2 &&
-					e.ReactionChangedEvent.Reaction.Users[0].Login == user2Login &&
-					e.ReactionChangedEvent.Reaction.Users[1].Id == user1 &&
-					e.ReactionChangedEvent.Reaction.Users[1].Login == user1Login &&
+					e.ReactionChangedEvent.Reaction.Users[0].Id == user1 &&
+					e.ReactionChangedEvent.Reaction.Users[0].Login == user1Login &&
+					e.ReactionChangedEvent.Reaction.Users[1].Id == user2 &&
+					e.ReactionChangedEvent.Reaction.Users[1].Login == user2Login &&
 					e.ReactionChangedEvent.Reaction.Count == 2 &&
 					e.ReactionChangedEvent.Reaction.Reaction == reaction
 			},
@@ -807,10 +807,10 @@ func TestReaction(t *testing.T) {
 					e.UserId == user2 &&
 					e.ReactionChangedEvent.MessageId == message1Id &&
 					len(e.ReactionChangedEvent.Reaction.Users) == 2 &&
-					e.ReactionChangedEvent.Reaction.Users[0].Id == user2 &&
-					e.ReactionChangedEvent.Reaction.Users[0].Login == user2Login &&
-					e.ReactionChangedEvent.Reaction.Users[1].Id == user1 &&
-					e.ReactionChangedEvent.Reaction.Users[1].Login == user1Login &&
+					e.ReactionChangedEvent.Reaction.Users[0].Id == user1 &&
+					e.ReactionChangedEvent.Reaction.Users[0].Login == user1Login &&
+					e.ReactionChangedEvent.Reaction.Users[1].Id == user2 &&
+					e.ReactionChangedEvent.Reaction.Users[1].Login == user2Login &&
 					e.ReactionChangedEvent.Reaction.Count == 2 &&
 					e.ReactionChangedEvent.Reaction.Reaction == reaction
 			},

@@ -553,25 +553,25 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 		return err
 	}
 
-	lastNReactionParticipantsIds, err := m.commonProjection.GetLastNReactionParticipantsIds(ctx, m.db, event.ChatId, event.MessageId, event.Reaction, m.chatUserViewConfig.MaxViewableParticipants)
+	sortedReactionParticipantsIds, err := m.commonProjection.GetReactionParticipantsIds(ctx, m.db, event.ChatId, event.MessageId, event.Reaction)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error during IterateOverReactionParticipantsIds", "err", err)
 		return nil
 	}
 
 	var wasChanged bool
-	var count = len(lastNReactionParticipantsIds)
+	var count = len(sortedReactionParticipantsIds)
 	if count > 0 {
 		wasChanged = true // false means removed
 	}
-	users, err := m.aaaRestClient.GetUsers(ctx, lastNReactionParticipantsIds)
+	users, err := m.aaaRestClient.GetUsers(ctx, sortedReactionParticipantsIds)
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
 	reactionUserMap := utils.ToMap(users)
 
 	reactionUsers := make([]*dto.User, 0)
-	for _, userId := range lastNReactionParticipantsIds {
+	for _, userId := range sortedReactionParticipantsIds {
 		user := reactionUserMap[userId]
 		if user != nil {
 			reactionUsers = append(reactionUsers, user)
