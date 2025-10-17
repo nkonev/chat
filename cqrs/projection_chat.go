@@ -35,29 +35,44 @@ func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32
 func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated) error {
 	_, err := m.db.ExecContext(ctx, `
 		insert into chat_common(
-			id, 
-			title,
-			create_date_time,
-			can_resend,
-			tet_a_tet,
-			avatar,
-			avatar_big
+			 id
+			,title
+			,create_date_time
+			,tet_a_tet
+			,avatar
+			,avatar_big
+			,can_resend
+			,can_react
+			,available_to_search
+			,regular_participant_can_publish_message
+			,regular_participant_can_pin_message
+			,regular_participant_can_write_message
 		) values (
-			$1, 
-			$2,
-			$3,
-			$4,
-			$5,
-		    $6,
-		    $7
+			$1
+			,$2
+			,$3
+			,$4
+			,$5
+		    ,$6
+		    ,$7
+		    ,$8
+		    ,$9
+		    ,$10
+		    ,$11
+		    ,$12
 		)
 		on conflict(id) do update set 
 		    title = excluded.title
-		    ,can_resend = excluded.can_resend
 		    ,tet_a_tet = excluded.tet_a_tet
 		    ,avatar = excluded.avatar
 		    ,avatar_big = excluded.avatar_big
-	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.CanResend, event.TetATet, event.Avatar, event.AvatarBig)
+			,can_resend = excluded.can_resend
+			,can_react = excluded.can_react
+			,available_to_search = excluded.available_to_search
+			,regular_participant_can_publish_message = excluded.regular_participant_can_publish_message
+			,regular_participant_can_pin_message = excluded.regular_participant_can_pin_message
+			,regular_participant_can_write_message = excluded.regular_participant_can_write_message
+	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.TetATet, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage)
 	if err != nil {
 		return err
 	}
@@ -101,12 +116,17 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 
 		_, errInner = tx.ExecContext(ctx, `
 			update chat_common
-			set title = $2,
-			    can_resend = $3,
-			    avatar = $4,
-			    avatar_big = $5
+			set title = $2
+			    ,avatar = $3
+			    ,avatar_big = $4
+				,can_resend = $5
+				,can_react = $6
+				,available_to_search = $7
+				,regular_participant_can_publish_message = $8
+				,regular_participant_can_pin_message = $9
+				,regular_participant_can_write_message = $10
 			where id = $1
-		`, event.ChatId, event.Title, event.CanResend, event.Avatar, event.AvatarBig)
+		`, event.ChatId, event.Title, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage)
 		if errInner != nil {
 			return errInner
 		}
@@ -669,24 +689,27 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 
 func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations, participantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, additionalFoundUserIds []int64, chatId *int64) ([]dto.ChatViewDto, error) {
 	type chatDto struct {
-		Id                                int64            `db:"id"`
-		UserId                            int64            `db:"user_id"`
-		Title                             string           `db:"title"`
-		Pinned                            bool             `db:"pinned"`
-		UnreadMessages                    int64            `db:"unread_messages"`
-		LastMessageId                     *int64           `db:"last_message_id"`
-		LastMessageOwnerId                *int64           `db:"last_message_owner_id"`
-		LastMessageContent                *string          `db:"last_message_content"`
-		ParticipantsCount                 int64            `db:"participants_count"`
-		ParticipantIds                    pgtype.Int8Array `db:"participant_ids"` // ids of last N participants
-		Blog                              bool             `db:"blog"`
-		UpdateDateTime                    *time.Time       `db:"update_date_time"`
-		TetATet                           bool             `db:"tet_a_tet"`
-		Avatar                            *string          `db:"avatar"`
-		AvatarBig                         *string          `db:"avatar_big"`
-		ConsiderMessagesAsUnread          bool             `db:"consider_messages_as_unread"`
-		RegularParticipantCanWriteMessage bool             `db:"regular_participant_can_write_message"`
-		CanReact                          bool             `db:"can_react"`
+		Id                                  int64            `db:"id"`
+		UserId                              int64            `db:"user_id"`
+		Title                               string           `db:"title"`
+		Pinned                              bool             `db:"pinned"`
+		UnreadMessages                      int64            `db:"unread_messages"`
+		LastMessageId                       *int64           `db:"last_message_id"`
+		LastMessageOwnerId                  *int64           `db:"last_message_owner_id"`
+		LastMessageContent                  *string          `db:"last_message_content"`
+		ParticipantsCount                   int64            `db:"participants_count"`
+		ParticipantIds                      pgtype.Int8Array `db:"participant_ids"` // ids of last N participants
+		Blog                                bool             `db:"blog"`
+		UpdateDateTime                      *time.Time       `db:"update_date_time"`
+		TetATet                             bool             `db:"tet_a_tet"`
+		Avatar                              *string          `db:"avatar"`
+		AvatarBig                           *string          `db:"avatar_big"`
+		ConsiderMessagesAsUnread            bool             `db:"consider_messages_as_unread"`
+		CanResend                           bool             `db:"can_resend"`
+		CanReact                            bool             `db:"can_react"`
+		RegularParticipantCanPublishMessage bool             `db:"regular_participant_can_publish_message"`
+		RegularParticipantCanPinMessage     bool             `db:"regular_participant_can_pin_message"`
+		RegularParticipantCanWriteMessage   bool             `db:"regular_participant_can_write_message"`
 	}
 
 	list := []chatDto{}
@@ -761,8 +784,11 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			cc.avatar,
 			cc.avatar_big,
 			coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread,
-			cc.regular_participant_can_write_message,
-			cc.can_react
+			cc.can_resend,
+			cc.can_react,
+			cc.regular_participant_can_publish_message,
+			cc.regular_participant_can_pin_message,
+			cc.regular_participant_can_write_message
 		from chat_user_view ch
 		left join blog b on ch.id = b.id
 		join chat_common cc on cc.id = ch.id
@@ -779,23 +805,26 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 
 	for i, de := range list {
 		mapped := dto.ChatViewDto{
-			Id:                                de.Id,
-			UserId:                            de.UserId,
-			Title:                             de.Title,
-			Pinned:                            de.Pinned,
-			UnreadMessages:                    de.UnreadMessages,
-			LastMessageId:                     de.LastMessageId,
-			LastMessageOwnerId:                de.LastMessageOwnerId,
-			LastMessageContent:                de.LastMessageContent,
-			ParticipantsCount:                 de.ParticipantsCount,
-			Blog:                              de.Blog,
-			UpdateDateTime:                    de.UpdateDateTime,
-			TetATet:                           de.TetATet,
-			Avatar:                            de.Avatar,
-			AvatarBig:                         de.AvatarBig,
-			ConsiderMessagesAsUnread:          de.ConsiderMessagesAsUnread,
-			RegularParticipantCanWriteMessage: de.RegularParticipantCanWriteMessage,
-			CanReact:                          &de.CanReact,
+			Id:                                  de.Id,
+			UserId:                              de.UserId,
+			Title:                               de.Title,
+			Pinned:                              de.Pinned,
+			UnreadMessages:                      de.UnreadMessages,
+			LastMessageId:                       de.LastMessageId,
+			LastMessageOwnerId:                  de.LastMessageOwnerId,
+			LastMessageContent:                  de.LastMessageContent,
+			ParticipantsCount:                   de.ParticipantsCount,
+			Blog:                                de.Blog,
+			UpdateDateTime:                      de.UpdateDateTime,
+			TetATet:                             de.TetATet,
+			Avatar:                              de.Avatar,
+			AvatarBig:                           de.AvatarBig,
+			ConsiderMessagesAsUnread:            de.ConsiderMessagesAsUnread,
+			CanResend:                           de.CanResend,
+			CanReact:                            de.CanReact,
+			RegularParticipantCanPublishMessage: de.RegularParticipantCanPublishMessage,
+			RegularParticipantCanPinMessage:     de.RegularParticipantCanPinMessage,
+			RegularParticipantCanWriteMessage:   de.RegularParticipantCanWriteMessage,
 		}
 		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {

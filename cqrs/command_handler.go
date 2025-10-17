@@ -88,25 +88,35 @@ func NewParticipantsError(info string) *ParticipantsError {
 }
 
 type ChatCreate struct {
-	AdditionalData *AdditionalData
-	Title          string
-	ParticipantIds []int64
-	CanResend      bool
-	TetATet        bool
-	Blog           bool
-	Avatar         *string
-	AvatarBig      *string
+	AdditionalData                      *AdditionalData
+	Title                               string
+	ParticipantIds                      []int64
+	TetATet                             bool
+	Blog                                bool
+	Avatar                              *string
+	AvatarBig                           *string
+	CanResend                           bool
+	CanReact                            bool
+	AvailableToSearch                   bool
+	RegularParticipantCanPublishMessage bool
+	RegularParticipantCanPinMessage     bool
+	RegularParticipantCanWriteMessage   bool
 }
 
 type ChatEdit struct {
-	ChatId              int64
-	AdditionalData      *AdditionalData
-	Title               string
-	ParticipantIdsToAdd []int64
-	Blog                bool // desired state
-	CanResend           bool
-	Avatar              *string
-	AvatarBig           *string
+	AdditionalData                      *AdditionalData
+	ChatId                              int64
+	Title                               string
+	ParticipantIdsToAdd                 []int64
+	Blog                                bool // desired state
+	Avatar                              *string
+	AvatarBig                           *string
+	CanResend                           bool
+	CanReact                            bool
+	AvailableToSearch                   bool
+	RegularParticipantCanPublishMessage bool
+	RegularParticipantCanPinMessage     bool
+	RegularParticipantCanWriteMessage   bool
 }
 
 func (cc *ChatEdit) IsValidatabale() bool {
@@ -278,14 +288,19 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 	}
 
 	cc := &ChatCreated{
-		AdditionalData: copyCommand.AdditionalData,
-		ChatId:         chatId,
-		Title:          copyCommand.Title,
-		CanResend:      copyCommand.CanResend,
-		TetATet:        copyCommand.TetATet,
-		Blog:           copyCommand.Blog,
-		Avatar:         copyCommand.Avatar,
-		AvatarBig:      copyCommand.AvatarBig,
+		AdditionalData:                      copyCommand.AdditionalData,
+		ChatId:                              chatId,
+		Title:                               copyCommand.Title,
+		TetATet:                             copyCommand.TetATet,
+		Blog:                                copyCommand.Blog,
+		Avatar:                              copyCommand.Avatar,
+		AvatarBig:                           copyCommand.AvatarBig,
+		CanResend:                           copyCommand.CanResend,
+		CanReact:                            copyCommand.CanReact,
+		AvailableToSearch:                   copyCommand.AvailableToSearch,
+		RegularParticipantCanPublishMessage: copyCommand.RegularParticipantCanPublishMessage,
+		RegularParticipantCanPinMessage:     copyCommand.RegularParticipantCanPinMessage,
+		RegularParticipantCanWriteMessage:   copyCommand.RegularParticipantCanWriteMessage,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {
@@ -358,13 +373,18 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 	}
 
 	cc := &ChatEdited{
-		AdditionalData: copyCommand.AdditionalData,
-		ChatId:         copyCommand.ChatId,
-		Title:          copyCommand.Title,
-		Blog:           copyCommand.Blog,
-		CanResend:      copyCommand.CanResend,
-		Avatar:         copyCommand.Avatar,
-		AvatarBig:      copyCommand.AvatarBig,
+		AdditionalData:                      copyCommand.AdditionalData,
+		ChatId:                              copyCommand.ChatId,
+		Title:                               copyCommand.Title,
+		Blog:                                copyCommand.Blog,
+		Avatar:                              copyCommand.Avatar,
+		AvatarBig:                           copyCommand.AvatarBig,
+		CanResend:                           copyCommand.CanResend,
+		CanReact:                            copyCommand.CanReact,
+		AvailableToSearch:                   copyCommand.AvailableToSearch,
+		RegularParticipantCanPublishMessage: copyCommand.RegularParticipantCanPublishMessage,
+		RegularParticipantCanPinMessage:     copyCommand.RegularParticipantCanPinMessage,
+		RegularParticipantCanWriteMessage:   copyCommand.RegularParticipantCanWriteMessage,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {

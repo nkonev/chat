@@ -6,32 +6,61 @@ import (
 
 const NoChatTitle = ""
 const NoSearchString = ""
+const ReservedPublicallyAvailableForSearchChats = "__AVAILABLE_FOR_SEARCH"
 
 type ChatViewDto struct {
-	Id                                int64      `json:"id"`
-	UserId                            int64      `json:"-"` // behalf user id
-	Title                             string     `json:"name"`
-	Pinned                            bool       `json:"pinned"`
-	UnreadMessages                    int64      `json:"unreadMessages"`
-	LastMessageId                     *int64     `json:"lastMessageId"`
-	LastMessageOwnerId                *int64     `json:"lastMessageOwnerId"`
-	LastMessageContent                *string    `json:"lastMessageContent"`
-	ParticipantsCount                 int64      `json:"participantsCount"`
-	ParticipantIds                    []int64    `json:"participantIds"` // ids of last N participants
-	Blog                              bool       `json:"blog"`
-	UpdateDateTime                    *time.Time `json:"lastUpdateDateTime"` // for sake compatibility
-	TetATet                           bool       `json:"tetATet"`
-	Avatar                            *string    `json:"avatar"`
-	AvatarBig                         *string    `json:"avatarBig"`
-	ConsiderMessagesAsUnread          bool       `json:"considerMessagesAsUnread"`
-	RegularParticipantCanWriteMessage bool       `json:"regularParticipantCanWriteMessage"`
-	CanReact                          *bool      `json:"canReact"`
+	Id                                  int64      `json:"id"`
+	UserId                              int64      `json:"-"` // behalf user id
+	Title                               string     `json:"name"`
+	Pinned                              bool       `json:"pinned"`
+	UnreadMessages                      int64      `json:"unreadMessages"`
+	LastMessageId                       *int64     `json:"lastMessageId"`
+	LastMessageOwnerId                  *int64     `json:"lastMessageOwnerId"`
+	LastMessageContent                  *string    `json:"lastMessageContent"`
+	ParticipantsCount                   int64      `json:"participantsCount"`
+	ParticipantIds                      []int64    `json:"participantIds"` // ids of last N participants
+	Blog                                bool       `json:"blog"`
+	UpdateDateTime                      *time.Time `json:"lastUpdateDateTime"` // for sake compatibility
+	TetATet                             bool       `json:"tetATet"`
+	Avatar                              *string    `json:"avatar"`
+	AvatarBig                           *string    `json:"avatarBig"`
+	ConsiderMessagesAsUnread            bool       `json:"considerMessagesAsUnread"`
+	CanResend                           bool       `json:"canResend"`
+	CanReact                            bool       `json:"canReact"`
+	RegularParticipantCanPublishMessage bool       `json:"regularParticipantCanPublishMessage"`
+	RegularParticipantCanPinMessage     bool       `json:"regularParticipantCanPinMessage"`
+	RegularParticipantCanWriteMessage   bool       `json:"regularParticipantCanWriteMessage"`
 }
 
 type ChatId struct {
 	Pinned             bool
 	LastUpdateDateTime time.Time
 	Id                 int64
+}
+
+type ChatBaseCreateDto struct {
+	Title                               string  `json:"name"`
+	ParticipantIds                      []int64 `json:"participantIds"`
+	Blog                                bool    `json:"blog"`
+	Avatar                              *string `json:"avatar"`
+	AvatarBig                           *string `json:"avatarBig"`
+	CanResend                           bool    `json:"canResend"`
+	AvailableToSearch                   bool    `json:"availableToSearch"`
+	RegularParticipantCanPublishMessage bool    `json:"regularParticipantCanPublishMessage"`
+	RegularParticipantCanPinMessage     bool    `json:"regularParticipantCanPinMessage"`
+}
+
+type ChatCreateDto struct {
+	ChatBaseCreateDto
+	CanReact                          *bool `json:"canReact"`
+	RegularParticipantCanWriteMessage *bool `json:"regularParticipantCanWriteMessage"`
+}
+
+type ChatEditDto struct {
+	Id int64 `json:"id"`
+	ChatBaseCreateDto
+	CanReact                          bool `json:"canReact"`
+	RegularParticipantCanWriteMessage bool `json:"regularParticipantCanWriteMessage"`
 }
 
 type ChatDeletedDto struct {

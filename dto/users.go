@@ -35,6 +35,10 @@ type AdditionalData struct {
 	Roles     []string `json:"roles"`
 }
 
+type ParticipantAddDto struct {
+	ParticipantIds []int64 `json:"addParticipantIds"`
+}
+
 type ParticipantsWithAdminWrapper struct {
 	Data  []*UserWithAdmin `json:"items"`
 	Count int64            `json:"count"` // for paginating purposes

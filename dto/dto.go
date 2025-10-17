@@ -10,45 +10,6 @@ type ErrorMessageDto struct {
 	Message string `json:"message"`
 }
 
-type ChatCreateDto struct {
-	Title          string  `json:"name"`
-	ParticipantIds []int64 `json:"participantIds"`
-	CanResend      bool    `json:"canResend"`
-	Blog           bool    `json:"blog"`
-	Avatar         *string `json:"avatar"`
-	AvatarBig      *string `json:"avatarBig"`
-}
-
-type ChatEditDto struct {
-	Id int64 `json:"id"`
-	ChatCreateDto
-}
-
-const ReservedPublicallyAvailableForSearchChats = "__AVAILABLE_FOR_SEARCH"
-
-const EmbedMessageTypeResend = "resend"
-const EmbedMessageTypeReply = "reply"
-
-type EmbedMessageRequest struct {
-	Id        int64  `json:"id"`
-	ChatId    int64  `json:"chatId"` // chat from (src)
-	EmbedType string `json:"embedType"`
-}
-
-type MessageCreateDto struct {
-	Content             string               `json:"text"`
-	EmbedMessageRequest *EmbedMessageRequest `json:"embedMessage"`
-}
-
-type MessageEditDto struct {
-	Id int64 `json:"id"`
-	MessageCreateDto
-}
-
-type ParticipantAddDto struct {
-	ParticipantIds []int64 `json:"addParticipantIds"`
-}
-
 type HasUnreadMessages struct {
 	HasUnreadMessages bool `json:"hasUnreadMessages"`
 }

@@ -34,7 +34,7 @@ func NewTestRestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestRe
 }
 
 type ChatCreateOption interface {
-	Apply(*dto.ChatCreateDto)
+	Apply(createDto *dto.ChatBaseCreateDto)
 }
 
 type ChatParamResend struct {
@@ -45,7 +45,7 @@ func NewChatOptionResend(v bool) *ChatParamResend {
 	return &ChatParamResend{v: v}
 }
 
-func (r *ChatParamResend) Apply(d *dto.ChatCreateDto) {
+func (r *ChatParamResend) Apply(d *dto.ChatBaseCreateDto) {
 	d.CanResend = r.v
 }
 
@@ -57,7 +57,7 @@ func NewChatOptionBlog(blog bool) *ChatParamBlog {
 	return &ChatParamBlog{blog: blog}
 }
 
-func (r *ChatParamBlog) Apply(d *dto.ChatCreateDto) {
+func (r *ChatParamBlog) Apply(d *dto.ChatBaseCreateDto) {
 	d.Blog = r.blog
 }
 
@@ -70,7 +70,7 @@ func NewChatOptionAvatar(avatar, avatarBig *string) *ChatParamAvatar {
 	return &ChatParamAvatar{avatar: avatar, avatarBig: avatarBig}
 }
 
-func (r *ChatParamAvatar) Apply(d *dto.ChatCreateDto) {
+func (r *ChatParamAvatar) Apply(d *dto.ChatBaseCreateDto) {
 	d.Avatar = r.avatar
 	d.AvatarBig = r.avatarBig
 }
@@ -83,19 +83,23 @@ func NewChatOptionParticipants(participants ...int64) *ChatParamParticipants {
 	return &ChatParamParticipants{participants: participants}
 }
 
-func (r *ChatParamParticipants) Apply(d *dto.ChatCreateDto) {
+func (r *ChatParamParticipants) Apply(d *dto.ChatBaseCreateDto) {
 	d.ParticipantIds = r.participants
 }
 
 func (rc *TestRestClient) CreateChat(ctx context.Context, behalfUserId int64, chatName string, chatCreateOptions ...ChatCreateOption) (int64, error) {
-	req := dto.ChatCreateDto{
+	ccd := dto.ChatBaseCreateDto{
 		Title: chatName,
 	}
 
 	for _, opt := range chatCreateOptions {
 		if opt != nil {
-			opt.Apply(&req)
+			opt.Apply(&ccd)
 		}
+	}
+
+	req := dto.ChatCreateDto{
+		ChatBaseCreateDto: ccd,
 	}
 
 	resp, err := query[dto.ChatCreateDto, dto.IdResponse](ctx, &rc.restClient, behalfUserId, http.MethodPost, "/api/chat", "chat.Create", &req, nil)
@@ -116,7 +120,7 @@ func (rc *TestRestClient) CreateTetATetChat(ctx context.Context, behalfUserId in
 }
 
 func (rc *TestRestClient) EditChat(ctx context.Context, behalfUserId int64, chatId int64, chatName string, chatCreateOptions ...ChatCreateOption) error {
-	ccd := dto.ChatCreateDto{
+	ccd := dto.ChatBaseCreateDto{
 		Title: chatName,
 	}
 
@@ -127,8 +131,8 @@ func (rc *TestRestClient) EditChat(ctx context.Context, behalfUserId int64, chat
 	}
 
 	req := dto.ChatEditDto{
-		Id:            chatId,
-		ChatCreateDto: ccd,
+		Id:                chatId,
+		ChatBaseCreateDto: ccd,
 	}
 	err := queryNoResponse[dto.ChatEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat", "chat.Edit", &req, nil)
 	if err != nil {

@@ -69,13 +69,19 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatCreate{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
-		Title:          ccd.Title,
-		ParticipantIds: ccd.ParticipantIds,
-		CanResend:      ccd.CanResend,
-		Blog:           ccd.Blog,
-		Avatar:         ccd.Avatar,
-		AvatarBig:      ccd.AvatarBig,
+		AdditionalData:                      cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		Title:                               ccd.Title,
+		ParticipantIds:                      ccd.ParticipantIds,
+		TetATet:                             false,
+		Blog:                                ccd.Blog,
+		Avatar:                              ccd.Avatar,
+		AvatarBig:                           ccd.AvatarBig,
+		CanResend:                           ccd.CanResend,
+		CanReact:                            utils.GetNullableBooleanOr(ccd.CanReact, true),
+		AvailableToSearch:                   ccd.AvailableToSearch,
+		RegularParticipantCanPublishMessage: ccd.RegularParticipantCanPublishMessage,
+		RegularParticipantCanPinMessage:     ccd.RegularParticipantCanPinMessage,
+		RegularParticipantCanWriteMessage:   utils.GetNullableBooleanOr(ccd.RegularParticipantCanWriteMessage, true),
 	}
 
 	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
@@ -119,6 +125,9 @@ func (ch *ChatHandler) CreateTetAChat(g *gin.Context) {
 		Title:          tetATetChatName,
 		ParticipantIds: []int64{oppositeUserId},
 		TetATet:        true,
+		Blog:           false,
+		CanResend:      ch.cfg.Chat.TetATet.CanResend,
+		CanReact:       ch.cfg.Chat.TetATet.CanReact,
 	}
 
 	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
@@ -158,14 +167,19 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 	}
 
 	cc := cqrs.ChatEdit{
-		AdditionalData:      cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
-		ChatId:              ccd.Id,
-		Title:               ccd.Title,
-		ParticipantIdsToAdd: ccd.ParticipantIds,
-		Blog:                ccd.Blog,
-		CanResend:           ccd.CanResend,
-		Avatar:              ccd.Avatar,
-		AvatarBig:           ccd.AvatarBig,
+		AdditionalData:                      cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		ChatId:                              ccd.Id,
+		Title:                               ccd.Title,
+		ParticipantIdsToAdd:                 ccd.ParticipantIds,
+		Blog:                                ccd.Blog,
+		Avatar:                              ccd.Avatar,
+		AvatarBig:                           ccd.AvatarBig,
+		CanResend:                           ccd.CanResend,
+		CanReact:                            ccd.CanReact,
+		AvailableToSearch:                   ccd.AvailableToSearch,
+		RegularParticipantCanPublishMessage: ccd.RegularParticipantCanPublishMessage,
+		RegularParticipantCanPinMessage:     ccd.RegularParticipantCanPinMessage,
+		RegularParticipantCanWriteMessage:   ccd.RegularParticipantCanWriteMessage,
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)

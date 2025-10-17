@@ -20,24 +20,34 @@ func (p *AdditionalData) GetCorrelationId() *string {
 }
 
 type ChatCreated struct {
-	AdditionalData *AdditionalData `json:"additionalData"`
-	ChatId         int64           `json:"chatId"`
-	Title          string          `json:"title"`
-	CanResend      bool            `json:"canResend"`
-	TetATet        bool            `json:"tetATet"`
-	Blog           bool            `json:"blog"`
-	Avatar         *string         `json:"avatar"`
-	AvatarBig      *string         `json:"avatarBig"`
+	AdditionalData                      *AdditionalData `json:"additionalData"`
+	ChatId                              int64           `json:"chatId"`
+	Title                               string          `json:"title"`
+	TetATet                             bool            `json:"tetATet"`
+	Blog                                bool            `json:"blog"`
+	Avatar                              *string         `json:"avatar"`
+	AvatarBig                           *string         `json:"avatarBig"`
+	CanResend                           bool            `json:"canResend"`
+	CanReact                            bool            `json:"canReact"`
+	AvailableToSearch                   bool            `json:"availableToSearch"`
+	RegularParticipantCanPublishMessage bool            `json:"regularParticipantCanPublishMessage"`
+	RegularParticipantCanPinMessage     bool            `json:"regularParticipantCanPinMessage"`
+	RegularParticipantCanWriteMessage   bool            `json:"regularParticipantCanWriteMessage"`
 }
 
 type ChatEdited struct {
-	AdditionalData *AdditionalData `json:"additionalData"`
-	ChatId         int64           `json:"chatId"`
-	Title          string          `json:"title"`
-	Blog           bool            `json:"blog"`
-	CanResend      bool            `json:"canResend"`
-	Avatar         *string         `json:"avatar"`
-	AvatarBig      *string         `json:"avatarBig"`
+	AdditionalData                      *AdditionalData `json:"additionalData"`
+	ChatId                              int64           `json:"chatId"`
+	Title                               string          `json:"title"`
+	Blog                                bool            `json:"blog"`
+	Avatar                              *string         `json:"avatar"`
+	AvatarBig                           *string         `json:"avatarBig"`
+	CanResend                           bool            `json:"canResend"`
+	CanReact                            bool            `json:"canReact"`
+	AvailableToSearch                   bool            `json:"availableToSearch"`
+	RegularParticipantCanPublishMessage bool            `json:"regularParticipantCanPublishMessage"`
+	RegularParticipantCanPinMessage     bool            `json:"regularParticipantCanPinMessage"`
+	RegularParticipantCanWriteMessage   bool            `json:"regularParticipantCanWriteMessage"`
 }
 
 type ChatDeleted struct {

@@ -87,6 +87,11 @@ message:
   maxDisplayableReactionUsers: 10
   previewMaxTextSize: 256
 
+chat:
+  tetatet:
+    canResend: true
+    canReact: true
+
 rabbitmq:
   url: "amqp://chat:chatPazZw0rd@127.0.0.1:5672"
   checkAreEventsProcessedInterval: 2s

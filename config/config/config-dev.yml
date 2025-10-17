@@ -87,5 +87,10 @@ message:
   maxDisplayableReactionUsers: 10
   previewMaxTextSize: 256
 
+chat:
+  tetatet:
+    canResend: true
+    canReact: true
+
 rabbitmq:
   url: "amqp://videoChat:videoChatPazZw0rd@127.0.0.1:36672"

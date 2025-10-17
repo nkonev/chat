@@ -148,6 +148,15 @@ type MessageConfig struct {
 	PreviewMaxTextSize          int
 }
 
+type ChatConfig struct {
+	TetATet TetATetConfig
+}
+
+type TetATetConfig struct {
+	CanResend bool
+	CanReact  bool
+}
+
 type RabbitMQConfig struct {
 	Url                             string
 	Debug                           bool
@@ -166,6 +175,7 @@ type AppConfig struct {
 	Logger      LoggerConfig
 	Aaa         AaaConfig
 	Message     MessageConfig
+	Chat        ChatConfig
 	FrontendUrl string
 	RabbitMQ    RabbitMQConfig
 }

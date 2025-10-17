@@ -4,6 +4,8 @@ import "time"
 
 const NoMessageContent = ""
 const NoOwner = -1
+const EmbedMessageTypeResend = "resend"
+const EmbedMessageTypeReply = "reply"
 
 type MessageDto struct {
 	Id       int64  `db:"id"`
@@ -171,4 +173,20 @@ type CleanHtmlTagsRequestDto struct {
 
 type CleanHtmlTagsResponseDto struct {
 	Text string `json:"text"`
+}
+
+type EmbedMessageRequest struct {
+	Id        int64  `json:"id"`
+	ChatId    int64  `json:"chatId"` // chat from (src)
+	EmbedType string `json:"embedType"`
+}
+
+type MessageCreateDto struct {
+	Content             string               `json:"text"`
+	EmbedMessageRequest *EmbedMessageRequest `json:"embedMessage"`
+}
+
+type MessageEditDto struct {
+	Id int64 `json:"id"`
+	MessageCreateDto
 }
