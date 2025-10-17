@@ -77,11 +77,11 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		Avatar:                              ccd.Avatar,
 		AvatarBig:                           ccd.AvatarBig,
 		CanResend:                           ccd.CanResend,
-		CanReact:                            utils.GetNullableBooleanOr(ccd.CanReact, true),
+		CanReact:                            utils.GetNullableBooleanOr(ccd.CanReact, dto.DefaultCanReact),
 		AvailableToSearch:                   ccd.AvailableToSearch,
 		RegularParticipantCanPublishMessage: ccd.RegularParticipantCanPublishMessage,
 		RegularParticipantCanPinMessage:     ccd.RegularParticipantCanPinMessage,
-		RegularParticipantCanWriteMessage:   utils.GetNullableBooleanOr(ccd.RegularParticipantCanWriteMessage, true),
+		RegularParticipantCanWriteMessage:   utils.GetNullableBooleanOr(ccd.RegularParticipantCanWriteMessage, dto.DefaultRegularParticipantCanWriteMessage),
 	}
 
 	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)

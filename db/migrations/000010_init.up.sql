@@ -14,10 +14,10 @@ create unlogged table chat_common(
     avatar text,
     avatar_big text,
     can_resend boolean not null default false,
-    can_react BOOLEAN NOT NULL DEFAULT TRUE,
+    can_react BOOLEAN NOT NULL DEFAULT TRUE, -- see also dto.DefaultCanReact
     regular_participant_can_publish_message boolean not null default false,
     regular_participant_can_pin_message BOOLEAN NOT NULL DEFAULT FALSE,
-    regular_participant_can_write_message BOOLEAN NOT NULL DEFAULT TRUE
+    regular_participant_can_write_message BOOLEAN NOT NULL DEFAULT TRUE -- see also dto.DefaultRegularParticipantCanWriteMessage
 );
 
 create unlogged table chat_participant(

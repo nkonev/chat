@@ -133,8 +133,8 @@ func (rc *TestRestClient) EditChat(ctx context.Context, behalfUserId int64, chat
 	req := dto.ChatEditDto{
 		Id:                                chatId,
 		ChatBaseCreateDto:                 ccd,
-		CanReact:                          true,
-		RegularParticipantCanWriteMessage: true,
+		CanReact:                          dto.DefaultCanReact,
+		RegularParticipantCanWriteMessage: dto.DefaultRegularParticipantCanWriteMessage,
 	}
 	err := queryNoResponse[dto.ChatEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat", "chat.Edit", &req, nil)
 	if err != nil {

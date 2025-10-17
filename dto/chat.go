@@ -7,6 +7,8 @@ import (
 const NoChatTitle = ""
 const NoSearchString = ""
 const ReservedPublicallyAvailableForSearchChats = "__AVAILABLE_FOR_SEARCH"
+const DefaultCanReact = true
+const DefaultRegularParticipantCanWriteMessage = true
 
 type ChatViewDto struct {
 	Id                                  int64      `json:"id"`
