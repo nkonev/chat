@@ -887,7 +887,7 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInter
 
 	sanitizedReaction := sanitizer.TrimAmdSanitize(policy, s.Reaction)
 
-	if len(sanitizedReaction) > 8 || len(sanitizedReaction) < 1 {
+	if len([]rune(sanitizedReaction)) > 4 || len([]rune(sanitizedReaction)) < 1 {
 		return NewValidationError("Wrong length of reaction")
 	}
 
