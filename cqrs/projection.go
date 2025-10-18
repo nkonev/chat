@@ -14,10 +14,9 @@ import (
 )
 
 type CommonProjection struct {
-	db                 *db.DB
-	lgr                *logger.LoggerWrapper
-	chatUserViewConfig *config.ChatUserViewConfig
-	blogViewConfig     *config.BlogViewConfig
+	db  *db.DB
+	lgr *logger.LoggerWrapper
+	cfg *config.AppConfig
 }
 
 type EnrichingProjection struct {
@@ -31,10 +30,9 @@ type EnrichingProjection struct {
 
 func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppConfig) *CommonProjection {
 	return &CommonProjection{
-		db:                 db,
-		lgr:                lgr,
-		chatUserViewConfig: &cfg.Cqrs.Projections.ChatUserView,
-		blogViewConfig:     &cfg.Cqrs.Projections.BlogView,
+		db:  db,
+		lgr: lgr,
+		cfg: cfg,
 	}
 }
 

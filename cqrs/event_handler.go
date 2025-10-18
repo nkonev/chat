@@ -553,25 +553,25 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 		return err
 	}
 
-	sortedReactionParticipantsIds, err := m.commonProjection.GetReactionParticipantsIds(ctx, m.db, event.ChatId, event.MessageId, event.Reaction)
+	reaction, err := m.commonProjection.GetReaction(ctx, m.db, event.ChatId, event.MessageId, event.Reaction)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error during IterateOverReactionParticipantsIds", "err", err)
 		return nil
 	}
 
 	var wasChanged bool
-	var count = len(sortedReactionParticipantsIds)
-	if count > 0 {
+	if reaction.Count > 0 {
 		wasChanged = true // false means removed
 	}
-	users, err := m.aaaRestClient.GetUsers(ctx, sortedReactionParticipantsIds)
+
+	users, err := m.aaaRestClient.GetUsers(ctx, reaction.UserIds)
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
 	reactionUserMap := utils.ToMap(users)
 
 	reactionUsers := make([]*dto.User, 0)
-	for _, userId := range sortedReactionParticipantsIds {
+	for _, userId := range reaction.UserIds {
 		user := reactionUserMap[userId]
 		if user != nil {
 			reactionUsers = append(reactionUsers, user)
@@ -588,8 +588,8 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 	}
 
 	aReaction := dto.Reaction{
-		Count:    int64(count),
-		Reaction: event.Reaction,
+		Count:    reaction.Count,
+		Reaction: reaction.Reaction,
 		Users:    reactionUsers,
 	}
 

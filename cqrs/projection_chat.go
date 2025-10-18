@@ -389,7 +389,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 						participants_count = (select count from chat_participant_count),
 						participant_ids = (select array_agg(user_id) from chat_participants_last_n)
 					WHERE user_id = any($1) and id = $2;
-				`, participantIds, chatId, m.chatUserViewConfig.MaxViewableParticipants)
+				`, participantIds, chatId, m.cfg.Cqrs.Projections.ChatUserView.MaxViewableParticipants)
 			if err != nil {
 				return fmt.Errorf("error during increasing unread messages: %w", err)
 			}

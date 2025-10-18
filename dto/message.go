@@ -130,9 +130,10 @@ type ReactionPutDto struct {
 }
 
 type ReactionDto struct {
-	MessageId int64  `db:"message_id"`
-	UserId    int64  `db:"user_id"`
-	Reaction  string `db:"reaction"`
+	MessageId int64
+	UserIds   []int64
+	Reaction  string
+	Count     int64
 }
 
 type ReactionViewDto struct {

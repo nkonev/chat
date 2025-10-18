@@ -85,7 +85,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			, update_date_time = excluded.update_date_time 
 			, participants_count = excluded.participants_count 
 			, participant_ids = excluded.participant_ids
-		`, GetParticipantIds(event.Participants), event.ChatId, event.AdditionalData.CreatedAt, m.chatUserViewConfig.MaxViewableParticipants)
+		`, GetParticipantIds(event.Participants), event.ChatId, event.AdditionalData.CreatedAt, m.cfg.Cqrs.Projections.ChatUserView.MaxViewableParticipants)
 		if err != nil {
 			return err
 		}

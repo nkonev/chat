@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/georgysavva/scany/v2/sqlscan"
+	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/sanitizer"
@@ -197,7 +198,7 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, partic
 					last_message_content = (select content from last_message),
 					last_message_owner_id = (select owner_id from last_message)
 				WHERE user_id = any($1) and id = $2;
-			`, participantIds, chatId, m.chatUserViewConfig.LastMessageMaxTextDbPreviewSize)
+			`, participantIds, chatId, m.cfg.Cqrs.Projections.ChatUserView.LastMessageMaxTextDbPreviewSize)
 	if err != nil {
 		return fmt.Errorf("error during setting last message: %w", err)
 	}
@@ -548,7 +549,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			messageIds = append(messageIds, message.Id)
 		}
 
-		reactions, err := getReactions(ctx, tx, chatId, messageIds)
+		reactions, err := m.getReactions(ctx, tx, chatId, messageIds)
 		if err != nil {
 			return nil, fmt.Errorf("Got error during enriching messages with reactions: %v", err)
 		}
@@ -556,7 +557,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 		var usersSet = map[int64]bool{}
 		var chatsPreSet = map[int64]bool{}
 		for _, message := range messages {
-			populateSets(&message, usersSet, chatsPreSet, chatId, m.cfg.Message.MaxDisplayableReactionUsers, reactions)
+			populateSets(&message, usersSet, chatsPreSet, chatId, reactions)
 		}
 		chats, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserIds)
 		if err != nil {
@@ -584,10 +585,18 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 	})
 }
 
-func getReactionsCommon(ctx context.Context, co db.CommonOperations, chatId int64, messageIds []int64, reaction *string) ([]dto.ReactionDto, error) {
-	reactions := []dto.ReactionDto{}
+func getReactionsCommon(ctx context.Context, co db.CommonOperations, chatId int64, messageIds []int64, reaction *string, maxDisplayableUsers int) ([]dto.ReactionDto, error) {
+	type reactionDto struct {
+		MessageId int64            `db:"message_id"`
+		UserIds   pgtype.Int8Array `db:"user_ids"`
+		Reaction  string           `db:"reaction"`
+		Count     int64            `db:"count"`
+	}
 
-	sqlArgs := []any{chatId, messageIds}
+	reactions := []reactionDto{}
+	res := []dto.ReactionDto{}
+
+	sqlArgs := []any{chatId, messageIds, maxDisplayableUsers}
 
 	var additionalCondition string
 	if reaction != nil {
@@ -596,24 +605,57 @@ func getReactionsCommon(ctx context.Context, co db.CommonOperations, chatId int6
 	}
 
 	q := fmt.Sprintf(`
-		SELECT user_id, message_id, reaction 
-		FROM message_reaction 
-		WHERE chat_id = $1 AND message_id = ANY($2) %s
-		order by create_date_time asc
+		with
+		requested_message_reactions as (
+			select * from message_reaction where chat_id = $1 and message_id = any($2) %s
+		),
+		reaction_counts as (
+			select message_id, reaction, count(user_id) as count
+			from requested_message_reactions group by message_id, reaction
+		),
+		reaction_users_last_n as (
+			select
+				message_id,
+				reaction,
+				(array_agg(user_id order by create_date_time))[:$3] as user_ids,
+				min(create_date_time) as create_date_time
+			from message_reaction group by message_id, reaction
+		)
+		select
+			rc.message_id,
+			rc.reaction,
+			rn.user_ids,
+			rc.count
+		from reaction_counts rc
+		join reaction_users_last_n rn on (rc.message_id, rc.reaction) = (rn.message_id, rn.reaction)
+		order by rn.create_date_time
 		`, additionalCondition)
 
 	err := sqlscan.Select(ctx, co, &reactions, q, sqlArgs...)
 	if err != nil {
-		return reactions, fmt.Errorf("error during interacting with db: %w", err)
+		return res, fmt.Errorf("error during interacting with db: %w", err)
 	}
 
-	return reactions, nil
+	for i, de := range reactions {
+		mapped := dto.ReactionDto{
+			MessageId: de.MessageId,
+			Reaction:  de.Reaction,
+			Count:     de.Count,
+		}
+		err = de.UserIds.AssignTo(&mapped.UserIds)
+		if err != nil {
+			return res, fmt.Errorf("error during mapping on index %d: %w", i, err)
+		}
+		res = append(res, mapped)
+	}
+
+	return res, nil
 }
 
-func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, messageIds []int64) (map[int64][]dto.ReactionDto, error) {
+func (m *EnrichingProjection) getReactions(ctx context.Context, co db.CommonOperations, chatId int64, messageIds []int64) (map[int64][]dto.ReactionDto, error) {
 	ret := map[int64][]dto.ReactionDto{} // messageId:reactionList
 
-	reactions, err := getReactionsCommon(ctx, co, chatId, messageIds, nil)
+	reactions, err := getReactionsCommon(ctx, co, chatId, messageIds, nil, m.cfg.Message.MaxDisplayableReactionUsers)
 	if err != nil {
 		return ret, fmt.Errorf("error during interacting with db: %w", err)
 	}
@@ -628,22 +670,31 @@ func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, mes
 	return ret, nil
 }
 
-func (m *CommonProjection) GetReactionParticipantsIds(ctx context.Context, co db.CommonOperations, chatId, messageId int64, reaction string) ([]int64, error) {
-	list := make([]int64, 0)
-
-	reactions, err := getReactionsCommon(ctx, co, chatId, []int64{messageId}, &reaction)
+func (m *CommonProjection) GetReaction(ctx context.Context, co db.CommonOperations, chatId, messageId int64, reaction string) (dto.ReactionDto, error) {
+	reactions, err := getReactionsCommon(ctx, co, chatId, []int64{messageId}, &reaction, m.cfg.Message.MaxDisplayableReactionUsers)
 	if err != nil {
-		return list, fmt.Errorf("error during interacting with db: %w", err)
+		return dto.ReactionDto{}, fmt.Errorf("error during interacting with db: %w", err)
 	}
 
-	for _, reaction := range reactions {
-		list = append(list, reaction.UserId)
+	if len(reactions) == 0 {
+		return dto.ReactionDto{
+			MessageId: messageId,
+			UserIds:   []int64{},
+			Reaction:  reaction,
+			Count:     0,
+		}, nil
 	}
 
-	return list, nil
+	if len(reactions) > 1 {
+		return dto.ReactionDto{}, fmt.Errorf("wrong invarint: more than 1 reaction: %w", err)
+	}
+
+	r := reactions[0]
+
+	return r, nil
 }
 
-func populateSets(message *dto.MessageDto, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, maxDisplayableReactionUsers int, reactions map[int64][]dto.ReactionDto) {
+func populateSets(message *dto.MessageDto, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, reactions map[int64][]dto.ReactionDto) {
 	usersSet[message.OwnerId] = true
 
 	chatsPreSet[currentChatId] = true
@@ -658,22 +709,15 @@ func populateSets(message *dto.MessageDto, usersSet map[int64]bool, chatsPreSet 
 		chatsPreSet[embeddedMessageResendChatId] = true
 	}
 
-	takeOnAccountReactions(message.Id, usersSet, maxDisplayableReactionUsers, reactions)
+	takeOnAccountReactions(message.Id, usersSet, reactions)
 }
 
-func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, maxDisplayableReactionUsers int, messageReactions map[int64][]dto.ReactionDto) {
-	var currDisplayableUsers = 0
-
+func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, messageReactions map[int64][]dto.ReactionDto) {
 	rl, ok := messageReactions[messageId]
 	if ok {
 		for _, r := range rl {
-			if !ownersSet[r.UserId] {
-				ownersSet[r.UserId] = true
-				currDisplayableUsers++
-			}
-
-			if currDisplayableUsers >= maxDisplayableReactionUsers {
-				break
+			for _, u := range r.UserIds {
+				ownersSet[u] = true
 			}
 		}
 	}
@@ -723,41 +767,23 @@ func CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin bool) bool {
 }
 
 func setReactions(dst *dto.MessageViewEnrichedDto, users map[int64]*dto.User, reactionsList []dto.ReactionDto) {
-	var convertedReactionsOfMessageToReturn = make([]dto.ReactionViewDto, 0)
-
+	var convertedReactionsOfMessageToReturn = make([]dto.ReactionViewDto, 0, len(reactionsList))
 	for _, dbReaction := range reactionsList {
-		user := users[dbReaction.UserId]
-		wasSummed := false
-		for j, existingReaction := range convertedReactionsOfMessageToReturn {
-			if dbReaction.Reaction == existingReaction.Reaction {
-				convertedReactionsOfMessageToReturn[j].Count = existingReaction.Count + 1
 
-				usersOfThisReaction := convertedReactionsOfMessageToReturn[j].Users
-				if user != nil {
-					usersOfThisReaction = append(usersOfThisReaction, user)
-				} else {
-					usersOfThisReaction = append(usersOfThisReaction, getDeletedUser(dbReaction.UserId))
-				}
-
-				convertedReactionsOfMessageToReturn[j].Users = usersOfThisReaction
-
-				wasSummed = true
+		reactionUsers := []*dto.User{}
+		for _, u := range dbReaction.UserIds {
+			ru := users[u]
+			if ru == nil {
+				ru = getDeletedUser(u)
 			}
+			reactionUsers = append(reactionUsers, ru)
 		}
-		if !wasSummed {
-			usersOfThisReaction := []*dto.User{}
-			if user != nil {
-				usersOfThisReaction = append(usersOfThisReaction, user)
-			} else {
-				usersOfThisReaction = append(usersOfThisReaction, getDeletedUser(dbReaction.UserId))
-			}
 
-			convertedReactionsOfMessageToReturn = append(convertedReactionsOfMessageToReturn, dto.ReactionViewDto{
-				Count:    1,
-				Reaction: dbReaction.Reaction,
-				Users:    usersOfThisReaction,
-			})
-		}
+		convertedReactionsOfMessageToReturn = append(convertedReactionsOfMessageToReturn, dto.ReactionViewDto{
+			Count:    dbReaction.Count,
+			Users:    reactionUsers,
+			Reaction: dbReaction.Reaction,
+		})
 	}
 
 	dst.Reactions = convertedReactionsOfMessageToReturn
