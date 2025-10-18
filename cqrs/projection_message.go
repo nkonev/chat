@@ -595,12 +595,14 @@ func getReactionsCommon(ctx context.Context, co db.CommonOperations, chatId int6
 		additionalCondition = fmt.Sprintf("and reaction = $%d", len(sqlArgs))
 	}
 
-	err := sqlscan.Select(ctx, co, &reactions, fmt.Sprintf(`
+	q := fmt.Sprintf(`
 		SELECT user_id, message_id, reaction 
 		FROM message_reaction 
 		WHERE chat_id = $1 AND message_id = ANY($2) %s
 		order by create_date_time asc
-		`, additionalCondition), sqlArgs...)
+		`, additionalCondition)
+
+	err := sqlscan.Select(ctx, co, &reactions, q, sqlArgs...)
 	if err != nil {
 		return reactions, fmt.Errorf("error during interacting with db: %w", err)
 	}
