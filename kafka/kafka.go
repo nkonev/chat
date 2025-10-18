@@ -22,7 +22,7 @@ func ConfigureKafkaAdmin(
 	lc fx.Lifecycle,
 ) (sarama.ClusterAdmin, error) {
 	kafkaAdminConfig := sarama.NewConfig()
-	kafkaAdminConfig.Version = sarama.V4_0_0_0
+	kafkaAdminConfig.Version = sarama.V4_1_0_0
 
 	kafkaAdmin, err := sarama.NewClusterAdmin(cfg.Kafka.BootstrapServers, kafkaAdminConfig)
 	if err != nil {
@@ -117,7 +117,7 @@ func ConfigureSaramaClient(
 	lc fx.Lifecycle,
 ) (sarama.Client, error) {
 	config := sarama.NewConfig()
-	config.Version = sarama.V4_0_0_0
+	config.Version = sarama.V4_1_0_0
 
 	client, err := sarama.NewClient(cfg.Kafka.BootstrapServers, config)
 	if err != nil {
@@ -286,7 +286,7 @@ func Export(
 	}
 
 	config := sarama.NewConfig()
-	config.Version = sarama.V4_0_0_0
+	config.Version = sarama.V4_1_0_0
 
 	newConsumer, err := sarama.NewConsumer(cfg.Kafka.BootstrapServers, config)
 	if err != nil {
@@ -382,7 +382,7 @@ func Import(
 	cfg *config.AppConfig,
 ) error {
 	config := sarama.NewConfig()
-	config.Version = sarama.V4_0_0_0
+	config.Version = sarama.V4_1_0_0
 	config.Producer.Return.Successes = true
 
 	producer, err := sarama.NewSyncProducer(cfg.Kafka.BootstrapServers, config)

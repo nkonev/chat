@@ -1,7 +1,7 @@
 module go-cqrs-chat-example
 
 require (
-	github.com/IBM/sarama v1.46.0
+	github.com/IBM/sarama v1.46.2
 	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/PuerkitoBio/goquery v1.8.1
 	github.com/ThreeDotsLabs/watermill v1.5.0
@@ -21,7 +21,7 @@ require (
 	github.com/sanity-io/litter v1.5.8
 	github.com/shogo82148/go-sql-proxy v0.7.2
 	github.com/streadway/amqp v1.0.0
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	github.com/traefik/paerser v0.2.2
 	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.60.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0
@@ -104,14 +104,14 @@ require (
 	go.uber.org/multierr v1.10.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/arch v0.20.0 // indirect
-	golang.org/x/crypto v0.41.0 // indirect
-	golang.org/x/net v0.43.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/crypto v0.43.0 // indirect
+	golang.org/x/net v0.46.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250218202821-56aae31c358a // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-go 1.23.9
+go 1.25
