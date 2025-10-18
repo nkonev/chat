@@ -543,7 +543,12 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			return nil, fmt.Errorf("Unknown invariant")
 		}
 
-		reactions, err := getReactions(ctx, tx, chatId, messages)
+		messageIds := make([]int64, 0)
+		for _, message := range messages {
+			messageIds = append(messageIds, message.Id)
+		}
+
+		reactions, err := getReactions(ctx, tx, chatId, messageIds)
 		if err != nil {
 			return nil, fmt.Errorf("Got error during enriching messages with reactions: %v", err)
 		}
@@ -579,28 +584,34 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 	})
 }
 
-func messageReactionQuery(additionalCondition string) string {
-	return fmt.Sprintf(`
-		FROM message_reaction 
-		WHERE chat_id = $2 AND message_id = ANY ($1) %s
-		order by create_date_time asc
-	`, additionalCondition)
-}
-
-// see also GetReactionParticipantsIds()
-func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, list []dto.MessageDto) (map[int64][]dto.ReactionDto, error) {
-	messageIds := make([]int64, 0)
-	for _, message := range list {
-		messageIds = append(messageIds, message.Id)
-	}
-
+func getReactionsCommon(ctx context.Context, co db.CommonOperations, chatId int64, messageIds []int64, reaction *string) ([]dto.ReactionDto, error) {
 	reactions := []dto.ReactionDto{}
 
+	sqlArgs := []any{chatId, messageIds}
+
+	var additionalCondition string
+	if reaction != nil {
+		sqlArgs = append(sqlArgs, *reaction)
+		additionalCondition = fmt.Sprintf("and reaction = $%d", len(sqlArgs))
+	}
+
+	err := sqlscan.Select(ctx, co, &reactions, fmt.Sprintf(`
+		SELECT user_id, message_id, reaction 
+		FROM message_reaction 
+		WHERE chat_id = $1 AND message_id = ANY($2) %s
+		order by create_date_time asc
+		`, additionalCondition), sqlArgs...)
+	if err != nil {
+		return reactions, fmt.Errorf("error during interacting with db: %w", err)
+	}
+
+	return reactions, nil
+}
+
+func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, messageIds []int64) (map[int64][]dto.ReactionDto, error) {
 	ret := map[int64][]dto.ReactionDto{} // messageId:reactionList
 
-	err := sqlscan.Select(ctx, co, &reactions, `
-		SELECT user_id, message_id, reaction 
-		`+messageReactionQuery(""), messageIds, chatId)
+	reactions, err := getReactionsCommon(ctx, co, chatId, messageIds, nil)
 	if err != nil {
 		return ret, fmt.Errorf("error during interacting with db: %w", err)
 	}
@@ -615,18 +626,18 @@ func getReactions(ctx context.Context, co db.CommonOperations, chatId int64, lis
 	return ret, nil
 }
 
-// see also getReactions()
 func (m *CommonProjection) GetReactionParticipantsIds(ctx context.Context, co db.CommonOperations, chatId, messageId int64, reaction string) ([]int64, error) {
 	list := make([]int64, 0)
 
-	sqlArgs := []any{[]int64{messageId}, chatId, reaction}
-	sqlQuery := `
-		SELECT user_id 
-		` + messageReactionQuery(" and reaction = $3")
-	err := sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
+	reactions, err := getReactionsCommon(ctx, co, chatId, []int64{messageId}, &reaction)
 	if err != nil {
-		return nil, fmt.Errorf("error during interacting with db: %w", err)
+		return list, fmt.Errorf("error during interacting with db: %w", err)
 	}
+
+	for _, reaction := range reactions {
+		list = append(list, reaction.UserId)
+	}
+
 	return list, nil
 }
 
