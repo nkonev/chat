@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
 	"slices"
@@ -557,7 +558,7 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 				admin = areAdminsOfChatIds[ch.Id]
 			}
 
-			che := enrichChat(ch.UserId, ch, usersMap, admin)
+			che := m.enrichChat(ch.UserId, ch, usersMap, admin)
 			chatsEnriched = append(chatsEnriched, che)
 		}
 
@@ -623,7 +624,7 @@ func getChatIdsFromChats(chats []dto.ChatViewDto) []int64 {
 	return r
 }
 
-func enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.User, admin bool) dto.ChatViewEnrichedDto {
+func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.User, admin bool) dto.ChatViewEnrichedDto {
 	che := dto.ChatViewEnrichedDto{
 		ChatViewDto:  ch,
 		Participants: makeParticipants(ch.ParticipantIds, users),
@@ -645,21 +646,12 @@ func enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.Use
 	if ch.LastMessageOwnerId != nil && ch.LastMessageContent != nil {
 		u := users[*ch.LastMessageOwnerId]
 		if u != nil {
-			preview := createMessagePreview(*ch.LastMessageContent, u.Login)
-			che.LastMessagePreview = &preview
+			previewStr := preview.CreateMessagePreview(m.stripAllTags, m.cfg.Message.PreviewMaxTextSize, *ch.LastMessageContent, u.Login)
+			che.LastMessagePreview = &previewStr
 		}
 	}
 
 	return che
-}
-
-func createMessagePreview(text, login string) string {
-	input := loginPrefix(login) + text
-	return input
-}
-
-func loginPrefix(login string) string {
-	return login + ": "
 }
 
 func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, participant bool) {

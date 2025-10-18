@@ -8,9 +8,9 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/sanitizer"
-	"go-cqrs-chat-example/utils"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -88,9 +88,9 @@ func NewMessageService(
 }
 
 func (p *MessageService) BroadcastMessage(ctx context.Context, messageText string, chatId, userId int64, userLogin string) {
-	preview := createMessagePreview(p.stripAllTags, p.cfg.Message.PreviewMaxTextSize, messageText, userLogin)
-	if preview == loginPrefix(userLogin) {
-		preview = ""
+	previewStr := preview.CreateMessagePreview(p.stripAllTags, p.cfg.Message.PreviewMaxTextSize, messageText, userLogin)
+	if previewStr == preview.LoginPrefix(userLogin) {
+		previewStr = ""
 	}
 
 	eventType := dto.EventTypeMessageBroadCast
@@ -100,7 +100,7 @@ func (p *MessageService) BroadcastMessage(ctx context.Context, messageText strin
 	ut := dto.MessageBroadcastNotification{
 		Login:  userLogin,
 		UserId: userId,
-		Text:   preview,
+		Text:   previewStr,
 	}
 
 	err := p.commonProjection.IterateOverChatParticipantIds(ctx, p.dbWrapper, chatId, []int64{}, func(participantIds []int64) error {
@@ -153,32 +153,7 @@ func (p *MessageService) TypeMessage(ctx context.Context, chatId, userId int64, 
 	}
 }
 
-func (p *MessageService) CreatePreview(ctx context.Context, messageText, userLogin string) string {
-	input := loginPrefix(userLogin) + messageText
-	return createMessagePreviewWithoutLogin(p.stripAllTags, p.cfg.Message.PreviewMaxTextSize, input)
-}
-
-func loginPrefix(login string) string {
-	return login + ": "
-}
-
-func createMessagePreview(cleanTagsPolicy *sanitizer.StripTagsPolicy, previewMaxTextSize int, text, login string) string {
-	input := loginPrefix(login) + text
-	return createMessagePreviewWithoutLogin(cleanTagsPolicy, previewMaxTextSize, input)
-}
-
-func createMessagePreviewWithoutLogin(cleanTagsPolicy *sanitizer.StripTagsPolicy, previewMaxTextSize int, text string) string {
-	return stripTagsAndCut(cleanTagsPolicy, previewMaxTextSize, text)
-}
-
-func stripTagsAndCut(cleanTagsPolicy *sanitizer.StripTagsPolicy, sizeToCut int, text string) string {
-	tmp := cleanTagsPolicy.Sanitize(text)
-	runes := []rune(tmp)
-	textLen := len(runes)
-	size := utils.Min(sizeToCut, textLen)
-	ret := string(runes[:size])
-	if textLen > sizeToCut {
-		ret += "..."
-	}
-	return ret
+func (p *MessageService) CreatePreview(messageText, userLogin string) string {
+	input := preview.LoginPrefix(userLogin) + messageText
+	return preview.CreateMessagePreviewWithoutLogin(p.stripAllTags, p.cfg.Message.PreviewMaxTextSize, input)
 }

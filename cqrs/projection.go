@@ -24,8 +24,9 @@ type EnrichingProjection struct {
 	cp            *CommonProjection
 	lgr           *logger.LoggerWrapper
 	aaaRestClient client.AaaRestClient
-	messageConfig config.MessageConfig
 	policy        *sanitizer.SanitizerPolicy
+	stripAllTags  *sanitizer.StripTagsPolicy
+	cfg           *config.AppConfig
 }
 
 func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppConfig) *CommonProjection {
@@ -37,12 +38,13 @@ func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppCo
 	}
 }
 
-func NewEnrichingProjection(cp *CommonProjection, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient, cfg *config.AppConfig, policy *sanitizer.SanitizerPolicy) *EnrichingProjection {
+func NewEnrichingProjection(cp *CommonProjection, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient, cfg *config.AppConfig, policy *sanitizer.SanitizerPolicy, stripAllTags *sanitizer.StripTagsPolicy) *EnrichingProjection {
 	return &EnrichingProjection{
 		cp:            cp,
 		lgr:           lgr,
 		aaaRestClient: aaaRestClient,
-		messageConfig: cfg.Message,
+		cfg:           cfg,
+		stripAllTags:  stripAllTags,
 		policy:        policy,
 	}
 }

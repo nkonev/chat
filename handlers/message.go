@@ -711,7 +711,7 @@ func (mc *MessageHandler) MessagePreview(g *gin.Context) {
 		return
 	}
 
-	preview := mc.messageService.CreatePreview(g.Request.Context(), bindTo.Text, bindTo.Login)
+	preview := mc.messageService.CreatePreview(bindTo.Text, bindTo.Login)
 	response := dto.CleanHtmlTagsResponseDto{
 		Text: preview,
 	}

@@ -197,7 +197,7 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, partic
 					last_message_content = (select content from last_message),
 					last_message_owner_id = (select owner_id from last_message)
 				WHERE user_id = any($1) and id = $2;
-			`, participantIds, chatId, m.chatUserViewConfig.LastMessageMaxTextPreviewSize)
+			`, participantIds, chatId, m.chatUserViewConfig.LastMessageMaxTextDbPreviewSize)
 	if err != nil {
 		return fmt.Errorf("error during setting last message: %w", err)
 	}
@@ -556,7 +556,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 		var usersSet = map[int64]bool{}
 		var chatsPreSet = map[int64]bool{}
 		for _, message := range messages {
-			populateSets(&message, usersSet, chatsPreSet, chatId, m.messageConfig.MaxDisplayableReactionUsers, reactions)
+			populateSets(&message, usersSet, chatsPreSet, chatId, m.cfg.Message.MaxDisplayableReactionUsers, reactions)
 		}
 		chats, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserIds)
 		if err != nil {

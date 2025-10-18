@@ -51,7 +51,7 @@ cqrs:
   projections:
     chatUserView:
       maxViewableParticipants: 10
-      lastMessageMaxTextPreviewSize: 256
+      lastMessageMaxTextDbPreviewSize: 512
     blogView:
       maxTextPreviewSize: 512
   commands:

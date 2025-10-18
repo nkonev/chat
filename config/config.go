@@ -103,8 +103,8 @@ type ExportConfig struct {
 }
 
 type ChatUserViewConfig struct {
-	MaxViewableParticipants       int32
-	LastMessageMaxTextPreviewSize int32
+	MaxViewableParticipants         int32
+	LastMessageMaxTextDbPreviewSize int32
 }
 
 type BlogViewConfig struct {
