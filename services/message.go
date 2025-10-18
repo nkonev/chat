@@ -11,6 +11,7 @@ import (
 	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/sanitizer"
+	"go-cqrs-chat-example/utils"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -61,9 +62,11 @@ type MessageService struct {
 	dbWrapper                    *db.DB
 	commonProjection             *cqrs.CommonProjection
 	stripAllTags                 *sanitizer.StripTagsPolicy
+	policy                       *sanitizer.SanitizerPolicy
 	cfg                          *config.AppConfig
 	tr                           trace.Tracer
 	rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher
+	enrichingProjection          *cqrs.EnrichingProjection
 }
 
 func NewMessageService(
@@ -71,8 +74,10 @@ func NewMessageService(
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	stripAllTags *sanitizer.StripTagsPolicy,
+	policy *sanitizer.SanitizerPolicy,
 	cfg *config.AppConfig,
 	rabbitmqEventPublisher *producer.RabbitOutputEventsPublisher,
+	enrichingProjection *cqrs.EnrichingProjection,
 ) *MessageService {
 	tr := otel.Tracer("event")
 
@@ -81,9 +86,11 @@ func NewMessageService(
 		dbWrapper:                    dbWrapper,
 		commonProjection:             commonProjection,
 		stripAllTags:                 stripAllTags,
+		policy:                       policy,
 		cfg:                          cfg,
 		tr:                           tr,
 		rabbitmqOutputEventPublisher: rabbitmqEventPublisher,
+		enrichingProjection:          enrichingProjection,
 	}
 }
 
@@ -156,4 +163,38 @@ func (p *MessageService) TypeMessage(ctx context.Context, chatId, userId int64, 
 func (p *MessageService) CreatePreview(messageText, userLogin string) string {
 	input := preview.LoginPrefix(userLogin) + messageText
 	return preview.CreateMessagePreviewWithoutLogin(p.stripAllTags, p.cfg.Message.PreviewMaxTextSize, input)
+}
+
+func (p *MessageService) SearchForUsersToMention(ctx context.Context, chatId, userId int64, searchString string) ([]*dto.User, error) {
+	participant, err := p.commonProjection.IsParticipant(ctx, p.dbWrapper, userId, chatId)
+	if err != nil {
+		return nil, err
+	}
+	if !participant {
+		return nil, cqrs.NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", userId, chatId))
+	}
+
+	searchString = sanitizer.TrimAmdSanitize(p.policy, searchString)
+
+	usersWithAdmin, _, err := p.enrichingProjection.SearchUsersContaining(ctx, p.dbWrapper, searchString, chatId, utils.DefaultSize, utils.DefaultOffset, true)
+	if err != nil {
+		return nil, err
+	}
+
+	users := []*dto.User{}
+	for _, u := range usersWithAdmin {
+		uu := u.User
+		users = append(users, &uu)
+	}
+
+	users = append(users, &dto.User{
+		Id:    dto.AllUsers, // -1 is reserved for 'deleted' in ./aaa/src/main/resources/db/migration/V1__init.sql
+		Login: dto.AllUsersLogin,
+	})
+	users = append(users, &dto.User{
+		Id:    dto.HereUsers, // -1 is reserved for 'deleted' in ./aaa/src/main/resources/db/migration/V1__init.sql
+		Login: dto.HereUsersLogin,
+	})
+
+	return users, nil
 }

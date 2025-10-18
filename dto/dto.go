@@ -1,7 +1,5 @@
 package dto
 
-const NonExistentUser = -65000
-
 type IdResponse struct {
 	Id int64 `json:"id"`
 }

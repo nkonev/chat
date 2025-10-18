@@ -3,6 +3,13 @@ package dto
 import "time"
 
 const NoId = -1
+const NonExistentUser = -65000
+const DeletedUser = -1
+const AllUsers = -2
+const HereUsers = -3
+
+const AllUsersLogin = "all"
+const HereUsersLogin = "here"
 
 type User struct {
 	Id               int64           `json:"id"`
