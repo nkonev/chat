@@ -2719,7 +2719,53 @@ func TestMessagePaginate(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 3, len(resp2Search))
 		assert.True(t, strings.HasPrefix(resp2Search[0].Content, "generated_message10"))
-		assert.True(t, strings.HasPrefix(resp2Search[1].Content, "generated_message100"))
-		assert.True(t, strings.HasPrefix(resp2Search[2].Content, "generated_message101"))
+		assert.True(t, strings.HasPrefix(resp2Search[1].Content, "generated_message11"))
+		assert.True(t, strings.HasPrefix(resp2Search[2].Content, "generated_message12"))
+	})
+}
+
+func TestMessageFuzzySearch(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		dba *db.DB,
+		aaaRestClient client.AaaRestClient,
+		lc fx.Lifecycle,
+	) {
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{}, nil)
+
+		const user1 int64 = 1
+		const chat1Name = "new chat 1"
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		const messageText = "Опубликована платформа Node.js 25.0.0"
+
+		lastMessageId, err := testRestClient.CreateMessage(ctx, user1, chat1Id, messageText)
+		require.NoError(t, err, "error in creating message")
+		waitForMessageExists(lgr, dba, chat1Id, lastMessageId)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		const searchString1 = "Опубликованный"
+		// get second page with search
+		resp1Search, _, err := testRestClient.GetMessages(ctx, user1, chat1Id, client.NewMessageGetOptionWithSearch(searchString1))
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(resp1Search))
+		assert.Equal(t, resp1Search[0].Content, "Опубликована платформа Node.js 25.0.0")
+
+		const searchString2 = "публик"
+		// get second page with search
+		resp2Search, _, err := testRestClient.GetMessages(ctx, user1, chat1Id, client.NewMessageGetOptionWithSearch(searchString2))
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(resp2Search))
+		assert.Equal(t, resp2Search[0].Content, "Опубликована платформа Node.js 25.0.0")
 	})
 }

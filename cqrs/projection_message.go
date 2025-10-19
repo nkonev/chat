@@ -869,9 +869,18 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 
 	var searchClause string
 	if len(searchString) > 0 {
+		searchClause = " and ("
+
 		searchStringPercents := "%" + searchString + "%"
 		queryArgs = append(queryArgs, searchStringPercents)
-		searchClause = fmt.Sprintf(" AND strip_tags(m.content) ILIKE $%d ", len(queryArgs))
+		searchClause += fmt.Sprintf(" strip_tags(m.content) ILIKE $%d ", len(queryArgs))
+
+		searchClause += " or "
+
+		queryArgs = append(queryArgs, searchString)
+		searchClause += fmt.Sprintf(" exists( select 1 from (select * from (select unnest(tsvector_to_array(m.fts_content))) t(av)) inq where inq.av %% to_tsquery('russian', $%d)::text ) ", len(queryArgs))
+
+		searchClause += " ) "
 	}
 
 	orderClause := fmt.Sprintf(" order by m.id %s ", order)

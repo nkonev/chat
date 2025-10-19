@@ -251,6 +251,7 @@ func (db *DB) Migrate(mc config.MigrationConfig) error {
 
 func (db *DB) Reset(mc config.MigrationConfig) error {
 	_, err := db.Exec(fmt.Sprintf(`
+	drop EXTENSION if exists pg_trgm;
 	drop sequence if exists chat_id_sequence;
 	
 	drop table if exists chat_common;
