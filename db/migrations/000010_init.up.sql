@@ -4,6 +4,12 @@ CREATE OR REPLACE FUNCTION strip_tags(TEXT) RETURNS TEXT AS $$
 SELECT regexp_replace($1, '<[^>]*>', '', 'g')
 $$ LANGUAGE SQL;
 
+CREATE OR REPLACE FUNCTION cyrillic_transliterate(p_string text) RETURNS character varying AS
+$BODY$
+SELECT replace(replace(replace(replace(replace(replace(replace(replace(translate(lower($1),'абвгдеёзийклмнопрстуфхцэы','abvgdeezijklmnoprstufхcey'), 'ж', 'zh'), 'ч', 'ch'), 'ш', 'sh'), 'щ', 'sch'), 'ъ', ''), 'ю', 'yu'), 'я', 'ya'), 'ь', '');
+$BODY$
+LANGUAGE SQL IMMUTABLE COST 100;
+
 create sequence chat_id_sequence;
 
 create unlogged table chat_common(

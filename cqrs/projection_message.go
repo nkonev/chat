@@ -878,7 +878,13 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		searchClause += " or "
 
 		queryArgs = append(queryArgs, searchString)
-		searchClause += fmt.Sprintf(" exists( select 1 from (select * from (select unnest(tsvector_to_array(m.fts_content))) t(av)) inq where inq.av %% to_tsquery('russian', $%d)::text ) ", len(queryArgs))
+		searchClause += fmt.Sprintf(` 
+		exists ( 
+			select 1 from (select * from (select unnest(tsvector_to_array(m.fts_content))) t(av)) inq 
+			where 
+				   ( inq.av %% to_tsquery('russian', $%d)::text ) 
+				or ( cyrillic_transliterate(inq.av) %% cyrillic_transliterate(to_tsquery('russian', $%d)::text) ) 
+		) `, len(queryArgs), len(queryArgs))
 
 		searchClause += " ) "
 	}
