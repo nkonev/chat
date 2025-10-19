@@ -490,7 +490,7 @@ func processAdditionalUserIds(queryArgsInput []any, additionalFoundUserIds []int
 		additionalUserIdsClause = fmt.Sprintf(" ( cc.id = any(array(SELECT chat_id FROM tet_a_tet_chats_ids)) ) or ")
 	}
 	// TODO available_to_search
-	searchClause = fmt.Sprintf("and ( ( %s cc.title ILIKE $%d ) OR ( (cc.available_to_search = TRUE OR b.id is not null) AND $%d = '%s' ) )", additionalUserIdsClause, len(queryArgs)+1, len(queryArgs)+2, dto.ReservedPublicallyAvailableForSearchChats)
+	searchClause = fmt.Sprintf(" ( ( %s cc.title ILIKE $%d ) OR ( (cc.available_to_search = TRUE OR b.id is not null) AND $%d = '%s' ) )", additionalUserIdsClause, len(queryArgs)+1, len(queryArgs)+2, dto.ReservedPublicallyAvailableForSearchChats)
 	searchStringPercents := "%" + searchString + "%"
 	queryArgs = append(queryArgs, searchStringPercents)
 	queryArgs = append(queryArgs, searchString)
@@ -742,7 +742,18 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 	var searchClause = ""
 	var searchCte = ""
 	if len(searchString) > 0 {
-		searchClause, searchCte, queryArgs = processAdditionalUserIds(queryArgs, additionalFoundUserIds, searchString)
+		searchClause = " and ("
+
+		searchClauseT, searchCteT, queryArgsT := processAdditionalUserIds(queryArgs, additionalFoundUserIds, searchString)
+		searchClause += searchClauseT
+		searchCte = searchCteT
+		queryArgs = queryArgsT
+
+		searchClause += " or "
+		queryArgs = append(queryArgs, searchString)
+		searchClause += fmt.Sprintf(" exists( select 1 from (select * from (select unnest(tsvector_to_array(cc.fts_title))) t(av)) inq where inq.av %% to_tsquery('russian', $%d)::text ) ", len(queryArgs))
+
+		searchClause += " ) "
 	}
 
 	if chatId != nil {

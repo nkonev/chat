@@ -9,6 +9,7 @@ create sequence chat_id_sequence;
 create unlogged table chat_common(
     id bigint primary key,
     title varchar(512) not null,
+    fts_title tsvector generated always as (to_tsvector('russian', title)) stored,
     last_generated_message_id bigint not null default 0,
     create_date_time timestamp not null,
     tet_a_tet boolean not null,

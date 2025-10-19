@@ -2649,9 +2649,47 @@ func TestChatPaginate(t *testing.T) {
 		const searchString = "generated_chat96"
 		resp2Search, _, err := testRestClient.GetChats(ctx, user1, client.NewChatGetOptionWithSize(40), client.NewChatGetOptionWithStartsFromChatPinned(lastPinned), client.NewChatGetOptionWithStartsFromChatLastUpdateDateTime(lastLastUpdateDateTime), client.NewChatGetOptionWithStartsFromChatId(lastId), client.NewChatGetOptionWithSearch(searchString))
 		require.NoError(t, err)
-		assert.Equal(t, 2, len(resp2Search))
+		assert.Equal(t, 40, len(resp2Search))
 		assert.Equal(t, "generated_chat960", resp2Search[0].Title)
-		assert.Equal(t, "generated_chat96", resp2Search[1].Title)
+		assert.Equal(t, "generated_chat959", resp2Search[1].Title)
+	})
+}
+
+func TestChatFuzzySearch(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		dba *db.DB,
+		aaaRestClient client.AaaRestClient,
+		lc fx.Lifecycle,
+	) {
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{}, nil)
+		mockAaaClient.EXPECT().SearchGetUsers(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*dto.User{}, 1, nil)
+
+		const user1 int64 = 1
+		const chat1Name = "чат Опубликована платформа Node.js 25.0.0"
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		const searchString1 = "Опубликованный"
+		resp1Search, _, err := testRestClient.GetChats(ctx, user1, client.NewChatGetOptionWithSearch(searchString1))
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(resp1Search))
+		assert.Equal(t, resp1Search[0].Title, "чат Опубликована платформа Node.js 25.0.0")
+
+		const searchString2 = "публик"
+		resp2Search, _, err := testRestClient.GetChats(ctx, user1, client.NewChatGetOptionWithSearch(searchString2))
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(resp2Search))
+		assert.Equal(t, resp2Search[0].Title, "чат Опубликована платформа Node.js 25.0.0")
 	})
 }
 
@@ -2747,7 +2785,7 @@ func TestMessageFuzzySearch(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		const messageText = "Опубликована платформа Node.js 25.0.0"
+		const messageText = "сообщение Опубликована платформа Node.js 25.0.0"
 
 		lastMessageId, err := testRestClient.CreateMessage(ctx, user1, chat1Id, messageText)
 		require.NoError(t, err, "error in creating message")
@@ -2755,17 +2793,15 @@ func TestMessageFuzzySearch(t *testing.T) {
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		const searchString1 = "Опубликованный"
-		// get second page with search
 		resp1Search, _, err := testRestClient.GetMessages(ctx, user1, chat1Id, client.NewMessageGetOptionWithSearch(searchString1))
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(resp1Search))
-		assert.Equal(t, resp1Search[0].Content, "Опубликована платформа Node.js 25.0.0")
+		assert.Equal(t, resp1Search[0].Content, "сообщение Опубликована платформа Node.js 25.0.0")
 
 		const searchString2 = "публик"
-		// get second page with search
 		resp2Search, _, err := testRestClient.GetMessages(ctx, user1, chat1Id, client.NewMessageGetOptionWithSearch(searchString2))
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(resp2Search))
-		assert.Equal(t, resp2Search[0].Content, "Опубликована платформа Node.js 25.0.0")
+		assert.Equal(t, resp2Search[0].Content, "сообщение Опубликована платформа Node.js 25.0.0")
 	})
 }
