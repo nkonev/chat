@@ -161,7 +161,14 @@ func (p *MessageService) TypeMessage(ctx context.Context, chatId, userId int64, 
 }
 
 func (p *MessageService) CreatePreview(messageText, userLogin string) string {
-	input := preview.LoginPrefix(userLogin) + messageText
+
+	var input string
+	if len(userLogin) > 0 {
+		input = preview.LoginPrefix(userLogin) + messageText
+	} else {
+		input = messageText
+	}
+
 	return preview.CreateMessagePreviewWithoutLogin(p.stripAllTags, p.cfg.Message.PreviewMaxTextSize, input)
 }
 
