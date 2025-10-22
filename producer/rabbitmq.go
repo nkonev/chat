@@ -13,6 +13,7 @@ import (
 
 const EventsFanoutExchange = "async-events-exchange"
 const ChatInternalExchange = "chat-internal-exchange"
+const AaaEventsExchange = "aaa-profile-events-exchange"
 const correlationIdName = "correlationId"
 
 func (rp *RabbitOutputEventsPublisher) Publish(ctx context.Context, correlationId *string, aDto interface{}) error {
@@ -113,6 +114,52 @@ func NewRabbitInternalEventsPublisher(lgr *logger.LoggerWrapper, connection *rab
 		return nil, err
 	}
 	return &RabbitInternalEventsPublisher{
+		channel:      cha,
+		lgr:          lgr,
+		typeRegistry: typeRegistry,
+	}, nil
+}
+
+func (rp *RabbitTestInputEventsPublisher) Publish(ctx context.Context, aDto interface{}) error {
+	headers := myRabbitmq.InjectAMQPHeaders(ctx)
+
+	aType := rp.typeRegistry.GetType(aDto)
+
+	bytea, err := json.Marshal(aDto)
+	if err != nil {
+		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", "err", err)
+		return err
+	}
+
+	msg := amqp.Publishing{
+		DeliveryMode: amqp.Transient,
+		Timestamp:    time.Now().UTC(),
+		ContentType:  "application/json",
+		Body:         bytea,
+		Type:         aType,
+		Headers:      headers,
+	}
+
+	if err := rp.channel.Publish(AaaEventsExchange, "", false, false, msg); err != nil {
+		rp.lgr.ErrorContext(ctx, "Error during publishing dto", "err", err)
+		return err
+	} else {
+		return nil
+	}
+}
+
+type RabbitTestInputEventsPublisher struct {
+	channel      *rabbitmq.Channel
+	lgr          *logger.LoggerWrapper
+	typeRegistry *type_registry.TypeRegistryInstance
+}
+
+func NewRabbitTestInputEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, typeRegistry *type_registry.TypeRegistryInstance) (*RabbitTestInputEventsPublisher, error) {
+	cha, err := myRabbitmq.CreateRabbitMqChannel(lgr, connection)
+	if err != nil {
+		return nil, err
+	}
+	return &RabbitTestInputEventsPublisher{
 		channel:      cha,
 		lgr:          lgr,
 		typeRegistry: typeRegistry,

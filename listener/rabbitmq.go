@@ -11,10 +11,15 @@ import (
 )
 
 const ChatExchange = producer.EventsFanoutExchange
+const AaaEventsExchange = producer.AaaEventsExchange
 const testQueueName = "chat-event-test"
+const aaaEventsQueue = "chat-aaa-profile-events"
 
 type ChatChannel struct{ *rabbitmq.Channel }
 type InternalEventChannel struct{ *rabbitmq.Channel }
+
+type AaaEventsChannel struct{ *rabbitmq.Channel }
+type AaaEventsQueue struct{ *amqp.Queue }
 
 func create(lgr *logger.LoggerWrapper, name string, consumeCh *rabbitmq.Channel) (*amqp.Queue, error) {
 	var err error
@@ -148,6 +153,39 @@ func CreateAndListenInternalEventsChannel(
 	}
 
 	return &InternalEventChannel{ch}, nil
+}
+
+func CreateAndListenAaaChannel(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, onMessage AaaUserProfileUpdateListener, lc fx.Lifecycle, sh fx.Shutdowner) (*AaaEventsChannel, error) {
+	ch, err := myRabbit.CreateRabbitMqChannelWithCallback(
+		lgr,
+		connection,
+		func(channel *rabbitmq.Channel) error {
+			lc.Append(fx.Hook{
+				OnStop: func(ctx context.Context) error {
+					lgr.Info("Stopping queue listening", "queue", aaaEventsQueue)
+					return channel.Close()
+				},
+			})
+
+			err := channel.ExchangeDeclare(AaaEventsExchange, "fanout", true, false, false, false, nil)
+			if err != nil {
+				return err
+			}
+
+			aQueue, err := createAndBind(lgr, aaaEventsQueue, "", AaaEventsExchange, channel)
+			if err != nil {
+				return err
+			}
+
+			listen(lgr, channel, aQueue, onMessage, sh)
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AaaEventsChannel{ch}, nil
 }
 
 func listen(

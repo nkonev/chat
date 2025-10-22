@@ -63,3 +63,8 @@ type FilteredParticipantsRequestDto struct {
 type FilteredParticipantItemResponse struct {
 	Id int64 `json:"id"`
 }
+
+type UserAccountEventChanged struct {
+	User      *User  `json:"user"`
+	EventType string `json:"eventType"`
+}
