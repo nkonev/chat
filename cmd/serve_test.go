@@ -2118,7 +2118,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == dto.EventTypeParticipantChanged &&
+				return ok && e.EventType == dto.EventTypeParticipantEdited &&
 					e.UserId == user1 &&
 					e.ChatId == chat1Id &&
 					len(*e.Participants) == 1 &&
@@ -2128,7 +2128,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == dto.EventTypeParticipantChanged &&
+				return ok && e.EventType == dto.EventTypeParticipantEdited &&
 					e.UserId == user2 &&
 					e.ChatId == chat1Id &&
 					len(*e.Participants) == 1 &&

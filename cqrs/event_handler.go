@@ -208,7 +208,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 }
 
 func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *ParticipantChanged) error {
-	eventTypeParticipantChanged := dto.EventTypeParticipantChanged
+	eventTypeParticipantChanged := dto.EventTypeParticipantEdited
 	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("participant.%s", eventTypeParticipantChanged))
 	defer participantAddSpan.End()
 

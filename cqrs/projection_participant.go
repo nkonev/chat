@@ -459,6 +459,37 @@ func (m *CommonProjection) IterateOverParticipantsChatIds(ctx context.Context, c
 	return lastError
 }
 
+func (m *CommonProjection) IterateOverCoChattedParticipantIds(ctx context.Context, co db.CommonOperations, participantId int64, consumer func(participantIdsPortion []int64) error) error {
+	shouldContinue := true
+	var lastError error
+	for page := int64(0); shouldContinue; page++ {
+		offset := utils.GetOffset(page, utils.DefaultSize)
+
+		participantIds := []int64{}
+
+		err := sqlscan.Select(ctx, co, &participantIds, "SELECT DISTINCT user_id FROM chat_participant WHERE chat_id IN (SELECT chat_id FROM chat_participant WHERE user_id = $1) ORDER BY user_id LIMIT $2 OFFSET $3", participantId, utils.DefaultSize, offset)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			lastError = err
+			break
+		}
+		if len(participantIds) == 0 {
+			return nil
+		}
+		if len(participantIds) < utils.DefaultSize {
+			shouldContinue = false
+		}
+
+		err = consumer(participantIds)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			lastError = err
+			break
+		}
+	}
+	return lastError
+}
+
 func (m *CommonProjection) GetParticipantsCount(ctx context.Context, co db.CommonOperations, chatId int64) (int64, error) {
 	var count int64
 	err := sqlscan.Get(ctx, co, &count, "SELECT count(*) FROM chat_participant WHERE chat_id = $1", chatId)

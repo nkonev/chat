@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/streadway/amqp"
-	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/rabbitmq"
@@ -17,7 +16,7 @@ import (
 
 type AaaUserProfileUpdateListener func(*amqp.Delivery) error
 
-func CreateAaaUserProfileUpdateListener(lgr *logger.LoggerWrapper, not *services.InputEventHandler, typeRegistry *type_registry.TypeRegistryInstance, db *db.DB) AaaUserProfileUpdateListener {
+func CreateAaaUserProfileUpdateListener(lgr *logger.LoggerWrapper, not *services.InputEventHandler, typeRegistry *type_registry.TypeRegistryInstance) AaaUserProfileUpdateListener {
 	tr := otel.Tracer("amqp/listener")
 
 	return func(msg *amqp.Delivery) error {
@@ -44,8 +43,8 @@ func CreateAaaUserProfileUpdateListener(lgr *logger.LoggerWrapper, not *services
 				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)
 				return err
 			}
-			if bindTo.EventType == "user_account_changed" {
-				not.NotifyAboutProfileChanged(ctx, bindTo.User, db)
+			if bindTo.EventType == dto.EventTypeUserAccountChanged {
+				not.NotifyAboutProfileChanged(ctx, bindTo.User)
 			}
 
 		default:
