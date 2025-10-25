@@ -21,8 +21,8 @@ func RunImport(args []string) {
 	if err != nil {
 		panic(err)
 	}
-	baseLogger := logger.NewBaseLogger(os.Stdout, cfg)
-	lgr := logger.NewLogger(baseLogger)
+	lgr := logger.NewLogger(os.Stdout, cfg)
+	defer lgr.CloseLogger()
 
 	lgr.Info("Start import command")
 

@@ -67,6 +67,7 @@ http:
 logger:
   level: info
   json: false
+  writeToFile: false
 
 aaa:
   url:

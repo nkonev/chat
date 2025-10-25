@@ -117,8 +117,11 @@ type ProjectionsConfig struct {
 }
 
 type LoggerConfig struct {
-	Level string
-	Json  bool
+	Level       string
+	Json        bool
+	WriteToFile bool
+	Dir         string
+	Filename    string
 }
 
 type AaaConfig struct {

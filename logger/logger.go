@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 )
@@ -34,9 +35,10 @@ func (h *TracingContextHandler) Handle(ctx context.Context, r slog.Record) error
 
 type LoggerWrapper struct {
 	*slog.Logger
+	file *os.File
 }
 
-func NewBaseLogger(w io.Writer, cfg *config.AppConfig) *slog.Logger {
+func NewLogger(consoleWriter io.Writer, cfg *config.AppConfig) *LoggerWrapper {
 	var baseLogger *slog.Logger
 
 	replaceFunc := func(groups []string, a slog.Attr) slog.Attr {
@@ -73,6 +75,26 @@ func NewBaseLogger(w io.Writer, cfg *config.AppConfig) *slog.Logger {
 		AddSource:   true,
 	}
 	commonAttrs := []slog.Attr{slog.String("service", app.TRACE_RESOURCE)}
+
+	w := consoleWriter
+	var fileVar *os.File
+	if cfg.Logger.WriteToFile {
+		logDir := cfg.Logger.Dir
+
+		err := os.MkdirAll(logDir, os.ModePerm)
+		if err != nil {
+			panic(err)
+		}
+
+		logFilename := cfg.Logger.Filename
+		fileVar, err = os.Create(logDir + string(os.PathSeparator) + logFilename)
+		if err != nil {
+			panic(err)
+		}
+
+		w = io.MultiWriter(consoleWriter, fileVar)
+	}
+
 	if cfg.Logger.Json {
 		h := &TracingContextHandler{slog.NewJSONHandler(w, bh).WithAttrs(commonAttrs)}
 		baseLogger = slog.New(h)
@@ -81,12 +103,15 @@ func NewBaseLogger(w io.Writer, cfg *config.AppConfig) *slog.Logger {
 		baseLogger = slog.New(h)
 	}
 
-	return baseLogger
+	return &LoggerWrapper{
+		Logger: baseLogger,
+		file:   fileVar,
+	}
 }
 
-func NewLogger(base *slog.Logger) *LoggerWrapper {
-	return &LoggerWrapper{
-		Logger: base,
+func (lw *LoggerWrapper) CloseLogger() {
+	if lw.file != nil {
+		lw.file.Close()
 	}
 }
 

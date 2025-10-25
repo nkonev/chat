@@ -28,8 +28,8 @@ func TestReset(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	baseLogger := logger.NewBaseLogger(os.Stdout, cfg)
-	lgr := logger.NewLogger(baseLogger)
+	lgr := logger.NewLogger(os.Stdout, cfg)
+	defer lgr.CloseLogger()
 
 	const user1 int64 = 1
 	const user1Login = "admin"

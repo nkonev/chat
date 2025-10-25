@@ -18,8 +18,8 @@ func RunExport(args []string) {
 	if err != nil {
 		panic(err)
 	}
-	baseLogger := logger.NewBaseLogger(os.Stderr, cfg)
-	lgr := logger.NewLogger(baseLogger)
+	lgr := logger.NewLogger(os.Stderr, cfg)
+	defer lgr.CloseLogger()
 
 	lgr.Info("Start export command")
 
