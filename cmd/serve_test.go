@@ -14,6 +14,7 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/listener"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/utils"
 	"go.uber.org/fx"
 	"strings"
@@ -2827,5 +2828,88 @@ func TestMessageFuzzySearch(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(resp3Search))
 		assert.Equal(t, resp3Search[0].Content, message2Text)
+	})
+}
+
+func TestEventSendingOnUserChange(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testEventsPublisher *producer.RabbitTestInputEventsPublisher,
+		testEventsAccumulator *listener.TestEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user1LoginNew = "admin1New"
+		const user1Avatar = "http://example.com/ava.jpg"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		a := user1Avatar
+		err = testEventsPublisher.Publish(ctx, dto.UserAccountEventChanged{
+			User: &dto.User{
+				Id:     user1,
+				Login:  user1LoginNew,
+				Avatar: &a,
+			},
+			EventType: dto.EventTypeUserAccountChanged,
+		})
+		require.NoError(t, err, "error in sending test event")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeParticipantChanged &&
+					e.UserId == user1 &&
+					e.CoChattedParticipantNotification.Id == user1 &&
+					e.CoChattedParticipantNotification.Login == user1LoginNew &&
+					*e.CoChattedParticipantNotification.Avatar == a
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeParticipantChanged &&
+					e.UserId == user2 &&
+					e.CoChattedParticipantNotification.Id == user1 &&
+					e.CoChattedParticipantNotification.Login == user1LoginNew &&
+					*e.CoChattedParticipantNotification.Avatar == a
+			},
+		}))
 	})
 }
