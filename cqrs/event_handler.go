@@ -271,7 +271,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 		}
 
 		var hasUnreadMessages = map[int64]bool{}
-		if event.UnreadMessagesAction != 0 {
+		if event.UnreadMessagesAction != UnreadMessagesActionUnspecified {
 			hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
 			if err != nil {
 				return err
@@ -288,7 +288,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 			}
 
-			if event.UnreadMessagesAction != 0 {
+			if event.UnreadMessagesAction != UnreadMessagesActionUnspecified {
 				err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 					UserId:    cv.UserId,
 					EventType: eventTypeUnreadMessagesChanged,

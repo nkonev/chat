@@ -76,7 +76,8 @@ func (p *ParticipantsAdded) GetParticipantIds() []int64 {
 type GetParticipantsType int16
 
 const (
-	GetParticipantsTypeNormal = iota + 1
+	GetParticipantsTypeUnspecified = iota
+	GetParticipantsTypeNormal
 	GetParticipantsTypeAllInChatExcepting
 )
 
@@ -137,34 +138,39 @@ type MessageEmbedded struct {
 type UnreadMessagesAction int16
 
 const (
-	UnreadMessagesActionRefresh = iota + 1
+	UnreadMessagesActionUnspecified = iota
+	UnreadMessagesActionRefresh
 	UnreadMessagesActionIncrease
 )
 
 type LastMessageAction int16
 
 const (
-	LastMessageActionRefresh = iota + 1
+	LastMessageActionUnspecified = iota
+	LastMessageActionRefresh
 )
 
 type ParticipantsAction int16
 
 const (
+	ParticipantsActionUnspecified = iota
 	// represents action to update participants
 	// see also OnParticipantAdd - there chat_user_view is created
-	ParticipantsActionRefresh = iota + 1
+	ParticipantsActionRefresh
 )
 
 type ChatAction int16
 
 const (
-	ChatActionRefresh = iota + 1
+	ChatActionUnspecified = iota
+	ChatActionRefresh
 )
 
 type ReadMessagesAction int16
 
 const (
-	ReadMessagesActionOneMessage = iota + 1
+	ReadMessagesActionUnspecified = iota
+	ReadMessagesActionOneMessage
 	ReadMessagesActionAllMessagesInOneChat
 	ReadMessagesActionAllChats
 )
@@ -172,7 +178,8 @@ const (
 type ParticipantsMode int16
 
 const (
-	ParticipantsModeAllParticipantIdsExcepting = iota + 1
+	ParticipantsModeUnspecified = iota
+	ParticipantsModeAllParticipantIdsExcepting
 	ParticipantsModeOnlyParticipantIds
 )
 
