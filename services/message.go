@@ -110,7 +110,7 @@ func (p *MessageService) BroadcastMessage(ctx context.Context, messageText strin
 		Text:   previewStr,
 	}
 
-	err := p.commonProjection.IterateOverChatParticipantIds(ctx, p.dbWrapper, chatId, []int64{}, func(participantIds []int64) error {
+	err := p.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, p.dbWrapper, chatId, []int64{}, func(participantIds []int64) error {
 		for _, participantId := range participantIds {
 			err := p.rabbitmqOutputEventPublisher.Publish(ctx, nil, dto.ChatEvent{
 				EventType:                    eventType,
@@ -141,7 +141,7 @@ func (p *MessageService) TypeMessage(ctx context.Context, chatId, userId int64, 
 		ChatId:        chatId,
 	}
 
-	err := p.commonProjection.IterateOverChatParticipantIds(ctx, p.dbWrapper, chatId, []int64{userId}, func(participantIds []int64) error {
+	err := p.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, p.dbWrapper, chatId, []int64{userId}, func(participantIds []int64) error {
 		for _, participantId := range participantIds {
 			err := p.rabbitmqOutputEventPublisher.Publish(ctx, nil, dto.GlobalUserEvent{
 				UserId:                 participantId,

@@ -220,7 +220,7 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 		}
 
 		pwc, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*participantsWithCount, error) {
-			participants, err := getParticipantsCommon(ctx, m.cp.db, chatId, nil, size, offset, reverse)
+			participants, err := getParticipantsCommonExcepting(ctx, m.cp.db, chatId, nil, size, offset, reverse)
 			if err != nil {
 				m.lgr.ErrorContext(ctx, "Error getting participants", "err", err)
 
@@ -305,7 +305,7 @@ func (m *EnrichingProjection) SearchUsersContaining(ctx context.Context, co db.C
 	// iterate over all chat participants
 	for page := int64(0); shouldContinue; page++ {
 		offset := utils.GetOffset(page, pageSize)
-		participantsPortion, err := getParticipantsCommon(ctx, co, chatId, nil, utils.DefaultSize, offset, reverse)
+		participantsPortion, err := getParticipantsCommonExcepting(ctx, co, chatId, nil, utils.DefaultSize, offset, reverse)
 		if int32(len(participantsPortion)) < pageSize {
 			shouldContinue = false
 		}
@@ -316,7 +316,7 @@ func (m *EnrichingProjection) SearchUsersContaining(ctx context.Context, co db.C
 
 		participantIds := GetParticipantIdsP(participantsPortion)
 
-		// we don't send offset to SearchGetUsers(), because it's enriching, the base are participantsPortion from getParticipantsCommon()
+		// we don't send offset to SearchGetUsers(), because it's enriching, the base are participantsPortion from getParticipantsCommonExcepting()
 		// page 0 because it's portion by ids
 		usersPortion, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, participantIds, 0, pageSize)
 		if err != nil {
@@ -401,12 +401,42 @@ func (m *EnrichingProjection) SearchUsersNotContaining(ctx context.Context, co d
 // you cannot use it in command handler
 // if you do this you will introduce a race condition
 // see comments in TestUnreads()
-func (m *CommonProjection) IterateOverChatParticipantIds(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, consumer func(participantIdsPortion []int64) error) error {
+func (m *CommonProjection) IterateOverChatParticipantIdsExcepting(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, consumer func(participantIdsPortion []int64) error) error {
 	shouldContinue := true
 	var lastError error
 	for page := int64(0); shouldContinue; page++ {
 		offset := utils.GetOffset(page, utils.DefaultSize)
-		participants, err := getParticipantsCommon(ctx, co, chatId, excluding, utils.DefaultSize, offset, false)
+		participants, err := getParticipantsCommonExcepting(ctx, co, chatId, excluding, utils.DefaultSize, offset, false)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			lastError = err
+			break
+		}
+		if len(participants) == 0 {
+			return nil
+		}
+		if len(participants) < utils.DefaultSize {
+			shouldContinue = false
+		}
+
+		participantIds := GetParticipantIdsP(participants)
+
+		err = consumer(participantIds)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			lastError = err
+			break
+		}
+	}
+	return lastError
+}
+
+func (m *CommonProjection) IterateOverChatParticipantIdsIncluding(ctx context.Context, co db.CommonOperations, chatId int64, including []int64, consumer func(participantIdsPortion []int64) error) error {
+	shouldContinue := true
+	var lastError error
+	for page := int64(0); shouldContinue; page++ {
+		offset := utils.GetOffset(page, utils.DefaultSize)
+		participants, err := getParticipantsCommonIncluding(ctx, co, chatId, including, utils.DefaultSize, offset, false)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
 			lastError = err
@@ -629,7 +659,7 @@ func getParticipantsCount(ctx context.Context, co db.CommonOperations, chatId in
 	return res, nil
 }
 
-func getParticipantsCommon(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]*ParticipantWithAdmin, error) {
+func getParticipantsCommonExcepting(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]*ParticipantWithAdmin, error) {
 	list := make([]*ParticipantWithAdmin, 0)
 
 	var err error
@@ -645,6 +675,37 @@ func getParticipantsCommon(ctx context.Context, co db.CommonOperations, chatId i
 		condition = "AND user_id NOT IN (select * from unnest(cast ($4 as bigint[])))"
 		sqlArgs = append(sqlArgs, excluding)
 	}
+	sqlQuery := fmt.Sprintf(`
+		SELECT 
+		    user_id,
+		    chat_admin 
+		FROM chat_participant
+		WHERE chat_id = $1
+			%s
+		ORDER BY create_date_time %s, user_id asc
+		LIMIT $2 OFFSET $3
+	`, condition, order)
+	err = sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("error during interacting with db: %w", err)
+	}
+	return list, nil
+}
+
+func getParticipantsCommonIncluding(ctx context.Context, co db.CommonOperations, chatId int64, including []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]*ParticipantWithAdmin, error) {
+	list := make([]*ParticipantWithAdmin, 0)
+
+	var err error
+
+	order := "asc"
+	if reverseOrder {
+		order = "desc"
+	}
+
+	sqlArgs := []any{chatId, participantsSize, participantsOffset}
+	condition := "AND user_id IN (select * from unnest(cast ($4 as bigint[])))"
+	sqlArgs = append(sqlArgs, including)
+
 	sqlQuery := fmt.Sprintf(`
 		SELECT 
 		    user_id,

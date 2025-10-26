@@ -767,7 +767,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		chatIdClause := fmt.Sprintf("and ch.id = $%d", len(queryArgs))
 
 		conditionClause = chatIdClause
-		orderClause = "order by ch.update_date_time desc, ch.user_id" // to prevent flaky tests. the same as in projection_participantv :: getParticipantsCommon()
+		orderClause = "order by ch.update_date_time desc, ch.user_id" // to prevent flaky tests. the same as in projection_participantv :: getParticipantsCommonExcepting()
 	}
 
 	// it is optimized (all order by in the same table)

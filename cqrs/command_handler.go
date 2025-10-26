@@ -413,7 +413,8 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 	}
 
 	ui := &ChatViewRefreshed{
-		AdditionalData: copyCommand.AdditionalData,
+		AdditionalData:   copyCommand.AdditionalData,
+		ParticipantsMode: ParticipantsModeAllParticipantIdsExcepting,
 		// excluding => s.ParticipantIds is an optimization in order not to re-refresh views for the recently added
 		AllParticipantIdsExcepting: copyCommand.ParticipantIdsToAdd,
 		ChatId:                     copyCommand.ChatId,
@@ -508,6 +509,7 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 	if len(s.ParticipantIds) > 0 {
 		ui := &ChatViewRefreshed{
 			AdditionalData:             s.AdditionalData,
+			ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 			AllParticipantIdsExcepting: s.ParticipantIds, // chat_user_views for newly added participants will be created from scratch including already added, see ParticipantsAdded handler
 			ChatId:                     s.ChatId,
 			ParticipantsAction:         ParticipantsActionRefresh,
@@ -549,6 +551,7 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 	if len(s.ParticipantIds) > 0 {
 		ui := &ChatViewRefreshed{
 			AdditionalData:             s.AdditionalData,
+			ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 			AllParticipantIdsExcepting: s.ParticipantIds,
 			ChatId:                     s.ChatId,
 			ParticipantsAction:         ParticipantsActionRefresh,
@@ -585,6 +588,7 @@ func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterfa
 
 	ui := &ChatViewRefreshed{
 		AdditionalData:             s.AdditionalData,
+		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 		AllParticipantIdsExcepting: []int64{},
 		ChatId:                     s.ChatId,
 		// here we don't add ParticipantsAction == ParticipantsActionRefresh because changing a participant (e. g. making him admin) shouldn't change chat_user_view
@@ -602,7 +606,25 @@ func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error 
 		ChatId:         s.ChatId,
 		Pinned:         s.Pin,
 	}
-	return eventBus.Publish(ctx, cp)
+	err := eventBus.Publish(ctx, cp)
+	if err != nil {
+		return err
+	}
+
+	ui := &ChatViewRefreshed{
+		AdditionalData:     s.AdditionalData,
+		ParticipantsMode:   ParticipantsModeOnlyParticipantIds,
+		OnlyParticipantIds: []int64{s.AdditionalData.BehalfUserId},
+		ChatId:             s.ChatId,
+		ChatAction:         ChatActionRefresh,
+	}
+
+	errInner := eventBus.Publish(ctx, ui)
+	if errInner != nil {
+		return errInner
+	}
+
+	return nil
 }
 
 func (s *ChatNotificationSettingsSet) Handle(ctx context.Context, eventBus EventBusInterface) error {
@@ -673,6 +695,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 
 	ui := &ChatViewRefreshed{
 		AdditionalData:             copyCommand.AdditionalData,
+		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 		AllParticipantIdsExcepting: []int64{},
 		ChatId:                     copyCommand.ChatId,
 		UnreadMessagesAction:       UnreadMessagesActionIncrease,
@@ -788,6 +811,7 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 
 	ui := &ChatViewRefreshed{
 		AdditionalData:             s.AdditionalData,
+		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 		AllParticipantIdsExcepting: []int64{},
 		ChatId:                     s.ChatId,
 		UnreadMessagesAction:       UnreadMessagesActionRefresh,
@@ -861,6 +885,7 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 	if lastMessageId == copyCommand.MessageId {
 		ui := &ChatViewRefreshed{
 			AdditionalData:             copyCommand.AdditionalData,
+			ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 			AllParticipantIdsExcepting: []int64{},
 			ChatId:                     copyCommand.ChatId,
 			LastMessageAction:          LastMessageActionRefresh,

@@ -95,7 +95,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantAdded, "user_ids", userIds)
 
 	// this is an event for ChatParticipantsModal.vue
-	err = m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+	err = m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		// for every participant of chat we send an info about the newly added participants
 		for _, participantId := range participantIdsPortion {
 			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
@@ -125,7 +125,7 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
 		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId)
 	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting {
-		return m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+		return m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId)
 		})
 	} else {
@@ -151,7 +151,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 
 	// this is an event for ChatParticipantsModal.vue
 	// we send for all the participant an event about removing those
-	err := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, chatId, nil, func(participantIdsPortion []int64) error {
+	err := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, chatId, nil, func(participantIdsPortion []int64) error {
 		// for every participant of chat we send an info about the newly added participants
 		for _, participantId := range participantIdsPortion {
 			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.ChatEvent{
@@ -226,7 +226,7 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 
 	m.lgr.DebugContext(ctx, "Sending notification about the participant", "event_type", eventTypeParticipantChanged, "user_ids", userIds)
 
-	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		for _, participantId := range participantIdsPortion {
 			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:    eventTypeParticipantChanged,
@@ -255,7 +255,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
 	defer messageSpan.End()
 
-	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, event.AllParticipantIdsExcepting, func(participantIdsPortion []int64) error {
+	processParticipantsBatch := func(participantIdsPortion []int64) error {
 		userIds := participantIdsPortion
 
 		m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
@@ -302,9 +302,24 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 			}
 		}
 		return nil
-	})
+	}
 
-	return errOuter
+	switch event.ParticipantsMode {
+	case ParticipantsModeAllParticipantIdsExcepting:
+		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, event.AllParticipantIdsExcepting, processParticipantsBatch)
+		if errOuter != nil {
+			return errOuter
+		}
+	case ParticipantsModeOnlyParticipantIds:
+		errOuter := m.commonProjection.IterateOverChatParticipantIdsIncluding(ctx, m.db, event.ChatId, event.OnlyParticipantIds, processParticipantsBatch)
+		if errOuter != nil {
+			return errOuter
+		}
+	default:
+		return fmt.Errorf("Unknown constant ParticipantsMode = %v", event.ParticipantsMode)
+	}
+
+	return nil
 }
 
 func (m *EventHandler) buildUserWithAdminBasedOnParticipantWithAdmin(participants []ParticipantWithAdmin, usersMap map[int64]*dto.User) []*dto.UserWithAdmin {
@@ -360,7 +375,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 
 	// TODO NotifyNewMessageBrowserNotification browser_notification_add_message
 
-	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.Id)
 		if errInn != nil {
 			return errInn
@@ -400,7 +415,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 
 	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
 
-	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		messageViews, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.Id)
 		if errInn != nil {
 			return errInn
@@ -441,7 +456,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 
 	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
 
-	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		for _, participantId := range participantIdsPortion {
 			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType: eventType,
@@ -598,7 +613,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 		Reaction:  aReaction,
 	}
 
-	errOuter := m.commonProjection.IterateOverChatParticipantIds(ctx, m.db, event.ChatId, []int64{}, func(participantIds []int64) error {
+	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, []int64{}, func(participantIds []int64) error {
 		for _, participantId := range participantIds {
 			err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:            eventType,

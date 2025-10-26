@@ -169,9 +169,18 @@ const (
 	ReadMessagesActionAllChats
 )
 
+type ParticipantsMode int16
+
+const (
+	ParticipantsModeAllParticipantIdsExcepting = iota + 1
+	ParticipantsModeOnlyParticipantIds
+)
+
 type ChatViewRefreshed struct {
 	AdditionalData             *AdditionalData      `json:"additionalData"`
+	ParticipantsMode           ParticipantsMode     `json:"participantsMode"`
 	AllParticipantIdsExcepting []int64              `json:"allParticipantIdsExcepting"`
+	OnlyParticipantIds         []int64              `json:"onlyParticipantIds"`
 	ChatId                     int64                `json:"chatId"`
 	UnreadMessagesAction       UnreadMessagesAction `json:"unreadMessagesAction"`
 	LastMessageAction          LastMessageAction    `json:"lastMessageAction"`
