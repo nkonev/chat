@@ -1174,6 +1174,7 @@ func TestPinChat(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -1260,9 +1261,27 @@ func TestPinChat(t *testing.T) {
 		assert.Equal(t, chat1Name, chat1OfUser2.Title)
 		assert.Equal(t, int64(1), chat1OfUser2.UnreadMessages)
 
+		testEventsAccumulator.Clean()
+
 		err = testRestClient.PinChat(ctx, user1, chat1Id, true)
 		require.NoError(t, err, "error in pinning chats")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeChatEdited &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 2 &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.Participants[1].Id == user1 &&
+					e.ChatNotification.Participants[1].Login == user1Login &&
+					e.ChatNotification.Pinned
+			},
+		}))
 
 		user1ChatsNew2, _, err := testRestClient.GetChats(ctx, user1)
 		require.NoError(t, err, "error in getting chats")
