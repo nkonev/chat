@@ -795,7 +795,7 @@ func getDeletedUser(id int64) *dto.User {
 
 func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) {
 	if srcDbMessage.ResponseEmbeddedMessageType != nil {
-		if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeReply {
+		if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeReply && srcDbMessage.ResponseEmbeddedMessageReplyOwnerId != nil { // the second condition2 in order to prevent NPE in case deleted message
 			embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageReplyOwnerId]
 			dstRet.EmbedMessage = &dto.EmbedMessageResponse{
 				Id:        *srcDbMessage.ResponseEmbeddedMessageReplyId,
@@ -803,7 +803,7 @@ func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, u
 				EmbedType: *srcDbMessage.ResponseEmbeddedMessageType,
 				Owner:     embeddedUser,
 			}
-		} else if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeResend {
+		} else if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeResend && srcDbMessage.ResponseEmbeddedMessageResendOwnerId != nil {
 			embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageResendOwnerId]
 			basicEmbeddedChat := chats[*srcDbMessage.ResponseEmbeddedMessageResendChatId]
 			var embedChatName *string = nil
