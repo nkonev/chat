@@ -702,6 +702,16 @@ func populateSets(message *dto.MessageDto, usersSet map[int64]bool, chatsPreSet 
 	if message.ResponseEmbeddedMessageReplyOwnerId != nil {
 		var embeddedMessageReplyOwnerId = *message.ResponseEmbeddedMessageReplyOwnerId
 		usersSet[embeddedMessageReplyOwnerId] = true
+
+		if message.ResponseEmbeddedMessageResendOwnerId != nil {
+			var embeddedMessageResendOwnerId = *message.ResponseEmbeddedMessageResendOwnerId
+			usersSet[embeddedMessageResendOwnerId] = true
+		}
+
+		if message.ResponseEmbeddedMessageResendChatId != nil {
+			var embeddedMessageResendChatId = *message.ResponseEmbeddedMessageResendChatId
+			chatsPreSet[embeddedMessageResendChatId] = true
+		}
 	} else if message.ResponseEmbeddedMessageResendOwnerId != nil {
 		var embeddedMessageResendOwnerId = *message.ResponseEmbeddedMessageResendOwnerId
 		usersSet[embeddedMessageResendOwnerId] = true
@@ -796,12 +806,33 @@ func getDeletedUser(id int64) *dto.User {
 func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) {
 	if srcDbMessage.ResponseEmbeddedMessageType != nil {
 		if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeReply {
-			embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageReplyOwnerId]
+
+			var embeddedUser *dto.User
+			if srcDbMessage.ResponseEmbeddedMessageReplyOwnerId != nil {
+				embeddedUser = users[*srcDbMessage.ResponseEmbeddedMessageReplyOwnerId]
+			}
+
+			var basicEmbeddedChat *dto.BasicChatDtoExtended
+			if srcDbMessage.ResponseEmbeddedMessageResendChatId != nil {
+				basicEmbeddedChat = chats[*srcDbMessage.ResponseEmbeddedMessageResendChatId]
+			}
+			var embedChatName *string = nil
+			var isParticipant bool
+			if basicEmbeddedChat != nil { // basicEmbeddedChat can be deleted
+				if !basicEmbeddedChat.TetATet {
+					embedChatName = &basicEmbeddedChat.Title
+				}
+				isParticipant = basicEmbeddedChat.BehalfUserIsParticipant
+			}
+
 			dstRet.EmbedMessage = &dto.EmbedMessageResponse{
-				Id:        *srcDbMessage.ResponseEmbeddedMessageReplyId,
-				Text:      *srcDbMessage.ResponseEmbeddedMessageReplyText,
-				EmbedType: *srcDbMessage.ResponseEmbeddedMessageType,
-				Owner:     embeddedUser,
+				Id:            *srcDbMessage.ResponseEmbeddedMessageReplyId,
+				ChatId:        srcDbMessage.ResponseEmbeddedMessageResendChatId,
+				ChatName:      embedChatName,
+				Text:          *srcDbMessage.ResponseEmbeddedMessageReplyText,
+				EmbedType:     *srcDbMessage.ResponseEmbeddedMessageType,
+				Owner:         embeddedUser,
+				IsParticipant: isParticipant,
 			}
 		} else if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeResend {
 			embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageResendOwnerId]
