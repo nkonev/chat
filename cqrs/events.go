@@ -87,6 +87,7 @@ type ParticipantDeleted struct {
 	ParticipantIds             []int64             `json:"participantIds"`
 	AllParticipantIdsExcepting []int64             `json:"allParticipantIdsExcepting"`
 	ChatId                     int64               `json:"chatId"`
+	IsLeaving                  bool                `json:"isLeaving"`
 }
 
 type ParticipantChanged struct {

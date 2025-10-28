@@ -177,6 +177,44 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
+func (ch *ParticipantHandler) LeaveChat(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cc := cqrs.ParticipantDelete{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		ParticipantIds: []int64{userId},
+		ChatId:         chatId,
+		IsLeaving:      true,
+	}
+
+	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.cfg)
+	if err != nil {
+		if translateParticipantError(g, err) {
+			return
+		}
+
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantDelete command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.Status(http.StatusOK)
+}
+
 func (ch *ParticipantHandler) ParticipantsFilter(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 

@@ -155,6 +155,7 @@ type ParticipantDelete struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	ParticipantIds []int64
+	IsLeaving      bool
 }
 
 type ParticipantChange struct {
@@ -528,7 +529,7 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 	if err != nil {
 		return err
 	}
-	if !admin {
+	if !s.IsLeaving && !admin {
 		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
@@ -541,6 +542,7 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 		ParticipantIds:      s.ParticipantIds,
 		GetParticipantsType: GetParticipantsTypeNormal,
 		ChatId:              s.ChatId,
+		IsLeaving:           s.IsLeaving,
 	}
 	err = eventBus.Publish(ctx, pa)
 	if err != nil {

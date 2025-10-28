@@ -1987,6 +1987,177 @@ func TestDeleteParticipant(t *testing.T) {
 	})
 }
 
+func TestLeaveFromChat(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		title, err := m.GetChatByUserIdAndChatId(ctx, user1, chat1Id)
+		require.NoError(t, err, "error in getting chat")
+		assert.Equal(t, chat1Name, title)
+
+		const message1Text = "new message 1"
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user1Chats, _, err := testRestClient.GetChats(ctx, user1)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user1Chats))
+		chat1OfUser1 := user1Chats[0]
+		assert.Equal(t, chat1Name, chat1OfUser1.Title)
+		assert.Equal(t, int64(0), chat1OfUser1.UnreadMessages)
+		assert.Equal(t, int64(1), chat1OfUser1.ParticipantsCount)
+		assert.Equal(t, []int64{1}, chat1OfUser1.ParticipantIds)
+
+		user2Chats, _, err := testRestClient.GetChats(ctx, user2)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 0, len(user2Chats))
+
+		chat1Messages, _, err := testRestClient.GetMessages(ctx, user1, chat1Id)
+		require.NoError(t, err, "error in getting messages")
+		assert.Equal(t, 1, len(chat1Messages))
+		message1 := chat1Messages[0]
+		assert.Equal(t, message1Id, message1.Id)
+		assert.Equal(t, message1Text, message1.Content)
+
+		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
+		require.NoError(t, err, "error in adding participants")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		chat1Participants, _, err := testRestClient.GetChatParticipants(ctx, user1, chat1Id)
+		require.NoError(t, err, "error in chat participants")
+		require.Equal(t, 2, len(chat1Participants))
+		assert.Equal(t, user2, chat1Participants[0].Id)
+		assert.Equal(t, user1, chat1Participants[1].Id)
+
+		user2ChatsNew, _, err := testRestClient.GetChats(ctx, user2)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user2ChatsNew))
+		chat1OfUser2 := user2ChatsNew[0]
+		assert.Equal(t, chat1Name, chat1OfUser2.Title)
+		assert.Equal(t, int64(1), chat1OfUser2.UnreadMessages)
+		assert.Equal(t, message1.Id, *chat1OfUser2.LastMessageId)
+		assert.Equal(t, message1.Content, *chat1OfUser2.LastMessageContent)
+		assert.Equal(t, int64(2), chat1OfUser2.ParticipantsCount)
+		assert.Equal(t, []int64{2, 1}, chat1OfUser2.ParticipantIds)
+
+		user2HasUnreadMessages, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user2HasUnreadMessages)
+
+		testEventsAccumulator.Clean()
+
+		err = testRestClient.LeaveChat(ctx, user2, chat1Id)
+		require.NoError(t, err, "error in removing chat participants")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeParticipantDeleted &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					len(*e.Participants) == 1 &&
+					(*e.Participants)[0].Id == user2
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeParticipantDeleted &&
+					e.UserId == user2 &&
+					e.ChatId == chat1Id &&
+					len(*e.Participants) == 1 &&
+					(*e.Participants)[0].Id == user2
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeChatDeleted &&
+					e.UserId == user2 &&
+					e.ChatDeletedDto.Id == chat1Id
+			},
+
+			// caused by LeaveChat
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeChatEdited &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 1 &&
+					e.ChatNotification.Participants[0].Id == user1 &&
+					e.ChatNotification.Participants[0].Login == user1Login
+			},
+		}))
+
+		user2ChatsNew2, _, err := testRestClient.GetChats(ctx, user2)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 0, len(user2ChatsNew2))
+
+		// after removing from chat user 2 got no unread messages
+		user2HasUnreadMessagesNew2, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user2HasUnreadMessagesNew2)
+
+		chat1Participants2, _, err := testRestClient.GetChatParticipants(ctx, user1, chat1Id)
+		require.NoError(t, err, "error in chat participants")
+		require.Equal(t, 1, len(chat1Participants2))
+		assert.Equal(t, user1, chat1Participants2[0].Id)
+
+		user1ChatsNew2, _, err := testRestClient.GetChats(ctx, user1)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user1ChatsNew2))
+		chat1OfUser1New2 := user1ChatsNew2[0]
+		assert.Equal(t, int64(1), chat1OfUser1New2.ParticipantsCount)
+		assert.Equal(t, []int64{1}, chat1OfUser1New2.ParticipantIds)
+	})
+}
+
 func TestAddChangeAndDeleteParticipant(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,

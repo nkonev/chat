@@ -450,6 +450,10 @@ func (rc *TestRestClient) ChangeChatParticipant(ctx context.Context, behalfUserI
 	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/participant/"+utils.ToString(participantId), "participants.Change", nil, &query1)
 }
 
+func (rc *TestRestClient) LeaveChat(ctx context.Context, behalfUserId int64, chatId int64) error {
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/leave", "chat.Leave", nil, nil)
+}
+
 type ParticipantGetOption interface {
 	Apply(queryParams *url.Values) *url.Values
 }

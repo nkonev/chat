@@ -123,17 +123,17 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	defer participantSpan.End()
 
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
-		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId)
+		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving)
 	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting {
 		return m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId)
+			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving)
 		})
 	} else {
 		return fmt.Errorf("Unknown event.GetParticipantsType = %v", event.GetParticipantsType)
 	}
 }
 
-func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64) error {
+func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool) error {
 	userIds := participantIds
 
 	eventType := dto.EventTypeChatDeleted
@@ -172,7 +172,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
-	errp := m.commonProjection.OnParticipantRemoved(ctx, additionalData, userIds, chatId, behalfUserId)
+	errp := m.commonProjection.OnParticipantRemoved(ctx, additionalData, userIds, chatId, behalfUserId, isLeaving)
 	if errp != nil {
 		return errp
 	}
@@ -184,7 +184,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 	}
 
 	for _, participantId := range userIds {
-		err := m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
 			UserId:         participantId,
 			EventType:      eventType,
 			ChatDeletedDto: &dto.ChatDeletedDto{Id: chatId},

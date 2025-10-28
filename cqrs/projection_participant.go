@@ -115,13 +115,13 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	return nil
 }
 
-func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64) error {
+func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		admin, err := m.IsChatAdmin(ctx, tx, behalfUserId, chatId)
 		if err != nil {
 			return err
 		}
-		if !admin {
+		if !isLeaving && !admin {
 			m.lgr.InfoContext(ctx,
 				"Participant isn't admin so he cannot remove a participant",
 				"user_id", behalfUserId,
