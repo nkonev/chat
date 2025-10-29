@@ -149,6 +149,7 @@ type ParticipantAdd struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	ParticipantIds []int64
+	IsJoining      bool
 }
 
 type ParticipantDelete struct {
@@ -309,10 +310,10 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 	}
 
 	pa := &ParticipantsAdded{
-		AdditionalData:     copyCommand.AdditionalData,
-		ChatId:             chatId,
-		Participants:       make([]ParticipantWithAdmin, 0),
-		SkipChatAdminCheck: true,
+		AdditionalData: copyCommand.AdditionalData,
+		ChatId:         chatId,
+		Participants:   make([]ParticipantWithAdmin, 0),
+		AreFirstUsers:  true,
 	}
 	for _, participantId := range copyCommand.ParticipantIds {
 		pa.Participants = append(pa.Participants, ParticipantWithAdmin{
@@ -466,12 +467,12 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 }
 
 func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig) error {
-	exists, err := commonProjection.checkChatExists(ctx, dba, s.ChatId)
+	basic, err := commonProjection.GetChatBasic(ctx, dba, s.ChatId)
 	if err != nil {
 		return err
 	}
 
-	if !exists {
+	if basic == nil {
 		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", s.ChatId))
 	}
 
@@ -484,12 +485,19 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 		return err
 	}
 	if !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+		if s.IsJoining {
+			if !basic.AvailableToSearch && !basic.IsBlog {
+				return NewUnauthorizedError(fmt.Sprintf("user %v is not allowed to join to chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+			}
+		} else {
+			return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+		}
 	}
 
 	pa := &ParticipantsAdded{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
+		IsJoining:      s.IsJoining,
 	}
 	for _, participantId := range s.ParticipantIds {
 		pa.Participants = append(pa.Participants, ParticipantWithAdmin{

@@ -90,11 +90,12 @@ type GetChatsResponseDto struct {
 }
 
 type ChatBasic struct {
-	Id        int64  `db:"id"`
-	Title     string `db:"title"`
-	CanResend bool   `db:"can_resend"`
-	TetATet   bool   `db:"tet_a_tet"`
-	IsBlog    bool   `db:"blog"`
+	Id                int64  `db:"id"`
+	Title             string `db:"title"`
+	CanResend         bool   `db:"can_resend"`
+	TetATet           bool   `db:"tet_a_tet"`
+	IsBlog            bool   `db:"blog"`
+	AvailableToSearch bool   `db:"available_to_search"`
 }
 
 type BasicChatDtoExtended struct {

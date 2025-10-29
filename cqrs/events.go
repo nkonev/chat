@@ -56,10 +56,11 @@ type ChatDeleted struct {
 }
 
 type ParticipantsAdded struct {
-	AdditionalData     *AdditionalData        `json:"additionalData"`
-	Participants       []ParticipantWithAdmin `json:"participants"`
-	ChatId             int64                  `json:"chatId"`
-	SkipChatAdminCheck bool                   `json:"skipChatAdminCheck"`
+	AdditionalData *AdditionalData        `json:"additionalData"`
+	Participants   []ParticipantWithAdmin `json:"participants"`
+	ChatId         int64                  `json:"chatId"`
+	AreFirstUsers  bool                   `json:"areFirstUsers"`
+	IsJoining      bool                   `json:"isJoining"`
 }
 
 func (p *ParticipantsAdded) GetParticipantIds() []int64 {

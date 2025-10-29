@@ -13,11 +13,11 @@ import (
 
 func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		chatExists, err := m.checkChatExists(ctx, tx, event.ChatId)
+		basic, err := m.GetChatBasic(ctx, tx, event.ChatId)
 		if err != nil {
 			return err
 		}
-		if !chatExists {
+		if basic == nil {
 			m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no chat", "chat_id", event.ChatId)
 			return nil
 		}
@@ -26,13 +26,24 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		if err != nil {
 			return err
 		}
-		if !admin && !event.SkipChatAdminCheck {
-			m.lgr.InfoContext(ctx,
-				"Participant isn't admin so he cannot add a participant",
-				"user_id", event.AdditionalData.BehalfUserId,
-				"chat_id", event.ChatId,
-			)
-			return nil
+		if !admin && !event.AreFirstUsers {
+			if event.IsJoining {
+				if !basic.AvailableToSearch && !basic.IsBlog {
+					m.lgr.InfoContext(ctx,
+						"Participant isn't allowed to join to chat",
+						"user_id", event.AdditionalData.BehalfUserId,
+						"chat_id", event.ChatId,
+					)
+					return nil
+				}
+			} else {
+				m.lgr.InfoContext(ctx,
+					"Participant isn't admin so he cannot add a participant",
+					"user_id", event.AdditionalData.BehalfUserId,
+					"chat_id", event.ChatId,
+				)
+				return nil
+			}
 		}
 
 		_, err = tx.ExecContext(ctx, `

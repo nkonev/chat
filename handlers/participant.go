@@ -215,6 +215,61 @@ func (ch *ParticipantHandler) LeaveChat(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
+func (ch *ParticipantHandler) JoinChat(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	basic, err := ch.commonProjection.GetChatBasic(g.Request.Context(), ch.dbWrapper, chatId)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error betting base chat", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+	if basic == nil {
+		ch.lgr.InfoContext(g.Request.Context(), "No chat found", "chat_id", chatId)
+		g.Status(http.StatusNoContent)
+		return
+	}
+	if !basic.AvailableToSearch && !basic.IsBlog {
+		ch.lgr.InfoContext(g.Request.Context(), "User isn't allowed to join into this chat because chat isn't available for search", "chat_id", chatId, "user_id", userId)
+		g.Status(http.StatusUnauthorized)
+		return
+	}
+
+	cc := cqrs.ParticipantAdd{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		ParticipantIds: []int64{userId},
+		ChatId:         chatId,
+		IsJoining:      true,
+	}
+
+	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.cfg)
+	if err != nil {
+		if translateParticipantError(g, err) {
+			return
+		}
+
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantAdd command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.Status(http.StatusOK)
+}
+
 func (ch *ParticipantHandler) ParticipantsFilter(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 
