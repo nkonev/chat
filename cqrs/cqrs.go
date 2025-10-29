@@ -7,6 +7,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v3/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/google/uuid"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
@@ -150,6 +151,13 @@ func ConfigureCqrsMarshaller() *CqrsMarshalerDecorator {
 	// We are decorating ProtobufMarshaler to add extra metadata to the message.
 	return &CqrsMarshalerDecorator{
 		cqrs.JSONMarshaler{
+			NewUUID: func() string {
+				uuidV7, err := uuid.NewV7()
+				if err != nil {
+					panic(err)
+				}
+				return uuidV7.String()
+			},
 			// It will generate topic names based on the event/command type.
 			// So for example, for "RoomBooked" name will be "RoomBooked".
 			GenerateName: cqrs.NamedStruct(func(v interface{}) string {
