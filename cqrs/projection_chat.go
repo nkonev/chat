@@ -688,6 +688,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		RegularParticipantCanPublishMessage bool             `db:"regular_participant_can_publish_message"`
 		RegularParticipantCanPinMessage     bool             `db:"regular_participant_can_pin_message"`
 		RegularParticipantCanWriteMessage   bool             `db:"regular_participant_can_write_message"`
+		AvailableToSearch                   bool             `db:"available_to_search"`
 	}
 
 	list := []chatDto{}
@@ -788,7 +789,8 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			cc.can_react,
 			cc.regular_participant_can_publish_message,
 			cc.regular_participant_can_pin_message,
-			cc.regular_participant_can_write_message
+			cc.regular_participant_can_write_message,
+			cc.available_to_search
 		from chat_common cc
 		left join chat_user_view ch on (cc.id = ch.id and ch.user_id = any($2))
 		left join blog b on ch.id = b.id
@@ -825,6 +827,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			RegularParticipantCanPublishMessage: de.RegularParticipantCanPublishMessage,
 			RegularParticipantCanPinMessage:     de.RegularParticipantCanPinMessage,
 			RegularParticipantCanWriteMessage:   de.RegularParticipantCanWriteMessage,
+			AvailableToSearch:                   de.AvailableToSearch,
 		}
 		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {
