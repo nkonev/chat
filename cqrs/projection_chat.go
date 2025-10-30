@@ -710,6 +710,8 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 
 	conditionClause := " true "
 
+	var joinClause string
+
 	if startingFromItemId != nil && chatId != nil {
 		return nil, fmt.Errorf("wrong invariant: both startingFromItemId and chatId provided")
 	}
@@ -756,6 +758,9 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 
 	if !searchForPublic {
 		conditionClause += " and ch.user_id = any($2) "
+		joinClause = " join "
+	} else {
+		joinClause = " left join "
 	}
 
 	// it is optimized (all order by in the same table)
@@ -787,14 +792,14 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			cc.regular_participant_can_write_message,
 			cc.available_to_search
 		from chat_common cc
-		left join chat_user_view ch on (cc.id = ch.id and ch.user_id = any($2))
+		%s chat_user_view ch on (cc.id = ch.id and ch.user_id = any($2))
 		left join blog b on ch.id = b.id
 		where %s
 		%s
 		%s
 		limit $1
 		%s
-		`, searchCte, conditionClause, searchClause, orderClause, offset)
+		`, searchCte, joinClause, conditionClause, searchClause, orderClause, offset)
 	err := sqlscan.Select(ctx, co, &list, q, queryArgs...)
 	if err != nil {
 		return res, err
