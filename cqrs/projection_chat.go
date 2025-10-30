@@ -169,19 +169,7 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 
 func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-
-		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
-		if err != nil {
-			return err
-		}
-		if !admin {
-			m.lgr.InfoContext(ctx,
-				"Participant isn't admin so he cannot delete chat",
-				"user_id", event.AdditionalData.BehalfUserId,
-				"chat_id", event.ChatId,
-			)
-			return nil
-		}
+		// we don't check IsChatAdmin because a participant was already removed
 
 		blog, errInner := m.isChatBlog(ctx, tx, event.ChatId)
 		if errInner != nil {
@@ -197,7 +185,7 @@ func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted
 		}
 
 		if blog {
-			err = m.removeBlog(ctx, tx, event.ChatId)
+			err := m.removeBlog(ctx, tx, event.ChatId)
 			if err != nil {
 				return err
 			}
