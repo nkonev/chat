@@ -28,7 +28,10 @@ create unlogged table chat_common(
     regular_participant_can_pin_message BOOLEAN NOT NULL,
     regular_participant_can_write_message BOOLEAN NOT NULL,
     participants_count bigint,
-    participant_ids bigint[]
+    participant_ids bigint[],
+    last_message_id bigint,
+    last_message_content text,
+    last_message_owner_id bigint
 );
 
 create unlogged table chat_participant(
@@ -77,9 +80,6 @@ create unlogged table chat_user_view(
     pinned boolean not null default false,
     user_id bigint not null,
     update_date_time timestamp not null,
-    last_message_id bigint,
-    last_message_content text,
-    last_message_owner_id bigint,
     consider_messages_as_unread BOOLEAN not null default true,
     unread_messages bigint not null default 0,
     last_read_message_id bigint not null default 0,

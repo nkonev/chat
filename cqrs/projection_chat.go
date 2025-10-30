@@ -364,7 +364,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 		// it's not forgotten else, it's the different action
 		if lastMessageAction == LastMessageActionRefresh {
-			err := m.setLastMessage(ctx, tx, participantIds, chatId)
+			err := m.setLastMessage(ctx, tx, chatId)
 			if err != nil {
 				return err
 			}
@@ -773,9 +773,9 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		    cc.title,
 		    coalesce(ch.pinned, false) as pinned,
 		    coalesce(ch.unread_messages, 0) as unread_messages,
-		    ch.last_message_id,
-		    ch.last_message_owner_id,
-		    ch.last_message_content,
+		    cc.last_message_id,
+		    cc.last_message_owner_id,
+		    cc.last_message_content,
 		    cc.participants_count,
 		    cc.participant_ids,
 		    b.id is not null as blog,

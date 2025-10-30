@@ -181,24 +181,24 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 	return nil
 }
 
-func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, participantIds []int64, chatId int64) error {
+func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId int64) error {
 
 	_, err := tx.ExecContext(ctx, `
 				with last_message as (
 					select 
 						m.id,
 						m.owner_id, 
-						left(strip_tags(m.content), $3) as content
+						left(strip_tags(m.content), $2) as content
 					from message m 
-					where m.chat_id = $2 and m.id = (select max(mm.id) from message mm where mm.chat_id = $2)
+					where m.chat_id = $1 and m.id = (select max(mm.id) from message mm where mm.chat_id = $1)
 				)
-				UPDATE chat_user_view 
+				UPDATE chat_common 
 				SET 
 					last_message_id = (select id from last_message),
 					last_message_content = (select content from last_message),
 					last_message_owner_id = (select owner_id from last_message)
-				WHERE user_id = any($1) and id = $2;
-			`, participantIds, chatId, m.cfg.Cqrs.Projections.ChatUserView.LastMessageMaxTextDbPreviewSize)
+				WHERE id = $1;
+			`, chatId, m.cfg.Cqrs.Projections.ChatUserView.LastMessageMaxTextDbPreviewSize)
 	if err != nil {
 		return fmt.Errorf("error during setting last message: %w", err)
 	}
@@ -337,7 +337,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 				}
 
 				_, err = tx.ExecContext(ctx, `
-				update chat_user_view uv set unread_messages = 0, last_read_message_id = last_message_id where uv.user_id = $1 and uv.id = $2
+				update chat_user_view uv set unread_messages = 0, last_read_message_id = (select last_message_id from chat_common where id = $2) where uv.user_id = $1 and uv.id = $2
 			`, event.AdditionalData.BehalfUserId, event.ChatId)
 				if err != nil {
 					return err
@@ -354,18 +354,30 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 	} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
 		offset := 0
 		for {
+
 			updatedChatsPortion := []dto.ChatUserViewBasic{}
 			err := sqlscan.Select(ctx, m.db, &updatedChatsPortion, `
-				update chat_user_view uv 
-				set unread_messages = 0, last_read_message_id = uv.last_message_id 
-				where uv.user_id = $1 and uv.id in (
-					select inn.id 
-					from chat_user_view inn 
-					where inn.user_id = $1 and inn.unread_messages > 0 -- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
-					order by inn.id 
+				with
+				input_data as (
+					select
+						uv.id as chat_id
+						,uv.user_id
+						,cc.last_message_id
+					from chat_user_view uv
+					join chat_common cc on uv.id = cc.id
+					where uv.user_id = $1 
+						and uv.unread_messages > 0 -- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
+					order by uv.id 
 					limit $2 offset $3
 				)
-				returning uv.id, uv.unread_messages, uv.update_date_time
+				update chat_user_view cuv 
+				set (unread_messages, last_read_message_id) = (
+					select 0, idt.last_message_id 
+					from input_data idt
+					where (idt.chat_id, idt.user_id) = (cuv.id, cuv.user_id)
+				)
+				where (cuv.id, cuv.user_id) in (select idtt.chat_id, idtt.user_id from input_data idtt) -- to avoid null. merge with return isn't supported
+				returning cuv.id, cuv.unread_messages, cuv.update_date_time
 			`, event.AdditionalData.BehalfUserId, utils.DefaultSize, offset)
 			if err != nil {
 				return err
@@ -472,13 +484,17 @@ func (m *CommonProjection) GetLastMessageReaded(ctx context.Context, chatId, use
 	with
 	chat_messages as (
 		select m.id from message m where m.chat_id = $2
+	),
+	user_last_read_message as (
+		select last_read_message_id from chat_user_view um 
+		where (um.user_id, um.id) = ($1, $2)
 	)
 	select 
-	    um.last_read_message_id as last_readed_message_id, 
-	    exists(select * from chat_messages m where m.id = um.last_message_id) as has,
+	    (select last_read_message_id from user_last_read_message) as last_readed_message_id, 
+	    exists(select * from chat_messages m where m.id = cc.last_message_id) as has,
 	    (select max(m.id) from chat_messages m) as max_message_id
-	from chat_user_view um 
-    where (um.user_id, um.id) = ($1, $2)
+	from chat_common cc 
+    where cc.id = $2
 	`, userId, chatId)
 	if err != nil {
 		return 0, false, 0, err

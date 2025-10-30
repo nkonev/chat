@@ -99,10 +99,6 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			return err
 		}
 
-		err = m.setLastMessage(ctx, tx, GetParticipantIds(event.Participants), event.ChatId)
-		if err != nil {
-			return err
-		}
 		return nil
 	})
 	if errOuter != nil {
