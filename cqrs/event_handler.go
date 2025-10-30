@@ -123,17 +123,18 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	defer participantSpan.End()
 
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
-		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving)
+		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, false)
 	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting {
-		return m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving)
+		isRemoveAllParticipants := len(event.AllParticipantIdsExcepting) == 0
+		return m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, event.AllParticipantIdsExcepting, func(participantIdsPortion []int64) error {
+			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isRemoveAllParticipants)
 		})
 	} else {
 		return fmt.Errorf("Unknown event.GetParticipantsType = %v", event.GetParticipantsType)
 	}
 }
 
-func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool) error {
+func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isRemoveAllParticipants bool) error {
 	userIds := participantIds
 
 	eventType := dto.EventTypeChatDeleted
@@ -172,7 +173,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
-	errp := m.commonProjection.OnParticipantRemoved(ctx, additionalData, userIds, chatId, behalfUserId, isLeaving)
+	errp := m.commonProjection.OnParticipantRemoved(ctx, additionalData, userIds, chatId, behalfUserId, isLeaving, isRemoveAllParticipants)
 	if errp != nil {
 		return errp
 	}
@@ -260,7 +261,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 
 		m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
-		errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.ParticipantsAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
+		errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
 		if errp != nil {
 			return errp
 		}

@@ -114,7 +114,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	return nil
 }
 
-func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool) error {
+func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isRemoveAllParticipants bool) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		admin, err := m.IsChatAdmin(ctx, tx, behalfUserId, chatId)
 		if err != nil {
@@ -143,9 +143,11 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalD
 			return err
 		}
 
-		err = m.updateViewableParticipants(ctx, tx, chatId)
-		if err != nil {
-			return err
+		if !isRemoveAllParticipants { // an optimization for chat deletion
+			err = m.updateViewableParticipants(ctx, tx, chatId)
+			if err != nil {
+				return err
+			}
 		}
 
 		err = m.updateHasUnreads(ctx, tx, participantIds)

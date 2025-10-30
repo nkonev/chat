@@ -152,15 +152,6 @@ const (
 	LastMessageActionRefresh
 )
 
-type ParticipantsAction int16
-
-const (
-	ParticipantsActionUnspecified = iota
-	// represents action to update participants
-	// see also OnParticipantAdd - there chat_user_view is created
-	ParticipantsActionRefresh
-)
-
 type ChatAction int16
 
 const (
@@ -193,7 +184,6 @@ type ChatViewRefreshed struct {
 	ChatId                     int64                `json:"chatId"`
 	UnreadMessagesAction       UnreadMessagesAction `json:"unreadMessagesAction"`
 	LastMessageAction          LastMessageAction    `json:"lastMessageAction"`
-	ParticipantsAction         ParticipantsAction   `json:"participantsAction"`
 	IncreaseOn                 int                  `json:"increaseOn"`
 	ChatAction                 ChatAction           `json:"chatAction"`
 }

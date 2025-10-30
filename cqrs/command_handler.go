@@ -423,10 +423,6 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		ChatAction:                 ChatActionRefresh,
 	}
 
-	if len(copyCommand.ParticipantIdsToAdd) > 0 {
-		ui.ParticipantsAction = ParticipantsActionRefresh
-	}
-
 	errInner := eventBus.Publish(ctx, ui)
 	if errInner != nil {
 		return errInner
@@ -514,19 +510,18 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 		return err
 	}
 
-	// excluding => s.ParticipantIds is an optimization in order not to re-refresh views for the recently added
-	if len(s.ParticipantIds) > 0 {
-		ui := &ChatViewRefreshed{
-			AdditionalData:             s.AdditionalData,
-			ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
-			AllParticipantIdsExcepting: s.ParticipantIds, // chat_user_views for newly added participants will be created from scratch including already added, see ParticipantsAdded handler
-			ChatId:                     s.ChatId,
-			ParticipantsAction:         ParticipantsActionRefresh,
-		}
-		errInner := eventBus.Publish(ctx, ui)
-		if errInner != nil {
-			return errInner
-		}
+	ui := &ChatViewRefreshed{
+		AdditionalData:   s.AdditionalData,
+		ParticipantsMode: ParticipantsModeAllParticipantIdsExcepting,
+		// chat_user_views for newly added participants will be created from scratch including already added, see ParticipantsAdded handler
+		// actually don't need to send an event for newly added, their last_updated will be updated in OnParticipantAdded()
+		AllParticipantIdsExcepting: s.ParticipantIds,
+		ChatId:                     s.ChatId,
+		ChatAction:                 ChatActionRefresh,
+	}
+	errInner := eventBus.Publish(ctx, ui)
+	if errInner != nil {
+		return errInner
 	}
 
 	return nil
@@ -564,7 +559,7 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 			ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 			AllParticipantIdsExcepting: s.ParticipantIds,
 			ChatId:                     s.ChatId,
-			ParticipantsAction:         ParticipantsActionRefresh,
+			ChatAction:                 ChatActionRefresh,
 		}
 		errInner := eventBus.Publish(ctx, ui)
 		if errInner != nil {

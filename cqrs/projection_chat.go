@@ -294,7 +294,7 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 
 // called in cases when chat should lift because of changing update_date_time
 // in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
-func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, participantsAction ParticipantsAction, increaseOn int, messageOwnerId int64, chatAction ChatAction) error {
+func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, increaseOn int, messageOwnerId int64, chatAction ChatAction) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// in oder not to have a potential race condition
 		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
@@ -372,13 +372,8 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 			wasUpdated = true
 		}
 
-		if participantsAction == ParticipantsActionRefresh {
-			// the db was updated earlier
-			wasUpdated = true
-		}
-
 		if chatAction == ChatActionRefresh {
-			// for the cases like renaming chat
+			// for the cases like renaming chat, ...
 			// the db was updated earlier, here we need to update chat_user_view.update_date_time
 			wasUpdated = true
 		}
