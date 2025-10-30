@@ -446,20 +446,19 @@ func (m *EnrichingProjection) ChatFilter(ctx context.Context, co db.CommonOperat
 
 	additionalFoundUserIds := m.searchForUsers(ctx, searchString)
 
-	queryArgs := []any{chatId}
+	queryArgs := []any{chatId, behalfUserId}
 
 	var searchClause = ""
 	var searchCte = ""
-	var shouldSkipCheckingOwnership bool
 	if len(searchString) > 0 {
-		searchClause, searchCte, shouldSkipCheckingOwnership, queryArgs = processAdditionalUserIds(queryArgs, additionalFoundUserIds, searchString)
-	}
+		searchClause += " and ("
 
-	var conditionClause string
-	shouldCheckOwnership := !shouldSkipCheckingOwnership
-	if shouldCheckOwnership {
-		queryArgs = append(queryArgs, behalfUserId)
-		conditionClause += fmt.Sprintf(" and ch.user_id = $%d ", len(queryArgs))
+		searchClauseT, searchCteT, _, queryArgsT := processAdditionalUserIds(queryArgs, additionalFoundUserIds, searchString)
+		searchClause += searchClauseT
+		searchCte = searchCteT
+		queryArgs = queryArgsT
+
+		searchClause += " ) "
 	}
 
 	var found bool
@@ -467,13 +466,13 @@ func (m *EnrichingProjection) ChatFilter(ctx context.Context, co db.CommonOperat
 		%s
 		SELECT EXISTS (
 			select 1
-			from chat_user_view ch
+			from chat_common cc
+			join chat_user_view ch on (cc.id = ch.id and ch.user_id = $2)
 			left join blog b on ch.id = b.id
-			join chat_common cc on cc.id = ch.id
-			where ch.id = $2 %s
+			where ch.id = $1
 			%s
 		)
-	`, searchCte, conditionClause, searchClause), queryArgs...)
+	`, searchCte, searchClause), queryArgs...)
 	if err != nil {
 		return false, err
 	}
@@ -481,9 +480,10 @@ func (m *EnrichingProjection) ChatFilter(ctx context.Context, co db.CommonOperat
 	return found, nil
 }
 
-func processAdditionalUserIds(queryArgsInput []any, additionalFoundUserIds []int64, searchString string) (searchClause string, searchCte string, shouldSkipCheckingOwnership bool, queryArgs []any) {
+func processAdditionalUserIds(queryArgsInput []any, additionalFoundUserIds []int64, searchString string) (searchClause string, searchCte string, searchForPublic bool, queryArgs []any) {
 	queryArgs = queryArgsInput
 	var additionalUserIdsClause = ""
+	searchForPublic = searchString == dto.ReservedPublicallyAvailableForSearchChats
 	if len(additionalFoundUserIds) > 0 {
 		queryArgs = append(queryArgs, additionalFoundUserIds)
 		searchCte = fmt.Sprintf(`
@@ -497,12 +497,10 @@ func processAdditionalUserIds(queryArgsInput []any, additionalFoundUserIds []int
 			`, len(queryArgs))
 		additionalUserIdsClause = fmt.Sprintf(" ( cc.id = any(array(SELECT chat_id FROM tet_a_tet_chats_ids)) ) or ")
 	}
-	searchClause = fmt.Sprintf(" ( ( %s cc.title ILIKE $%d ) OR ( (cc.available_to_search = TRUE OR b.id is not null) AND $%d = '%s' ) )", additionalUserIdsClause, len(queryArgs)+1, len(queryArgs)+2, dto.ReservedPublicallyAvailableForSearchChats)
+	searchClause = fmt.Sprintf(" ( ( %s cc.title ILIKE $%d ) OR ( (cc.available_to_search = TRUE OR b.id is not null) AND $%d = true ) )", additionalUserIdsClause, len(queryArgs)+1, len(queryArgs)+2)
 	searchStringPercents := "%" + searchString + "%"
 	queryArgs = append(queryArgs, searchStringPercents)
-	queryArgs = append(queryArgs, searchString)
-
-	shouldSkipCheckingOwnership = searchString == dto.ReservedPublicallyAvailableForSearchChats
+	queryArgs = append(queryArgs, searchForPublic)
 
 	return
 }
@@ -715,7 +713,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 	list := []chatDto{}
 	res := []dto.ChatViewDto{}
 
-	queryArgs := []any{size}
+	queryArgs := []any{size, participantIds, dto.NonExistentUser}
 
 	order := "desc"
 	offset := " offset 1" // to make behaviour the same as in users, messages (there is > or <)
@@ -747,16 +745,17 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		conditionClause += paginationKeyset
 	}
 
-	shouldCheckOwnership := true
 	var searchClause = ""
 	var searchCte = ""
+	var searchForPublic bool
 	if len(searchString) > 0 {
 		searchClause = " and ("
 
-		searchClauseT, searchCteT, shouldSkipCheckingOwnershipT, queryArgsT := processAdditionalUserIds(queryArgs, additionalFoundUserIds, searchString)
+		searchClauseT, searchCteT, searchForPublicT, queryArgsT := processAdditionalUserIds(queryArgs, additionalFoundUserIds, searchString)
 		searchClause += searchClauseT
 		searchCte = searchCteT
 		queryArgs = queryArgsT
+		searchForPublic = searchForPublicT
 
 		searchClause += " or "
 		queryArgs = append(queryArgs, searchString)
@@ -768,12 +767,6 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		) `, len(queryArgs), len(queryArgs))
 
 		searchClause += " ) "
-		shouldCheckOwnership = !shouldSkipCheckingOwnershipT
-	}
-
-	if shouldCheckOwnership {
-		queryArgs = append(queryArgs, participantIds)
-		conditionClause += fmt.Sprintf(" and ch.user_id = any($%d) ", len(queryArgs))
 	}
 
 	if chatId != nil {
@@ -785,21 +778,25 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		orderClause = "order by ch.update_date_time desc, ch.user_id" // to prevent flaky tests. the same as in projection_participantv :: getParticipantsCommonExcepting()
 	}
 
+	if !searchForPublic {
+		conditionClause += " and ch.user_id = any($2) "
+	}
+
 	// it is optimized (all order by in the same table)
 	// so querying a page (using keyset) from a large amount of chats is fast
 	// it's the root cause why we use cqrs
 	q := fmt.Sprintf(`
 		%s
 		select 
-		    ch.id,
-			ch.user_id,
+		    cc.id,
+			coalesce(ch.user_id, $3) as user_id,
 		    cc.title,
-		    ch.pinned,
-		    ch.unread_messages,
+		    coalesce(ch.pinned, false) as pinned,
+		    coalesce(ch.unread_messages, 0) as unread_messages,
 		    ch.last_message_id,
 		    ch.last_message_owner_id,
 		    ch.last_message_content,
-		    ch.participants_count,
+		    coalesce(ch.participants_count, 0) as participants_count,
 		    ch.participant_ids,
 		    b.id is not null as blog,
 		    ch.update_date_time,
@@ -812,9 +809,9 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			cc.regular_participant_can_publish_message,
 			cc.regular_participant_can_pin_message,
 			cc.regular_participant_can_write_message
-		from chat_user_view ch
+		from chat_common cc
+		left join chat_user_view ch on (cc.id = ch.id and ch.user_id = any($2))
 		left join blog b on ch.id = b.id
-		join chat_common cc on cc.id = ch.id
 		where %s
 		%s
 		%s
