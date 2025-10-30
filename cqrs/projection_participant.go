@@ -66,15 +66,6 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		// because we select chat_common, inserted from this consumer group in ChatCreated handler
 		_, err = tx.ExecContext(ctx, `
 		with 
-		this_chat_participants as (
-			select user_id, create_date_time from chat_participant where chat_id = $2
-		),
-		chat_participant_count as (
-			select count (*) as count from this_chat_participants
-		),
-		chat_participants_last_n as (
-			select user_id from this_chat_participants order by create_date_time desc limit $4
-		),
 		user_input as (
 			select unnest(cast ($1 as bigint[])) as user_id
 		),
@@ -83,20 +74,21 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 				c.id as chat_id, 
 				false as pinned, 
 				u.user_id as user_id, 
-				cast ($3 as timestamp) as update_date_time,
-				(select count from chat_participant_count) as participants_count, 
-				(select array_agg(user_id) from chat_participants_last_n) as participant_ids
+				cast ($3 as timestamp) as update_date_time
 			from user_input u
 			cross join (select cc.id, cc.title from chat_common cc where cc.id = $2) c 
 		)
-		insert into chat_user_view(id, pinned, user_id, update_date_time, participants_count, participant_ids) 
-			select chat_id, pinned, user_id, update_date_time, participants_count, participant_ids from input_data
+		insert into chat_user_view(id, pinned, user_id, update_date_time) 
+			select chat_id, pinned, user_id, update_date_time from input_data
 		on conflict(user_id, id) do update set
 			pinned = excluded.pinned
 			, update_date_time = excluded.update_date_time 
-			, participants_count = excluded.participants_count 
-			, participant_ids = excluded.participant_ids
-		`, GetParticipantIds(event.Participants), event.ChatId, event.AdditionalData.CreatedAt, m.cfg.Cqrs.Projections.ChatUserView.MaxViewableParticipants)
+		`, GetParticipantIds(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
+		if err != nil {
+			return err
+		}
+
+		err = m.updateViewableParticipants(ctx, tx, event.ChatId)
 		if err != nil {
 			return err
 		}
@@ -155,6 +147,11 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalD
 			return err
 		}
 
+		err = m.updateViewableParticipants(ctx, tx, chatId)
+		if err != nil {
+			return err
+		}
+
 		err = m.updateHasUnreads(ctx, tx, participantIds)
 		if err != nil {
 			return err
@@ -171,6 +168,36 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalD
 		"user_ids", participantIds,
 		"chat_id", chatId,
 	)
+
+	return nil
+}
+
+func (m *CommonProjection) updateViewableParticipants(ctx context.Context, co db.CommonOperations, chatId int64) error {
+	_, err := co.ExecContext(ctx, `
+		with 
+		this_chat_participants as (
+			select user_id, create_date_time from chat_participant where chat_id = $1
+		),
+		chat_participant_count as (
+			select count (*) as count from this_chat_participants
+		),
+		chat_participants_last_n as (
+			select user_id from this_chat_participants order by create_date_time desc limit $2
+		),
+		input_data as (
+			select 
+				(select count from chat_participant_count) as participants_count, 
+				(select array_agg(user_id) from chat_participants_last_n) as participant_ids
+		)
+		update chat_common cc
+		SET 
+			participants_count = (select participants_count from input_data),
+			participant_ids = (select participant_ids from input_data)
+		where cc.id = $1
+		`, chatId, m.cfg.Cqrs.Projections.ChatUserView.MaxViewableParticipants)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -373,27 +373,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 		}
 
 		if participantsAction == ParticipantsActionRefresh {
-			_, err := tx.ExecContext(ctx, `
-					with
-					this_chat_participants as (
-						select user_id, create_date_time from chat_participant where chat_id = $2
-					),
-					chat_participant_count as (
-						select count (*) as count from this_chat_participants
-					),
-					chat_participants_last_n as (
-						select user_id from this_chat_participants order by create_date_time desc limit $3
-					)
-					UPDATE chat_user_view 
-					SET 
-						participants_count = (select count from chat_participant_count),
-						participant_ids = (select array_agg(user_id) from chat_participants_last_n)
-					WHERE user_id = any($1) and id = $2;
-				`, participantIds, chatId, m.cfg.Cqrs.Projections.ChatUserView.MaxViewableParticipants)
-			if err != nil {
-				return fmt.Errorf("error during increasing unread messages: %w", err)
-			}
-
+			// the db was updated earlier
 			wasUpdated = true
 		}
 
@@ -796,8 +776,8 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		    ch.last_message_id,
 		    ch.last_message_owner_id,
 		    ch.last_message_content,
-		    coalesce(ch.participants_count, 0) as participants_count,
-		    ch.participant_ids,
+		    cc.participants_count,
+		    cc.participant_ids,
 		    b.id is not null as blog,
 		    ch.update_date_time,
 		    cc.tet_a_tet,
