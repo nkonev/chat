@@ -685,7 +685,6 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 	if !copied.RegularParticipantCanWriteMessage && !admin {
 		copied.CanWriteMessage = false
 	}
-	// TODO pinned
 }
 
 func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations, participantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, additionalFoundUserIds []int64, chatId *int64) ([]dto.ChatViewDto, error) {
