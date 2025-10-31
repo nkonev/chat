@@ -1548,6 +1548,7 @@ func TestDeleteChat(t *testing.T) {
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
+		dba *db.DB,
 		aaaRestClient client.AaaRestClient,
 		testEventsAccumulator *listener.TestEventAccumulator,
 		lc fx.Lifecycle,
@@ -1683,6 +1684,10 @@ func TestDeleteChat(t *testing.T) {
 					e.ChatDeletedDto.Id == chat1Id
 			},
 		}))
+
+		ch, err := m.GetChatBasic(ctx, dba, chat1Id)
+		require.NoError(t, err, "error in getting chat")
+		require.Nil(t, ch) // assert that the chat was physically removed
 	})
 
 }
