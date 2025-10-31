@@ -611,7 +611,7 @@ func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto,
 			}
 		}
 	}
-	SetChatPersonalizedFields(&che, admin, true)
+	SetChatPersonalizedFields(&che, admin, ch.IsParticipant)
 
 	if ch.LastMessageOwnerId != nil && ch.LastMessageContent != nil {
 		u := users[*ch.LastMessageOwnerId]
@@ -636,7 +636,7 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 	copied.CanChangeChatAdmins = admin && !copied.TetATet
 	copied.CanBroadcast = admin
 
-	if !participant {
+	if !participant { // participant can be false in case result from search for publicly available chats
 		isResultFromSearch := true
 		copied.IsResultFromSearch = &isResultFromSearch
 	}
@@ -672,6 +672,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		RegularParticipantCanPinMessage     bool             `db:"regular_participant_can_pin_message"`
 		RegularParticipantCanWriteMessage   bool             `db:"regular_participant_can_write_message"`
 		AvailableToSearch                   bool             `db:"available_to_search"`
+		IsParticipant                       bool             `db:"is_participant"`
 	}
 
 	list := []chatDto{}
@@ -778,7 +779,8 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			cc.regular_participant_can_publish_message,
 			cc.regular_participant_can_pin_message,
 			cc.regular_participant_can_write_message,
-			cc.available_to_search
+			cc.available_to_search,
+			ch.id is not null as is_participant
 		from chat_common cc
 		%s chat_user_view ch on (cc.id = ch.id and ch.user_id = any($2))
 		left join blog b on ch.id = b.id
@@ -816,6 +818,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			RegularParticipantCanPinMessage:     de.RegularParticipantCanPinMessage,
 			RegularParticipantCanWriteMessage:   de.RegularParticipantCanWriteMessage,
 			AvailableToSearch:                   de.AvailableToSearch,
+			IsParticipant:                       de.IsParticipant,
 		}
 		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {

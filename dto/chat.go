@@ -33,6 +33,7 @@ type ChatViewDto struct {
 	RegularParticipantCanPinMessage     bool       `json:"regularParticipantCanPinMessage"`
 	RegularParticipantCanWriteMessage   bool       `json:"regularParticipantCanWriteMessage"`
 	AvailableToSearch                   bool       `json:"availableToSearch"`
+	IsParticipant                       bool       `json:"-"`
 }
 
 type ChatId struct {
