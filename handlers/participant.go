@@ -270,6 +270,31 @@ func (ch *ParticipantHandler) JoinChat(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
+func (ch *ParticipantHandler) GetChatParticipants(g *gin.Context) {
+	cid := g.Query(dto.ChatIdQueryParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	participantsPage := utils.FixPageString(g.Query(dto.PageParam))
+	participantsSize := utils.FixSizeString(g.Query(dto.SizeParam))
+	participantsOffset := utils.GetOffset(participantsPage, participantsSize)
+
+	ids, err := ch.commonProjection.GetParticipantIds(g.Request.Context(), ch.dbWrapper, chatId, participantsSize, participantsOffset)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participant ids", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, ids)
+	return
+}
+
 func (ch *ParticipantHandler) ParticipantsFilter(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 

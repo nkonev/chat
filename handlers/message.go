@@ -321,6 +321,34 @@ func (mc *MessageHandler) MarkAsReadAllChats(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
+func (mc *MessageHandler) GetReadMessageUsers(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mid := g.Param(dto.MessageIdParam)
+
+	messageId, err := utils.ParseInt64(mid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println(userId, chatId, messageId) // TODO
+}
+
 func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {

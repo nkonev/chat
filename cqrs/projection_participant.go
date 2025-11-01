@@ -556,13 +556,17 @@ func (m *CommonProjection) IterateOverCoChattedParticipantIds(ctx context.Contex
 	return lastError
 }
 
-func (m *CommonProjection) GetParticipantsCount(ctx context.Context, co db.CommonOperations, chatId int64) (int64, error) {
-	var count int64
-	err := sqlscan.Get(ctx, co, &count, "SELECT count(*) FROM chat_participant WHERE chat_id = $1", chatId)
+func (m *CommonProjection) GetParticipantIds(ctx context.Context, co db.CommonOperations, chatId int64, participantsSize int32, participantsOffset int64) ([]int64, error) {
+	pwa, err := getParticipantsCommonExcepting(ctx, co, chatId, nil, participantsSize, participantsOffset, true)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return count, nil
+
+	return GetParticipantIdsP(pwa), nil
+}
+
+func (m *CommonProjection) GetParticipantsCount(ctx context.Context, co db.CommonOperations, chatId int64) (int64, error) {
+	return getParticipantsCount(ctx, co, chatId)
 }
 
 func (m *CommonProjection) IsChatAdmin(ctx context.Context, co db.CommonOperations, userId, chatId int64) (bool, error) {

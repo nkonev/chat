@@ -13,6 +13,7 @@ const AdminParam = "admin"
 const SearchStringParam = "searchString"
 const OverrideMessageId = "overrideMessageId"
 const OverrideChatId = "overrideChatId"
+const ChatIdQueryParam = "chatId"
 
 // path
 const ChatIdParam = "id"
