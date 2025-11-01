@@ -6,15 +6,24 @@ import (
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/logger"
 	"go.opentelemetry.io/otel"
+	"go.uber.org/fx"
 )
 
-func CreateRabbitMqConnection(lgr *logger.LoggerWrapper, cfg *config.AppConfig) (*rabbitmq.Connection, error) {
+func CreateRabbitMqConnection(lgr *logger.LoggerWrapper, cfg *config.AppConfig, lc fx.Lifecycle) (*rabbitmq.Connection, error) {
 	rabbitmq.Debug = cfg.RabbitMQ.Debug
 
 	conn, err := rabbitmq.Dial(cfg.RabbitMQ.Url)
 	if err != nil {
 		return nil, err
 	}
+
+	lc.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			lgr.Info("Closing rabbitmq connection")
+			return conn.Close()
+		},
+	})
+
 	return conn, nil
 }
 
