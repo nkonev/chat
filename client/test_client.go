@@ -258,6 +258,14 @@ func (rc *TestRestClient) GetHasUnreadMessages(ctx context.Context, behalfUserId
 	return resp.HasUnreadMessages, nil
 }
 
+func (rc *TestRestClient) GetReadMessageUsers(ctx context.Context, behalfUserId, chatId, messageId int64) (*dto.MessageReadResponse, error) {
+	resp, err := query[any, dto.MessageReadResponse](ctx, &rc.restClient, behalfUserId, http.MethodGet, fmt.Sprintf("/api/chat/%d/message/read/%d", chatId, messageId), "message.ReadUsers", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 func (rc *TestRestClient) PutUserChatNotificationSettings(ctx context.Context, behalfUserId, chatId int64, consider bool) error {
 	req := dto.PutChatNotificationSettingsDto{
 		ConsiderMessagesOfThisChatAsUnread: consider,

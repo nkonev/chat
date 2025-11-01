@@ -226,6 +226,11 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, false, user2HasUnreadMessagesNew2)
 
+		user1WhoReadedNew2, err := testRestClient.GetReadMessageUsers(ctx, user1, chat1Id, message1Id)
+		require.NoError(t, err, "error in getting who read the message")
+		assert.Equal(t, user2, user1WhoReadedNew2.Data[0].Id)
+		assert.Equal(t, user1, user1WhoReadedNew2.Data[1].Id)
+
 		user3ChatsNew2, _, err := testRestClient.GetChats(ctx, user3)
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 1, len(user3ChatsNew2))

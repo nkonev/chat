@@ -299,42 +299,20 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 			// not owners
 			if len(participantIdsWithoutMessageOwner) > 0 && increaseOn > 0 {
-				_, err := tx.ExecContext(ctx, `
-					UPDATE chat_user_view 
-					SET unread_messages = unread_messages + $3
-					WHERE user_id = any($1) and id = $2;
-				`, participantIdsWithoutMessageOwner, chatId, increaseOn)
+				err := m.increaseUnreads(ctx, tx, participantIdsWithoutMessageOwner, chatId, increaseOn)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
-				}
-
-				// upsert only for sake using CTE
-				_, err = tx.ExecContext(ctx, `
-					with input_data as (
-						SELECT 
-							ch.user_id as user_id, 
-							true as has
-						FROM chat_user_view ch 
-						WHERE ch.id = $2 AND ch.user_id = any($1) and ch.consider_messages_as_unread
-					)	
-					insert into has_unread_messages(user_id, has)
-					select idt.user_id, idt.has
-					from input_data idt
-					on conflict (user_id) do update set
-					has = excluded.has
-				`, participantIdsWithoutMessageOwner, chatId)
-				if err != nil {
-					return fmt.Errorf("error during setting has unread messages: %w", err)
 				}
 			}
 
 			// owner
 			if ownerIdP != nil {
-				_, err := tx.ExecContext(ctx, `
-					UPDATE chat_user_view 
-					SET last_read_message_id = (select max(id) from message where chat_id = $2)
-					WHERE (user_id, id) = ($1, $2);
-				`, *ownerIdP, chatId)
+				err := m.fastForwardLastRead(ctx, tx, *ownerIdP, chatId)
+				if err != nil {
+					return fmt.Errorf("error during increasing unread messages: %w", err)
+				}
+
+				err = m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, additionalData.CreatedAt)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}

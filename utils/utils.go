@@ -233,3 +233,21 @@ func CompareStringPointers(p1, p2 *string) bool {
 		return false
 	}
 }
+
+func SetToArray(set map[int64]bool) []int64 {
+	var ownerIds []int64
+	for k, v := range set {
+		if v {
+			ownerIds = append(ownerIds, k)
+		}
+	}
+	return ownerIds
+}
+
+func ArrayToSet(arr []int64) map[int64]bool {
+	var ownerIds map[int64]bool = map[int64]bool{}
+	for _, el := range arr {
+		ownerIds[el] = true
+	}
+	return ownerIds
+}

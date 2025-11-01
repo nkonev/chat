@@ -191,3 +191,13 @@ type MessageEditDto struct {
 	Id int64 `json:"id"`
 	MessageCreateDto
 }
+
+type ParticipantsWrapper struct {
+	Data  []*User `json:"participants"`
+	Count int64   `json:"participantsCount"` // for paginating purposes
+}
+
+type MessageReadResponse struct {
+	ParticipantsWrapper
+	Text string `json:"text"`
+}

@@ -9,8 +9,10 @@ import (
 	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
+	"time"
 )
 
 func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageCreated) error {
@@ -182,23 +184,22 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 }
 
 func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId int64) error {
-
 	_, err := tx.ExecContext(ctx, `
-				with last_message as (
-					select 
-						m.id,
-						m.owner_id, 
-						left(strip_tags(m.content), $2) as content
-					from message m 
-					where m.chat_id = $1 and m.id = (select max(mm.id) from message mm where mm.chat_id = $1)
-				)
-				UPDATE chat_common 
-				SET 
-					last_message_id = (select id from last_message),
-					last_message_content = (select content from last_message),
-					last_message_owner_id = (select owner_id from last_message)
-				WHERE id = $1;
-			`, chatId, m.cfg.Cqrs.Projections.ChatUserView.LastMessageMaxTextDbPreviewSize)
+		with last_message as (
+			select 
+				m.id,
+				m.owner_id, 
+				left(strip_tags(m.content), $2) as content
+			from message m 
+			where m.chat_id = $1 and m.id = (select max(mm.id) from message mm where mm.chat_id = $1)
+		)
+		UPDATE chat_common 
+		SET 
+			last_message_id = (select id from last_message),
+			last_message_content = (select content from last_message),
+			last_message_owner_id = (select owner_id from last_message)
+		WHERE id = $1;
+	`, chatId, m.cfg.Cqrs.Projections.ChatUserView.LastMessageMaxTextDbPreviewSize)
 	if err != nil {
 		return fmt.Errorf("error during setting last message: %w", err)
 	}
@@ -224,9 +225,9 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 			from (
 				select
 					(case
-						when exists(select * from chat_user_view uw where uw.id = $2 and uw.user_id = w.user_id and uw.last_read_message_id > 0)
+						when exists(select * from chat_user_view uw where uw.id = $2 and uw.user_id = w.user_id and uw.cuv_last_read_message_id > 0)
 						then coalesce(
-							(select m.id as last_message_id from chat_messages m where m.id = w.last_read_message_id),
+							(select m.id as last_message_id from chat_messages m where m.id = w.cuv_last_read_message_id),
 							(select max from max_message where $5 = true) -- allow taking max_message only in case $5 = true
 						)
 					end) as last_message_id,
@@ -268,7 +269,7 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 		on (idt.chat_id, idt.user_id) = (cuv.id, cuv.user_id)
 		when matched then update set 
 		   unread_messages = idt.unread_messages
-		  ,last_read_message_id = idt.last_read_message_id
+		  ,cuv_last_read_message_id = idt.last_read_message_id
 	`, participantIds, chatId, messageId, needSet, needRefresh)
 	if err != nil {
 		return err
@@ -280,6 +281,124 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 	}
 
 	return nil
+}
+
+func (m *CommonProjection) getCommonInputData() string {
+	return `
+		input_data as (
+			select
+				uv.id as chat_id
+				,uv.user_id
+				,cc.last_message_id
+			from chat_user_view uv
+			join chat_common cc on uv.id = cc.id
+			where uv.user_id = $1 
+				and uv.unread_messages > 0 -- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
+			order by uv.id 
+			limit $2 offset $3
+		)
+	`
+}
+
+func (m *CommonProjection) setNoUnreadsInAllChats(ctx context.Context, co db.CommonOperations, userId int64, size int, offset int64) ([]dto.ChatUserViewBasic, error) {
+	updatedChatsPortion := []dto.ChatUserViewBasic{}
+
+	q := fmt.Sprintf(`
+		with
+		%s
+		update chat_user_view cuv 
+		set (unread_messages, cuv_last_read_message_id) = (
+			select 0, idt.last_message_id 
+			from input_data idt
+			where (idt.chat_id, idt.user_id) = (cuv.id, cuv.user_id)
+		)
+		where (cuv.id, cuv.user_id) in (select idtt.chat_id, idtt.user_id from input_data idtt) -- to avoid null. merge with return isn't supported
+		returning cuv.id, cuv.unread_messages, cuv.update_date_time
+	`, m.getCommonInputData())
+
+	err := sqlscan.Select(ctx, co, &updatedChatsPortion, q, userId, size, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedChatsPortion, nil
+}
+
+func (m *CommonProjection) updateParticipantMessageReadId(ctx context.Context, co db.CommonOperations, userId, chatId, messageId int64, lastReadMessageDateTime time.Time) error {
+	_, err := co.ExecContext(ctx, `
+		with
+		max_message as (
+			select max(id) as max from message where chat_id = $2
+		),
+		max_message_normalized as (
+			select coalesce((select max from max_message), 0) as max
+		),
+		normalized_message as (
+			select case 
+				when cast($3 as bigint) <= (select max from max_message_normalized) then cast($3 as bigint)
+				else (select max from max_message_normalized)
+			end
+			as id
+		)
+		UPDATE chat_participant 
+		SET 
+			 cp_last_read_message_id = (select id from normalized_message)
+			,cp_last_read_message_date_time = $4
+		WHERE (user_id, chat_id) = ($1, $2);
+	`, userId, chatId, messageId, lastReadMessageDateTime)
+	return err
+}
+
+func (m *CommonProjection) fastForwardParticipantMessageReadId(ctx context.Context, co db.CommonOperations, userId, chatId int64, lastReadMessageDateTime time.Time) error {
+	_, err := co.ExecContext(ctx, `
+		with 
+		curr_message as (
+			select coalesce((select cp_last_read_message_id from chat_participant where (user_id, chat_id) = ($1, $2)), 0) as curr
+		),
+		max_message as (
+			select coalesce((select max(id) from message where chat_id = $2), 0) as max
+		)
+		UPDATE chat_participant 
+		SET 
+		    cp_last_read_message_id = (select max from max_message)
+			,cp_last_read_message_date_time = $3
+		WHERE 
+			(user_id, chat_id) = ($1, $2)
+			and (select curr from curr_message) != (select max from max_message)
+	`, userId, chatId, lastReadMessageDateTime)
+	return err
+}
+
+func (m *CommonProjection) fastForwardParticipantMessageReadIdInAllChats(ctx context.Context, co db.CommonOperations, userId int64, size int, offset int64, lastReadMessageDateTime time.Time) error {
+	q := fmt.Sprintf(`
+		with
+		%s
+		update chat_participant cuv 
+		set 
+		cp_last_read_message_id = (
+			select idt.last_message_id 
+			from input_data idt
+			where (idt.chat_id, idt.user_id) = (cuv.chat_id, cuv.user_id)
+		)
+		,cp_last_read_message_date_time = $4
+		where (cuv.chat_id, cuv.user_id) in (select idtt.chat_id, idtt.user_id from input_data idtt)
+	`, m.getCommonInputData())
+
+	_, err := co.ExecContext(ctx, q, userId, size, offset, lastReadMessageDateTime)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *CommonProjection) fastForwardLastRead(ctx context.Context, co db.CommonOperations, userId, chatId int64) error {
+	_, err := co.ExecContext(ctx, `
+		UPDATE chat_user_view 
+		SET unread_messages = 0, cuv_last_read_message_id = (select max(id) from message where chat_id = $2)
+		WHERE (user_id, id) = ($1, $2);
+	`, userId, chatId)
+	return err
 }
 
 // should be called after upserting into unread_messages_user_view otherwise it's going to reset has to false
@@ -312,6 +431,46 @@ func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, part
 	return err
 }
 
+func (m *CommonProjection) increaseUnreads(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64, increaseOn int) error {
+	_, err := co.ExecContext(ctx, `
+		UPDATE chat_user_view 
+		SET unread_messages = unread_messages + $3
+		WHERE user_id = any($1) and id = $2;
+	`, participantIds, chatId, increaseOn)
+	if err != nil {
+		return err
+	}
+
+	// upsert only for sake using CTE
+	_, err = co.ExecContext(ctx, `
+		with input_data as (
+			SELECT 
+				ch.user_id as user_id, 
+				true as has
+			FROM chat_user_view ch 
+			WHERE ch.id = $2 AND ch.user_id = any($1) and ch.consider_messages_as_unread
+		)	
+		insert into has_unread_messages(user_id, has)
+		select idt.user_id, idt.has
+		from input_data idt
+		on conflict (user_id) do update set
+		has = excluded.has
+	`, participantIds, chatId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *CommonProjection) setHasNoUnreadsInAllChats(ctx context.Context, co db.CommonOperations, userId int64) error {
+	_, err := co.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", userId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded, allChatsReadedConsumer func([]dto.ChatUserViewBasic)) error {
 	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
 		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
@@ -325,7 +484,17 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 					return nil
 				}
 
-				return m.setUnreadMessages(ctx, tx, []int64{event.AdditionalData.BehalfUserId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
+				err = m.setUnreadMessages(ctx, tx, []int64{event.AdditionalData.BehalfUserId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
+				if err != nil {
+					return err
+				}
+
+				err = m.updateParticipantMessageReadId(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt)
+				if err != nil {
+					return err
+				}
+
+				return nil
 			} else if event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
 				participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 				if err != nil {
@@ -336,14 +505,22 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 					return nil
 				}
 
-				_, err = tx.ExecContext(ctx, `
-				update chat_user_view uv set unread_messages = 0, last_read_message_id = (select last_message_id from chat_common where id = $2) where uv.user_id = $1 and uv.id = $2
-			`, event.AdditionalData.BehalfUserId, event.ChatId)
+				err = m.fastForwardLastRead(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 				if err != nil {
 					return err
 				}
 
-				return m.updateHasUnreads(ctx, tx, []int64{event.AdditionalData.BehalfUserId})
+				err = m.updateHasUnreads(ctx, tx, []int64{event.AdditionalData.BehalfUserId})
+				if err != nil {
+					return err
+				}
+
+				err = m.fastForwardParticipantMessageReadId(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.AdditionalData.CreatedAt)
+				if err != nil {
+					return err
+				}
+
+				return nil
 			} else {
 				return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
 			}
@@ -352,33 +529,16 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 			return fmt.Errorf("error during read messages: %w", errOuter)
 		}
 	} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
-		offset := 0
+		offset := int64(0)
 		for {
 
-			updatedChatsPortion := []dto.ChatUserViewBasic{}
-			err := sqlscan.Select(ctx, m.db, &updatedChatsPortion, `
-				with
-				input_data as (
-					select
-						uv.id as chat_id
-						,uv.user_id
-						,cc.last_message_id
-					from chat_user_view uv
-					join chat_common cc on uv.id = cc.id
-					where uv.user_id = $1 
-						and uv.unread_messages > 0 -- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
-					order by uv.id 
-					limit $2 offset $3
-				)
-				update chat_user_view cuv 
-				set (unread_messages, last_read_message_id) = (
-					select 0, idt.last_message_id 
-					from input_data idt
-					where (idt.chat_id, idt.user_id) = (cuv.id, cuv.user_id)
-				)
-				where (cuv.id, cuv.user_id) in (select idtt.chat_id, idtt.user_id from input_data idtt) -- to avoid null. merge with return isn't supported
-				returning cuv.id, cuv.unread_messages, cuv.update_date_time
-			`, event.AdditionalData.BehalfUserId, utils.DefaultSize, offset)
+			// deliberately don't use transaction in order not to span transaction over all the loop iterations
+			updatedChatsPortion, err := m.setNoUnreadsInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId, utils.DefaultSize, offset)
+			if err != nil {
+				return err
+			}
+
+			err = m.fastForwardParticipantMessageReadIdInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId, utils.DefaultSize, offset, event.AdditionalData.CreatedAt)
 			if err != nil {
 				return err
 			}
@@ -391,7 +551,8 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 
 			offset += utils.DefaultSize
 		}
-		_, err := m.db.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", event.AdditionalData.BehalfUserId)
+
+		err := m.setHasNoUnreadsInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId)
 		if err != nil {
 			return err
 		}
@@ -486,7 +647,7 @@ func (m *CommonProjection) GetLastMessageReaded(ctx context.Context, chatId, use
 		select m.id from message m where m.chat_id = $2
 	),
 	user_last_read_message as (
-		select last_read_message_id from chat_user_view um 
+		select cuv_last_read_message_id as last_read_message_id from chat_user_view um 
 		where (um.user_id, um.id) = ($1, $2)
 	)
 	select 
@@ -982,4 +1143,117 @@ func (m *EnrichingProjection) MessageFilter(ctx context.Context, co db.CommonOpe
 	}
 
 	return found, nil
+}
+
+func (m *EnrichingProjection) GetReadMessageUsers(ctx context.Context, userId int64, chatId int64, messageId int64, size int32, offset int64) (*dto.MessageReadResponse, error) {
+	type result struct {
+		userIds []int64
+		count   int64
+		msg     *dto.MessageBasic
+	}
+
+	txRes, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*result, error) {
+		if participant, err := m.cp.IsParticipant(ctx, tx, userId, chatId); err != nil {
+			m.lgr.ErrorContext(ctx, "Error during checking participant")
+			return nil, err
+		} else if !participant {
+			return nil, NewUnauthorizedError(fmt.Sprintf("User %v is not participant of chat %v, skipping", userId, chatId))
+		}
+
+		userIds, err := m.getParticipantsRead(ctx, tx, chatId, messageId, size, offset)
+		if err != nil {
+			return nil, err
+		}
+
+		count, err := m.getParticipantsReadCount(ctx, tx, chatId, messageId)
+		if err != nil {
+			return nil, err
+		}
+
+		msg, err := m.cp.GetMessageBasic(ctx, tx, chatId, messageId)
+		if err != nil {
+			return nil, err
+		}
+
+		return &result{
+			userIds: userIds,
+			count:   count,
+			msg:     msg,
+		}, nil
+	})
+	if errOuter != nil {
+		return nil, errOuter
+	}
+
+	usersToGet := map[int64]bool{}
+	for _, u := range txRes.userIds {
+		usersToGet[u] = true
+	}
+	if txRes.msg != nil {
+		usersToGet[txRes.msg.OwnerId] = true
+	}
+
+	users, err := m.aaaRestClient.GetUsers(ctx, utils.SetToArray(usersToGet))
+	if err != nil {
+		return nil, err
+	}
+	userMap := utils.ToMap(users)
+
+	usersToReturn := []*dto.User{}
+	var anOwnerLogin string
+
+	for _, usId := range txRes.userIds {
+		us, ok := userMap[usId]
+		if ok {
+			usersToReturn = append(usersToReturn, us)
+			if txRes.msg != nil && us.Id == txRes.msg.OwnerId {
+				anOwnerLogin = us.Login
+			}
+		}
+	}
+
+	var text string
+	if txRes.msg != nil {
+		text = txRes.msg.Content
+	}
+	previewTxt := preview.CreateMessagePreview(m.stripAllTags, m.cfg.Message.PreviewMaxTextSize, text, anOwnerLogin)
+
+	return &dto.MessageReadResponse{
+		ParticipantsWrapper: dto.ParticipantsWrapper{
+			Data:  usersToReturn,
+			Count: txRes.count,
+		},
+		Text: previewTxt,
+	}, nil
+}
+
+func (m *EnrichingProjection) getParticipantsReadCount(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (int64, error) {
+	var count int64
+
+	err := sqlscan.Get(ctx, co, &count, `
+		select 
+		    count(user_id) 
+		from chat_participant 
+		where chat_id = $1 and cp_last_read_message_id >= $2`,
+		chatId, messageId)
+
+	return count, err
+}
+
+func (m *EnrichingProjection) getParticipantsRead(ctx context.Context, co db.CommonOperations, chatId, messageId int64, limit int32, offset int64) ([]int64, error) {
+	list := make([]int64, 0)
+
+	err := sqlscan.Select(ctx, co, &list, `
+		select 
+			user_id 
+		from chat_participant 
+		where chat_id = $1 and cp_last_read_message_id >= $2
+		ORDER BY cp_last_read_message_date_time desc
+		LIMIT $3 OFFSET $4`,
+		chatId, messageId, limit, offset)
+
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
 }

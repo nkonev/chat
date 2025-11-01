@@ -27,8 +27,8 @@ create unlogged table chat_common(
     regular_participant_can_publish_message boolean not null,
     regular_participant_can_pin_message BOOLEAN NOT NULL,
     regular_participant_can_write_message BOOLEAN NOT NULL,
-    participants_count bigint,
-    participant_ids bigint[],
+    participants_count bigint not null default 0,
+    participant_ids bigint[] not null default array[]::bigint[],
     last_message_id bigint,
     last_message_content text,
     last_message_owner_id bigint
@@ -39,6 +39,8 @@ create unlogged table chat_participant(
     chat_id bigint not null,
     create_date_time timestamp not null,
     chat_admin boolean not null default false,
+    cp_last_read_message_id bigint not null default 0,
+    cp_last_read_message_date_time timestamp,
     primary key(user_id, chat_id)
 );
 SELECT create_distributed_table('chat_participant', 'chat_id');
@@ -82,7 +84,7 @@ create unlogged table chat_user_view(
     update_date_time timestamp not null,
     consider_messages_as_unread BOOLEAN not null default true,
     unread_messages bigint not null default 0,
-    last_read_message_id bigint not null default 0,
+    cuv_last_read_message_id bigint not null default 0,
     primary key (user_id, id)
 );
 SELECT create_distributed_table('chat_user_view', 'user_id');

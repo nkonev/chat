@@ -346,7 +346,22 @@ func (mc *MessageHandler) GetReadMessageUsers(g *gin.Context) {
 		return
 	}
 
-	fmt.Println(userId, chatId, messageId) // TODO
+	page := utils.FixPageString(g.Query(dto.PageParam))
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
+	offset := utils.GetOffset(page, size)
+
+	data, err := mc.enrichingProjection.GetReadMessageUsers(g.Request.Context(), userId, chatId, messageId, size, offset)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageRead command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, data)
 }
 
 func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
