@@ -82,7 +82,7 @@ type ChatViewEnrichedDto struct {
 	CanVideoKick        bool    `json:"canVideoKick"`
 	CanAudioMute        bool    `json:"canAudioMute"`
 	CanChangeChatAdmins bool    `json:"canChangeChatAdmins"`
-	IsResultFromSearch  *bool   `json:"isResultFromSearch"`
+	IsResultFromSearch  bool    `json:"isResultFromSearch"` // is result os "search publically available to join"
 	CanWriteMessage     bool    `json:"canWriteMessage"`
 }
 

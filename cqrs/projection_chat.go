@@ -636,10 +636,8 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 	copied.CanChangeChatAdmins = admin && !copied.TetATet
 	copied.CanBroadcast = admin
 
-	if !participant { // participant can be false in case result from search for publicly available chats
-		isResultFromSearch := true
-		copied.IsResultFromSearch = &isResultFromSearch
-	}
+	// participant can be false in case result from search for publicly available chats
+	copied.IsResultFromSearch = !participant
 
 	copied.CanWriteMessage = true
 	// see also handlers PostMessage, EditMessage, DeleteMessage
