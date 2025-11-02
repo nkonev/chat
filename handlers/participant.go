@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"github.com/gin-gonic/gin"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
@@ -9,8 +10,6 @@ import (
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
 )
 
 type ParticipantHandler struct {
