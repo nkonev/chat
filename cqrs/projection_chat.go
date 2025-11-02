@@ -521,6 +521,45 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 	return d.resultChats, d.intermediateUsers, nil
 }
 
+func (m *EnrichingProjection) GetChat(ctx context.Context, userId, chatId int64) (res *dto.ChatViewEnrichedDto, shouldJoin bool, err error) {
+	size := int32(1)
+	reverse := false
+
+	var startingFromItemId *dto.ChatId = nil
+	includeStartingFrom := true
+	searchString := ""
+
+	chats, _, errG := m.GetChatsEnriched(ctx, []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, &chatId)
+	if errG != nil {
+		m.lgr.ErrorContext(ctx, "Error getting chats", "err", errG)
+		err = errG
+		return
+	}
+
+	if len(chats) == 0 {
+		basic, errB := m.cp.GetChatBasic(ctx, m.cp.db, chatId)
+		if errB != nil {
+			m.lgr.ErrorContext(ctx, "Error getting basic chat", "err", errB)
+			err = errB
+			return
+		}
+		if basic != nil && (basic.AvailableToSearch || basic.IsBlog) {
+			shouldJoin = true
+			return
+		} else {
+			res = nil
+			return
+		}
+	} else if len(chats) > 1 {
+		err = errors.New("Wrong invariant: More than 1 chats got")
+		return
+	}
+
+	chat := chats[0]
+	res = &chat
+	return
+}
+
 func (m *EnrichingProjection) searchForUsers(ctx context.Context, searchString string) []int64 {
 	var additionalFoundUserIds = []int64{}
 

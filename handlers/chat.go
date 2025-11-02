@@ -419,14 +419,7 @@ func (ch *ChatHandler) GetChat(g *gin.Context) {
 		return
 	}
 
-	size := int32(1)
-	reverse := false
-
-	var startingFromItemId *dto.ChatId = nil
-	includeStartingFrom := true
-	searchString := ""
-
-	chats, _, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, &chatId)
+	chat, shouldJoin, err := ch.enrichingProjection.GetChat(g.Request.Context(), userId, chatId)
 	if err != nil {
 		if translateChatError(g, err) {
 			return
@@ -437,18 +430,18 @@ func (ch *ChatHandler) GetChat(g *gin.Context) {
 		return
 	}
 
-	if len(chats) == 0 {
-		g.Status(http.StatusNoContent)
-		return
-	} else if len(chats) > 1 {
-		ch.lgr.ErrorContext(g.Request.Context(), "Wrong invariant: More than 1 chats got")
-		g.Status(http.StatusInternalServerError)
+	if shouldJoin {
+		g.Status(http.StatusResetContent)
 		return
 	}
 
-	chat := chats[0]
-
-	g.JSON(http.StatusOK, chat)
+	if chat != nil {
+		g.JSON(http.StatusOK, chat)
+		return
+	} else {
+		g.Status(http.StatusNoContent)
+		return
+	}
 }
 
 func (ch *ChatHandler) ChatsFresh(g *gin.Context) {
