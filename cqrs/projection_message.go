@@ -675,8 +675,12 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 	return maxMessageId, nil
 }
 
-func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, needCheckAuth bool, authForUserId *int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageViewEnrichedDto, error) {
-	return db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) ([]dto.MessageViewEnrichedDto, error) {
+func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, needCheckAuth bool, authForUserId *int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageViewEnrichedDto, bool, error) {
+	type resDto struct {
+		items           []dto.MessageViewEnrichedDto
+		notAparticipant bool
+	}
+	res, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*resDto, error) {
 		if needCheckAuth {
 			if authForUserId != nil {
 				participant, err := m.cp.IsParticipant(ctx, m.cp.db, *authForUserId, chatId)
@@ -684,7 +688,10 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 					return nil, err
 				}
 				if !participant {
-					return nil, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", *authForUserId, chatId))
+					return &resDto{
+						items:           nil,
+						notAparticipant: true,
+					}, nil
 				}
 			} else {
 				return nil, errors.New("Unknown invariant")
@@ -758,8 +765,17 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			me := enrichMessage(mm, chatId, utils.ToMap(users), chats, reactions, mm.UserId, areAdmins)
 			messagesEnriched = append(messagesEnriched, me)
 		}
-		return messagesEnriched, nil
+		return &resDto{
+			items:           messagesEnriched,
+			notAparticipant: false,
+		}, nil
 	})
+
+	if errOuter != nil {
+		return nil, false, errOuter
+	}
+
+	return res.items, res.notAparticipant, nil
 }
 
 func getReactionsCommon(ctx context.Context, co db.CommonOperations, chatId int64, messageIds []int64, reaction *string, maxDisplayableUsers int) ([]dto.ReactionDto, error) {
