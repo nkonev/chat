@@ -87,6 +87,7 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ChatId:         chatId,
 		Content:        mcd.Content,
+		FileItemUuid:   mcd.FileItemUuid,
 	}
 	if mcd.EmbedMessageRequest != nil {
 		cc.EmbedMessage = &cqrs.EmbedMessage{
@@ -142,6 +143,7 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 		MessageId:      ccd.Id,
 		ChatId:         chatId,
 		Content:        ccd.Content,
+		FileItemUuid:   ccd.FileItemUuid,
 	}
 	if ccd.EmbedMessageRequest != nil {
 		cc.EmbedMessage = &cqrs.EmbedMessage{

@@ -111,9 +111,10 @@ type ChatNotificationSettingsSetted struct {
 }
 
 type MessageCommoned struct {
-	Id      int64  `json:"id"` // message id
-	ChatId  int64  `json:"chatId"`
-	Content string `json:"content"`
+	Id           int64   `json:"id"` // message id
+	ChatId       int64   `json:"chatId"`
+	Content      string  `json:"content"`
+	FileItemUuid *string `json:"fileItemUuid"`
 
 	EmbedMessageId      *int64  `json:"embedMessageId"`
 	EmbedMessageType    *string `json:"embedMessageType"`

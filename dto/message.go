@@ -23,6 +23,7 @@ type MessageDto struct {
 
 	CreateDateTime time.Time  `db:"create_date_time"`
 	UpdateDateTime *time.Time `db:"update_date_time"`
+	FileItemUuid   *string    `json:"file_item_uuid"`
 
 	UserId int64
 }
@@ -46,6 +47,7 @@ type MessageViewEnrichedDto struct {
 	EmbedMessage   *EmbedMessageResponse `json:"embedMessage"`
 	CreateDateTime time.Time             `json:"createDateTime"`
 	UpdateDateTime *time.Time            `json:"editDateTime"` // for sake compatibility
+	FileItemUuid   *string               `json:"fileItemUuid"`
 
 	Owner     *User             `json:"owner"`
 	Reactions []ReactionViewDto `json:"reactions"`
@@ -185,6 +187,7 @@ type EmbedMessageRequest struct {
 type MessageCreateDto struct {
 	Content             string               `json:"text"`
 	EmbedMessageRequest *EmbedMessageRequest `json:"embedMessage"`
+	FileItemUuid        *string              `json:"fileItemUuid"`
 }
 
 type MessageEditDto struct {

@@ -177,6 +177,7 @@ type MessageCreate struct {
 	ChatId         int64
 	Content        string
 	EmbedMessage   *EmbedMessage
+	FileItemUuid   *string
 }
 
 type MessageEdit struct {
@@ -185,6 +186,7 @@ type MessageEdit struct {
 	MessageId      int64
 	Content        string
 	EmbedMessage   *EmbedMessage
+	FileItemUuid   *string
 }
 
 func (a *MessageCreate) Validate() error {
@@ -671,8 +673,9 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 
 	mc := &MessageCreated{
 		MessageCommoned: MessageCommoned{
-			ChatId:  copyCommand.ChatId,
-			Content: copyCommand.Content,
+			ChatId:       copyCommand.ChatId,
+			Content:      copyCommand.Content,
+			FileItemUuid: copyCommand.FileItemUuid,
 		},
 		AdditionalData: copyCommand.AdditionalData,
 	}
@@ -869,9 +872,10 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 
 	cp := &MessageEdited{
 		MessageCommoned: MessageCommoned{
-			Id:      copyCommand.MessageId,
-			ChatId:  copyCommand.ChatId,
-			Content: copyCommand.Content,
+			Id:           copyCommand.MessageId,
+			ChatId:       copyCommand.ChatId,
+			Content:      copyCommand.Content,
+			FileItemUuid: copyCommand.FileItemUuid,
 		},
 		AdditionalData: copyCommand.AdditionalData,
 	}

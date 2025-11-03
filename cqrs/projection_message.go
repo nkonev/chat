@@ -36,8 +36,8 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 		}
 
 		_, err = tx.ExecContext(ctx, `
-		insert into message(id, chat_id, owner_id, content, embed_message_id, embed_chat_id, embed_owner_id, embed_message_type, create_date_time, update_date_time) 
-			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		insert into message(id, chat_id, owner_id, content, embed_message_id, embed_chat_id, embed_owner_id, embed_message_type, create_date_time, update_date_time, file_item_uuid) 
+			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		on conflict(chat_id, id) do update set 
 		    owner_id = excluded.owner_id
 		    , content = excluded.content
@@ -46,7 +46,8 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 		    , embed_owner_id = excluded.embed_owner_id
 		    , embed_message_type = excluded.embed_message_type
 		    , update_date_time = excluded.update_date_time
-	`, event.Id, event.ChatId, event.AdditionalData.BehalfUserId, event.Content, event.EmbedMessageId, event.EmbedMessageChatId, event.EmbedMessageOwnerId, event.EmbedMessageType, event.AdditionalData.CreatedAt, nil)
+			, file_item_uuid = excluded.file_item_uuid
+	`, event.Id, event.ChatId, event.AdditionalData.BehalfUserId, event.Content, event.EmbedMessageId, event.EmbedMessageChatId, event.EmbedMessageOwnerId, event.EmbedMessageType, event.AdditionalData.CreatedAt, nil, event.FileItemUuid)
 		if err != nil {
 			return err
 		}
@@ -96,8 +97,9 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 				, embed_owner_id = $6
 				, embed_message_type = $7
 				, update_date_time = $8
+				, file_item_uuid = $9
 			where chat_id = $2 and id = $1 
-		`, event.Id, event.ChatId, event.Content, event.EmbedMessageId, event.EmbedMessageChatId, event.EmbedMessageOwnerId, event.EmbedMessageType, event.AdditionalData.CreatedAt)
+		`, event.Id, event.ChatId, event.Content, event.EmbedMessageId, event.EmbedMessageChatId, event.EmbedMessageOwnerId, event.EmbedMessageType, event.AdditionalData.CreatedAt, event.FileItemUuid)
 		if err != nil {
 			return err
 		}
@@ -927,6 +929,7 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 		CreateDateTime: m.CreateDateTime,
 		Owner:          users[m.OwnerId],
 		UserId:         behalfUserId,
+		FileItemUuid:   m.FileItemUuid,
 	}
 	setEmbed(m, &me, users, chats)
 
@@ -1107,7 +1110,8 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 				m.embed_chat_id as embed_message_resend_chat_id,
 				m.embed_owner_id as embed_message_resend_owner_id,
 			    m.create_date_time,
-			    m.update_date_time
+			    m.update_date_time,
+			    m.file_item_uuid
 			from message m
 			left join message me 
 			on (m.chat_id = me.chat_id and m.embed_message_id = me.id and m.embed_message_type = '%v')
