@@ -19,6 +19,7 @@ import (
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/sanitizer"
 	"slices"
+	"time"
 )
 
 const minChatNameLen = 1
@@ -157,6 +158,9 @@ type ParticipantDelete struct {
 	ChatId         int64
 	ParticipantIds []int64
 	IsLeaving      bool
+}
+
+type Truncate struct {
 }
 
 type ParticipantChange struct {
@@ -570,6 +574,37 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 		return nil
 	}
 
+	return nil
+}
+
+func (s *Truncate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, lgr *logger.LoggerWrapper, cfg *config.AppConfig) error {
+	pa := &ProjectionsTruncated{}
+	err := eventBus.Publish(ctx, pa)
+	if err != nil {
+		return err
+	}
+
+	i := 0
+	for {
+		completed, err := commonProjection.GetIsTruncatingCompleted(ctx, dba)
+		if err != nil {
+			lgr.InfoContext(ctx, "error during GetIsTruncatingCompleted", "err", err)
+		}
+		if completed {
+			err = commonProjection.UnsetIsTruncatingCompleted(ctx, dba)
+			if err != nil {
+				lgr.ErrorContext(ctx, "error during UnsetIsTruncatingCompleted", "err", err)
+			}
+			break
+		}
+
+		time.Sleep(cfg.Cqrs.SleepBeforePolling)
+
+		i++
+		if i > cfg.Cqrs.PollingMaxTimes {
+			return fmt.Errorf("Exceed max %d poll times", cfg.Cqrs.PollingMaxTimes)
+		}
+	}
 	return nil
 }
 

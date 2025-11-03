@@ -34,7 +34,7 @@ infra_down:
 	docker compose down -v
 
 run: package-go infra
-	./$(EXECUTABLE) serve
+	./$(EXECUTABLE) serve --cqrs.testhelpermethods=true
 
 .PHONY: test
 test: export CHAT_LOGGER.LEVEL = warn

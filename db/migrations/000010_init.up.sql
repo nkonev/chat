@@ -93,8 +93,8 @@ create unlogged table has_unread_messages(user_id bigint primary key, has boolea
 SELECT create_distributed_table('has_unread_messages', 'user_id');
 
 create unlogged table technical(
-    id int primary key,
-    need_to_fast_forward_sequences bool not null default false
+    the_key varchar(256) primary key,
+    the_value text
 );
 
 create unlogged table blog(

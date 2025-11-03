@@ -64,7 +64,9 @@ func CreateHttpRouter(
 	ginRouter.POST("/api/chat/:id/participant/count", participantHandler.CountParticipants)
 	ginRouter.PUT("/api/chat/:id/leave", participantHandler.LeaveChat)
 	ginRouter.PUT("/api/chat/:id/join", participantHandler.JoinChat)
-
+	if cfg.Cqrs.TestHelperMethods {
+		ginRouter.DELETE("/internal/truncate", participantHandler.Truncate)
+	}
 	ginRouter.POST("/api/chat/:id/message", messageHandler.CreateMessage)
 	ginRouter.PUT("/api/chat/:id/message", messageHandler.EditMessage)
 	ginRouter.DELETE("/api/chat/:id/message/:messageId", messageHandler.DeleteMessage)

@@ -269,6 +269,23 @@ func (ch *ParticipantHandler) JoinChat(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
+func (ch *ParticipantHandler) Truncate(g *gin.Context) {
+	cc := cqrs.Truncate{}
+
+	err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.lgr, ch.cfg)
+	if err != nil {
+		if translateParticipantError(g, err) {
+			return
+		}
+
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantDelete command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.Status(http.StatusOK)
+}
+
 func (ch *ParticipantHandler) GetChatParticipants(g *gin.Context) {
 	cid := g.Query(dto.ChatIdQueryParam)
 

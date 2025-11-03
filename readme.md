@@ -96,6 +96,8 @@ curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' -H 'X-
 
 # reset offsets for consumer groups
 go run . reset
+
+curl -i -X DELETE --url 'http://localhost:1235/internal/truncate'
 ```
 
 # Tracing

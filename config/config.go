@@ -84,6 +84,9 @@ type CqrsConfig struct {
 	Import                          ImportConfig
 	Projections                     ProjectionsConfig
 	Commands                        CommandsConfig
+	TestHelperMethods               bool
+	SleepBeforePolling              time.Duration
+	PollingMaxTimes                 int
 }
 
 type RestClientConfig struct {

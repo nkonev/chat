@@ -80,6 +80,7 @@ const (
 	GetParticipantsTypeUnspecified = iota
 	GetParticipantsTypeNormal
 	GetParticipantsTypeAllInChatExcepting
+	GetParticipantsTypeAllInAllChats // test only
 )
 
 type ParticipantDeleted struct {
@@ -96,6 +97,9 @@ type ParticipantChanged struct {
 	ParticipantId  int64           `json:"participantId"`
 	ChatId         int64           `json:"chatId"`
 	NewAdmin       bool            `json:"newAdmin"`
+}
+
+type ProjectionsTruncated struct {
 }
 
 type ChatPinned struct {
@@ -248,6 +252,10 @@ func (s *ParticipantChanged) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
+func (s *ProjectionsTruncated) GetPartitionKey() string {
+	return utils.ToString(0)
+}
+
 func (s *ChatPinned) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
@@ -306,6 +314,10 @@ func (s *ParticipantDeleted) Name() string {
 
 func (s *ParticipantChanged) Name() string {
 	return "participantChanged"
+}
+
+func (s *ProjectionsTruncated) Name() string {
+	return "projectionsResetted"
 }
 
 func (s *ChatPinned) Name() string {

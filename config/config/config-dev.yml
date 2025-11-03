@@ -56,6 +56,9 @@ cqrs:
       maxTextPreviewSize: 512
   commands:
     maxParticipantsPerSingleCommand: 20
+  testHelperMethods: false
+  sleepBeforePolling: 500ms
+  pollingMaxTimes: 200
 
 # Rest client
 http:
