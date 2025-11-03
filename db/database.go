@@ -264,9 +264,11 @@ func (db *DB) Reset(mc config.MigrationConfig) error {
 
 	drop table if exists blog;
 
+	drop FUNCTION if exists strip_tags;
+	drop FUNCTION if exists cyrillic_transliterate;
+
+
 	drop table if exists %s;
-	
-	-- test
 `, mc.MigrationTable))
 	db.lgr.Info("Recreating database", "err", err)
 	return err
