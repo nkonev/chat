@@ -1001,31 +1001,40 @@ func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, comm
 			}
 		}
 
+		m, err := commonProjection.GetMessageBasic(ctx, dba, embedMessageRequest.ChatId, embedMessageRequest.Id)
+		if err != nil {
+			return err
+		}
+		if m == nil {
+			return errors.New("Missing the message")
+		}
+
 		if embedMessageRequest.EmbedType == dto.EmbedMessageTypeReply {
-			receiver.EmbedMessageId = &embedMessageRequest.Id
-			receiver.EmbedMessageType = &embedMessageRequest.EmbedType
+			receiver.Embed = &dto.EmbedReply{
+				MessageId:      embedMessageRequest.Id,
+				MessageContent: m.Content,
+				OwnerId:        m.OwnerId,
+			}
 			return nil
 		} else if embedMessageRequest.EmbedType == dto.EmbedMessageTypeResend {
-			receiver.EmbedMessageId = &embedMessageRequest.Id
-			receiver.EmbedMessageType = &embedMessageRequest.EmbedType
-
 			chat, err := commonProjection.GetChatBasic(ctx, dba, embedMessageRequest.ChatId)
 			if err != nil {
 				return err
 			}
+			if chat == nil {
+				return errors.New("Missing the chat")
+			}
 			if !chat.CanResend {
 				return errors.New("Resending is forbidden for this chat")
 			}
-			m, err := commonProjection.GetMessageBasic(ctx, dba, embedMessageRequest.ChatId, embedMessageRequest.Id)
-			if err != nil {
-				return err
+
+			receiver.Embed = &dto.EmbedResend{
+				MessageId:      embedMessageRequest.Id,
+				MessageContent: m.Content,
+				OwnerId:        m.OwnerId,
+				ChatId:         embedMessageRequest.ChatId,
 			}
-			if m == nil {
-				return errors.New("Missing the message")
-			}
-			receiver.Content = m.Content
-			receiver.EmbedMessageOwnerId = &m.OwnerId
-			receiver.EmbedMessageChatId = &embedMessageRequest.ChatId
+
 			return nil
 		}
 		return fmt.Errorf("Unexpected embed type '%v'", embedMessageRequest.EmbedType)

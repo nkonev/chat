@@ -35,19 +35,23 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 			return nil
 		}
 
+		var embed pgtype.JSONB
+		if event.Embed != nil {
+			err = embed.Set(event.Embed)
+			if err != nil {
+				return err
+			}
+		}
 		_, err = tx.ExecContext(ctx, `
-		insert into message(id, chat_id, owner_id, content, embed_message_id, embed_chat_id, embed_owner_id, embed_message_type, create_date_time, update_date_time, file_item_uuid) 
-			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		insert into message(id, chat_id, owner_id, content, embed, create_date_time, update_date_time, file_item_uuid) 
+			values ($1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict(chat_id, id) do update set 
 		    owner_id = excluded.owner_id
 		    , content = excluded.content
 			, embed_message_id = excluded.embed_message_id
-		    , embed_chat_id = excluded.embed_chat_id
-		    , embed_owner_id = excluded.embed_owner_id
-		    , embed_message_type = excluded.embed_message_type
 		    , update_date_time = excluded.update_date_time
 			, file_item_uuid = excluded.file_item_uuid
-	`, event.Id, event.ChatId, event.AdditionalData.BehalfUserId, event.Content, event.EmbedMessageId, event.EmbedMessageChatId, event.EmbedMessageOwnerId, event.EmbedMessageType, event.AdditionalData.CreatedAt, nil, event.FileItemUuid)
+	`, event.Id, event.ChatId, event.AdditionalData.BehalfUserId, event.Content, embed, event.AdditionalData.CreatedAt, nil, event.FileItemUuid)
 		if err != nil {
 			return err
 		}
@@ -88,18 +92,23 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			return err
 		}
 
+		var embed pgtype.JSONB
+		if event.Embed != nil {
+			err = embed.Set(event.Embed)
+			if err != nil {
+				return err
+			}
+		}
+
 		_, err = tx.ExecContext(ctx, `
 			update message
 			set	
 			    content = $3
-				, embed_message_id = $4
-				, embed_chat_id = $5
-				, embed_owner_id = $6
-				, embed_message_type = $7
-				, update_date_time = $8
-				, file_item_uuid = $9
+				, embed = $4
+				, update_date_time = $5
+				, file_item_uuid = $6
 			where chat_id = $2 and id = $1 
-		`, event.Id, event.ChatId, event.Content, event.EmbedMessageId, event.EmbedMessageChatId, event.EmbedMessageOwnerId, event.EmbedMessageType, event.AdditionalData.CreatedAt, event.FileItemUuid)
+		`, event.Id, event.ChatId, event.Content, embed, event.AdditionalData.CreatedAt, event.FileItemUuid)
 		if err != nil {
 			return err
 		}
@@ -743,7 +752,10 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 		var usersSet = map[int64]bool{}
 		var chatsPreSet = map[int64]bool{}
 		for _, message := range messages {
-			populateSets(&message, usersSet, chatsPreSet, chatId, reactions)
+			err = populateSets(&message, usersSet, chatsPreSet, chatId, reactions)
+			if err != nil {
+				return nil, err
+			}
 		}
 		chats, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserIds)
 		if err != nil {
@@ -889,22 +901,29 @@ func (m *CommonProjection) GetReaction(ctx context.Context, co db.CommonOperatio
 	return r, nil
 }
 
-func populateSets(message *dto.MessageDto, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, reactions map[int64][]dto.ReactionDto) {
+func populateSets(message *dto.MessageDto, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, reactions map[int64][]dto.ReactionDto) error {
 	usersSet[message.OwnerId] = true
 
 	chatsPreSet[currentChatId] = true
 
-	if message.ResponseEmbeddedMessageReplyOwnerId != nil {
-		var embeddedMessageReplyOwnerId = *message.ResponseEmbeddedMessageReplyOwnerId
-		usersSet[embeddedMessageReplyOwnerId] = true
-	} else if message.ResponseEmbeddedMessageResendOwnerId != nil {
-		var embeddedMessageResendOwnerId = *message.ResponseEmbeddedMessageResendOwnerId
-		usersSet[embeddedMessageResendOwnerId] = true
-		var embeddedMessageResendChatId = *message.ResponseEmbeddedMessageResendChatId
-		chatsPreSet[embeddedMessageResendChatId] = true
+	if message.Embed != nil {
+		switch typed := message.Embed.(type) {
+		case *dto.EmbedReply:
+			var embeddedMessageReplyOwnerId = typed.OwnerId
+			usersSet[embeddedMessageReplyOwnerId] = true
+		case *dto.EmbedResend:
+			var embeddedMessageResendOwnerId = typed.OwnerId
+			usersSet[embeddedMessageResendOwnerId] = true
+			var embeddedMessageResendChatId = typed.ChatId
+			chatsPreSet[embeddedMessageResendChatId] = true
+		default:
+			return fmt.Errorf("Unknown case %T", typed)
+		}
 	}
 
 	takeOnAccountReactions(message.Id, usersSet, reactions)
+
+	return nil
 }
 
 func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, messageReactions map[int64][]dto.ReactionDto) {
@@ -989,19 +1008,21 @@ func getDeletedUser(id int64) *dto.User {
 	return &dto.User{Login: fmt.Sprintf("deleted_user_%v", id), Id: id}
 }
 
-func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) {
-	if srcDbMessage.ResponseEmbeddedMessageType != nil {
-		if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeReply && srcDbMessage.ResponseEmbeddedMessageReplyOwnerId != nil { // the second condition2 in order to prevent NPE in case deleted message
-			embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageReplyOwnerId]
+func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) error {
+	if srcDbMessage.Embed != nil {
+
+		switch typed := srcDbMessage.Embed.(type) {
+		case *dto.EmbedReply:
+			embeddedUser := users[typed.OwnerId]
 			dstRet.EmbedMessage = &dto.EmbedMessageResponse{
-				Id:        *srcDbMessage.ResponseEmbeddedMessageReplyId,
-				Text:      *srcDbMessage.ResponseEmbeddedMessageReplyText,
-				EmbedType: *srcDbMessage.ResponseEmbeddedMessageType,
+				Id:        typed.MessageId,
+				Text:      typed.MessageContent,
+				EmbedType: string(typed.GetType()),
 				Owner:     embeddedUser,
 			}
-		} else if *srcDbMessage.ResponseEmbeddedMessageType == dto.EmbedMessageTypeResend && srcDbMessage.ResponseEmbeddedMessageResendOwnerId != nil {
-			embeddedUser := users[*srcDbMessage.ResponseEmbeddedMessageResendOwnerId]
-			basicEmbeddedChat := chats[*srcDbMessage.ResponseEmbeddedMessageResendChatId]
+		case *dto.EmbedResend:
+			embeddedUser := users[typed.OwnerId]
+			basicEmbeddedChat := chats[typed.ChatId]
 			var embedChatName *string = nil
 			var isParticipant bool
 			if basicEmbeddedChat != nil { // basicEmbeddedChat can be deleted
@@ -1012,26 +1033,40 @@ func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, u
 			}
 
 			dstRet.EmbedMessage = &dto.EmbedMessageResponse{
-				Id:            *srcDbMessage.ResponseEmbeddedMessageResendId,
-				ChatId:        srcDbMessage.ResponseEmbeddedMessageResendChatId,
+				Id:            typed.MessageId,
+				ChatId:        &typed.ChatId,
 				ChatName:      embedChatName,
 				Text:          srcDbMessage.Content,
-				EmbedType:     *srcDbMessage.ResponseEmbeddedMessageType,
+				EmbedType:     string(typed.GetType()),
 				Owner:         embeddedUser,
 				IsParticipant: isParticipant,
 			}
-			dstRet.Content = ""
+		default:
+			return fmt.Errorf("Unknown type: %T", typed)
 		}
 	}
+
+	return nil
 }
 
 func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageDto, error) {
+	type messageDto struct {
+		Id             int64        `db:"id"`
+		OwnerId        int64        `db:"owner_id"`
+		Content        string       `db:"content"`
+		BlogPost       bool         `db:"blog_post"`
+		Embed          pgtype.JSONB `db:"embed"`
+		CreateDateTime time.Time    `db:"create_date_time"`
+		UpdateDateTime *time.Time   `db:"update_date_time"`
+		FileItemUuid   *string      `db:"file_item_uuid"`
+	}
 
 	if startingFromItemId != nil && messageId != nil {
 		return nil, fmt.Errorf("wrong invariant: both startingFromItemId and messageId provided")
 	}
 
-	ma := []dto.MessageDto{}
+	mar := []dto.MessageDto{}
+	ma := []messageDto{}
 
 	queryArgs := []any{chatId, size}
 
@@ -1102,14 +1137,8 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 			    m.owner_id,
 			    m.content,
 			    m.blog_post,
-				m.embed_message_type as embed_message_type,
-				me.id as embed_message_reply_id,
-				me.content as embed_message_reply_text,
-				me.owner_id as embed_message_reply_owner_id,
-				m.embed_message_id as embed_message_resend_id,
-				m.embed_chat_id as embed_message_resend_chat_id,
-				m.embed_owner_id as embed_message_resend_owner_id,
-			    m.create_date_time,
+				m.embed,
+				m.create_date_time,
 			    m.update_date_time,
 			    m.file_item_uuid
 			from message m
@@ -1123,9 +1152,49 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		queryArgs...)
 
 	if err != nil {
-		return ma, err
+		return mar, err
 	}
-	return ma, nil
+
+	for i, mm := range ma {
+		mc := dto.MessageDto{
+			Id:             mm.Id,
+			OwnerId:        mm.OwnerId,
+			Content:        mm.Content,
+			BlogPost:       mm.BlogPost,
+			CreateDateTime: mm.CreateDateTime,
+			UpdateDateTime: mm.UpdateDateTime,
+			FileItemUuid:   mm.FileItemUuid,
+		}
+		if mm.Embed.Status == pgtype.Present {
+			var typer dto.EmbedTyper
+			err = mm.Embed.AssignTo(&typer)
+			if err != nil {
+				return mar, fmt.Errorf("error during mapping on index %d: %w", i, err)
+			}
+
+			switch typer.Type {
+			case dto.EmbedMessageTypeReply:
+				var erpl *dto.EmbedReply
+				err = mm.Embed.AssignTo(erpl)
+				if err != nil {
+					return mar, fmt.Errorf("error during mapping on index %d: %w", i, err)
+				}
+				mc.Embed = erpl
+			case dto.EmbedMessageTypeResend:
+				var eres *dto.EmbedResend
+				err = mm.Embed.AssignTo(eres)
+				if err != nil {
+					return mar, fmt.Errorf("error during mapping on index %d: %w", i, err)
+				}
+				mc.Embed = eres
+			default:
+				return nil, fmt.Errorf("Unknown embed type %v", typer.Type)
+			}
+		}
+		mar = append(mar, mc)
+	}
+
+	return mar, nil
 }
 
 func (m *CommonProjection) GetMessageBasic(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.MessageBasic, error) {

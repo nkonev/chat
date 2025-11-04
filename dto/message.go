@@ -1,31 +1,56 @@
 package dto
 
-import "time"
+import (
+	"time"
+)
 
 const NoMessageContent = ""
 const NoOwner = -1
-const EmbedMessageTypeResend = "resend"
+
+type EmbedMessageType string
+
 const EmbedMessageTypeReply = "reply"
+const EmbedMessageTypeResend = "resend"
 
 type MessageDto struct {
-	Id       int64  `db:"id"`
-	OwnerId  int64  `db:"owner_id"`
-	Content  string `db:"content"`
-	BlogPost bool   `db:"blog_post"`
+	Id             int64
+	OwnerId        int64
+	Content        string
+	BlogPost       bool
+	Embed          Embeddable
+	CreateDateTime time.Time
+	UpdateDateTime *time.Time
+	FileItemUuid   *string
+	UserId         int64
+}
 
-	ResponseEmbeddedMessageType          *string `db:"embed_message_type"`
-	ResponseEmbeddedMessageReplyId       *int64  `db:"embed_message_reply_id"`
-	ResponseEmbeddedMessageReplyText     *string `db:"embed_message_reply_text"`
-	ResponseEmbeddedMessageReplyOwnerId  *int64  `db:"embed_message_reply_owner_id"`
-	ResponseEmbeddedMessageResendId      *int64  `db:"embed_message_resend_id"`
-	ResponseEmbeddedMessageResendChatId  *int64  `db:"embed_message_resend_chat_id"`
-	ResponseEmbeddedMessageResendOwnerId *int64  `db:"embed_message_resend_owner_id"`
+type EmbedTyper struct {
+	Type EmbedMessageType `json:"embedMessageType"`
+}
 
-	CreateDateTime time.Time  `db:"create_date_time"`
-	UpdateDateTime *time.Time `db:"update_date_time"`
-	FileItemUuid   *string    `json:"file_item_uuid"`
+type Embeddable interface {
+	GetType() EmbedMessageType
+}
 
-	UserId int64
+type EmbedReply struct {
+	MessageId      int64  `json:"messageId"`
+	MessageContent string `json:"messageContent"`
+	OwnerId        int64  `json:"ownerId"`
+}
+
+func (p *EmbedReply) GetType() EmbedMessageType {
+	return EmbedMessageTypeReply
+}
+
+type EmbedResend struct {
+	MessageId      int64  `json:"messageId"`
+	MessageContent string `json:"messageContent"`
+	OwnerId        int64  `json:"ownerId"`
+	ChatId         int64  `json:"chatId"`
+}
+
+func (p *EmbedResend) GetType() EmbedMessageType {
+	return EmbedMessageTypeResend
 }
 
 type EmbedMessageResponse struct {

@@ -1,6 +1,9 @@
 package cqrs
 
 import (
+	"encoding/json"
+	"fmt"
+	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
 	"time"
 )
@@ -120,10 +123,65 @@ type MessageCommoned struct {
 	Content      string  `json:"content"`
 	FileItemUuid *string `json:"fileItemUuid"`
 
-	EmbedMessageId      *int64  `json:"embedMessageId"`
-	EmbedMessageType    *string `json:"embedMessageType"`
-	EmbedMessageChatId  *int64  `json:"embedMessageChatId"`
-	EmbedMessageOwnerId *int64  `json:"embedMessageOwnerId"`
+	Embed    dto.Embeddable  `json:"-"` // seem marshalling below
+	RawEmbed json.RawMessage `json:"embed"`
+}
+
+func (f *MessageCommoned) UnmarshalJSON(b []byte) error {
+	type cp MessageCommoned
+	err := json.Unmarshal(b, (*cp)(f))
+	if err != nil {
+		return err
+	}
+
+	if f.Embed != nil {
+		var v dto.EmbedTyper
+		err = json.Unmarshal(f.RawEmbed, &v)
+		if err != nil {
+			return err
+		}
+
+		var i dto.Embeddable
+		switch v.Type {
+		case dto.EmbedMessageTypeReply:
+			i = &dto.EmbedReply{}
+		case dto.EmbedMessageTypeResend:
+			i = &dto.EmbedReply{}
+		default:
+			return fmt.Errorf("Unknown type: %s", v.Type)
+		}
+
+		err = json.Unmarshal(f.RawEmbed, i)
+		if err != nil {
+			return err
+		}
+		f.Embed = i
+	}
+	return nil
+}
+
+func (f *MessageCommoned) MarshalJSON() ([]byte, error) {
+	type res MessageCommoned
+	if f.Embed != nil {
+		switch typed := f.Embed.(type) {
+		case *dto.EmbedReply:
+			b, err := json.Marshal(*typed)
+			if err != nil {
+				return nil, err
+			}
+			f.RawEmbed = b
+		case *dto.EmbedResend:
+			b, err := json.Marshal(*typed)
+			if err != nil {
+				return nil, err
+			}
+			f.RawEmbed = b
+		default:
+			return nil, fmt.Errorf("Unknown type %T", f.Embed)
+		}
+	}
+
+	return json.Marshal((*res)(f))
 }
 
 type MessageCreated struct {
@@ -134,6 +192,34 @@ type MessageCreated struct {
 type MessageEdited struct {
 	MessageCommoned
 	AdditionalData *AdditionalData `json:"additionalData"`
+}
+
+func (f *MessageCreated) UnmarshalJSON(b []byte) error {
+	type cp MessageCreated
+	err := json.Unmarshal(b, (*cp)(f))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (f *MessageCreated) MarshalJSON() ([]byte, error) {
+	type res MessageCreated
+	return json.Marshal((*res)(f))
+}
+
+func (f *MessageEdited) UnmarshalJSON(b []byte) error {
+	type cp MessageEdited
+	err := json.Unmarshal(b, (*cp)(f))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (f *MessageEdited) MarshalJSON() ([]byte, error) {
+	type res MessageEdited
+	return json.Marshal((*res)(f))
 }
 
 type MessageEmbedded struct {
