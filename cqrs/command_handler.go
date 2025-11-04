@@ -577,16 +577,25 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 	return nil
 }
 
-func (s *Truncate) Handle(ctx0 context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, lgr *logger.LoggerWrapper, cfg *config.AppConfig) error {
+func (s *Truncate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, lgr *logger.LoggerWrapper, cfg *config.AppConfig) error {
 	pa := &ProjectionsTruncated{}
-	err := eventBus.Publish(ctx0, pa)
+	err := eventBus.Publish(ctx, pa)
 	if err != nil {
 		return err
 	}
 
 	i := 0
 	for {
-		ctx := context.Background()
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+			if err != nil {
+				lgr.ErrorContext(ctx, "error from context", "err", err)
+			}
+			break
+		default:
+		}
+
 		completed, err := commonProjection.GetIsTruncatingCompleted(ctx, dba)
 		if err != nil {
 			lgr.InfoContext(ctx, "error during GetIsTruncatingCompleted", "err", err)
