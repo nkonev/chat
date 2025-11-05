@@ -17,30 +17,32 @@ import (
 
 func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageCreated) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		chatExists, err := m.checkChatExists(ctx, tx, event.ChatId)
+		chatExists, err := m.checkChatExists(ctx, tx, event.MessageCommoned.ChatId)
 		if err != nil {
 			return err
 		}
 		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageCreated because there is no chat", "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageCreated because there is no chat", "chat_id", event.MessageCommoned.ChatId)
 			return nil
 		}
 
-		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
+		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.MessageCommoned.ChatId)
 		if err != nil {
 			return err
 		}
 		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping MessageCreated because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageCreated because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.MessageCommoned.ChatId)
 			return nil
 		}
 
 		var embed pgtype.JSONB
-		if event.Embed != nil {
-			err = embed.Set(event.Embed)
+		if event.MessageCommoned.Embed != nil {
+			err = embed.Set(event.MessageCommoned.Embed)
 			if err != nil {
 				return err
 			}
+		} else {
+			embed.Status = pgtype.Null
 		}
 		_, err = tx.ExecContext(ctx, `
 		insert into message(id, chat_id, owner_id, content, embed, create_date_time, update_date_time, file_item_uuid) 
@@ -48,18 +50,18 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 		on conflict(chat_id, id) do update set 
 		    owner_id = excluded.owner_id
 		    , content = excluded.content
-			, embed_message_id = excluded.embed_message_id
+			, embed = excluded.embed
 		    , update_date_time = excluded.update_date_time
 			, file_item_uuid = excluded.file_item_uuid
-	`, event.Id, event.ChatId, event.AdditionalData.BehalfUserId, event.Content, embed, event.AdditionalData.CreatedAt, nil, event.FileItemUuid)
+	`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, event.AdditionalData.BehalfUserId, event.MessageCommoned.Content, embed, event.AdditionalData.CreatedAt, nil, event.MessageCommoned.FileItemUuid)
 		if err != nil {
 			return err
 		}
 		m.lgr.InfoContext(ctx,
 			"Handling message added",
-			"id", event.Id,
+			"id", event.MessageCommoned.Id,
 			"user_id", event.AdditionalData.BehalfUserId,
-			"chat_id", event.ChatId,
+			"chat_id", event.MessageCommoned.ChatId,
 		)
 		return nil
 	})
@@ -69,35 +71,37 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 
 func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
+		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.MessageCommoned.ChatId)
 		if err != nil {
 			return err
 		}
 		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.MessageCommoned.ChatId)
 			return nil
 		}
 
-		messageOwnerId, err := m.GetMessageOwner(ctx, event.ChatId, event.Id)
+		messageOwnerId, err := m.GetMessageOwner(ctx, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
 		if err != nil {
 			return err
 		}
 		if messageOwnerId != event.AdditionalData.BehalfUserId {
-			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't owner", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't owner", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.MessageCommoned.ChatId)
 			return nil
 		}
 
-		messageBlogPost, err := m.isMessageBlogPost(ctx, tx, event.ChatId, event.Id)
+		messageBlogPost, err := m.isMessageBlogPost(ctx, tx, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
 		if err != nil {
 			return err
 		}
 
 		var embed pgtype.JSONB
-		if event.Embed != nil {
-			err = embed.Set(event.Embed)
+		if event.MessageCommoned.Embed != nil {
+			err = embed.Set(event.MessageCommoned.Embed)
 			if err != nil {
 				return err
 			}
+		} else {
+			embed.Status = pgtype.Null
 		}
 
 		_, err = tx.ExecContext(ctx, `
@@ -108,13 +112,13 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 				, update_date_time = $5
 				, file_item_uuid = $6
 			where chat_id = $2 and id = $1 
-		`, event.Id, event.ChatId, event.Content, embed, event.AdditionalData.CreatedAt, event.FileItemUuid)
+		`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, event.MessageCommoned.Content, embed, event.AdditionalData.CreatedAt, event.MessageCommoned.FileItemUuid)
 		if err != nil {
 			return err
 		}
 
 		if messageBlogPost {
-			err = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt)
+			err = m.refreshBlog(ctx, tx, event.MessageCommoned.ChatId, event.AdditionalData.CreatedAt)
 			if err != nil {
 				return err
 			}
@@ -122,9 +126,9 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 
 		m.lgr.InfoContext(ctx,
 			"Handling message edited",
-			"id", event.Id,
-			"chat_id", event.ChatId,
-			"message_id", event.Id,
+			"id", event.MessageCommoned.Id,
+			"chat_id", event.MessageCommoned.ChatId,
+			"message_id", event.MessageCommoned.Id,
 		)
 		return nil
 	})
@@ -200,14 +204,15 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId
 			select 
 				m.id,
 				m.owner_id, 
-				left(strip_tags(m.content), $2) as content
+				nullif(trim(left(strip_tags(m.content), $2)), '') as content,
+				nullif(trim(left(strip_tags(embed ->> 'messageContent'), $2)), '') as embed_content
 			from message m 
 			where m.chat_id = $1 and m.id = (select max(mm.id) from message mm where mm.chat_id = $1)
 		)
 		UPDATE chat_common 
 		SET 
 			last_message_id = (select id from last_message),
-			last_message_content = (select content from last_message),
+			last_message_content = (select coalesce(content, embed_content) from last_message),
 			last_message_owner_id = (select owner_id from last_message)
 		WHERE id = $1;
 	`, chatId, m.cfg.Cqrs.Projections.ChatUserView.LastMessageMaxTextDbPreviewSize)
@@ -776,8 +781,11 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		messagesEnriched := make([]dto.MessageViewEnrichedDto, 0, len(messages))
 		for _, mm := range messages {
-			me := enrichMessage(mm, chatId, utils.ToMap(users), chats, reactions, mm.UserId, areAdmins)
-			messagesEnriched = append(messagesEnriched, me)
+			me, err := enrichMessage(mm, chatId, utils.ToMap(users), chats, reactions, mm.UserId, areAdmins)
+			if err != nil {
+				return nil, err
+			}
+			messagesEnriched = append(messagesEnriched, *me)
 		}
 		return &resDto{
 			items:           messagesEnriched,
@@ -917,7 +925,7 @@ func populateSets(message *dto.MessageDto, usersSet map[int64]bool, chatsPreSet 
 			var embeddedMessageResendChatId = typed.ChatId
 			chatsPreSet[embeddedMessageResendChatId] = true
 		default:
-			return fmt.Errorf("Unknown case %T", typed)
+			return fmt.Errorf("Unknown type in populateSets: %T", typed)
 		}
 	}
 
@@ -937,7 +945,7 @@ func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, messageRe
 	}
 }
 
-func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool) dto.MessageViewEnrichedDto {
+func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool) (*dto.MessageViewEnrichedDto, error) {
 	me := dto.MessageViewEnrichedDto{
 		Id:             m.Id,
 		ChatId:         chatId,
@@ -950,7 +958,10 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 		UserId:         behalfUserId,
 		FileItemUuid:   m.FileItemUuid,
 	}
-	setEmbed(m, &me, users, chats)
+	err := setEmbed(m, &me, users, chats)
+	if err != nil {
+		return nil, err
+	}
 
 	rl := reactions[m.Id]
 	setReactions(&me, users, rl)
@@ -961,7 +972,7 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 		chatv = *chat
 	}
 	SetMessagePersonalizedFields(&me, chatv.RegularParticipantCanPublishMessage, chatv.RegularParticipantCanPinMessage, chatv.RegularCanWriteMessage, areAdmins[behalfUserId], behalfUserId)
-	return me
+	return &me, nil
 }
 
 func SetMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64) {
@@ -1036,13 +1047,13 @@ func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, u
 				Id:            typed.MessageId,
 				ChatId:        &typed.ChatId,
 				ChatName:      embedChatName,
-				Text:          srcDbMessage.Content,
+				Text:          typed.MessageContent,
 				EmbedType:     string(typed.GetType()),
 				Owner:         embeddedUser,
 				IsParticipant: isParticipant,
 			}
 		default:
-			return fmt.Errorf("Unknown type: %T", typed)
+			return fmt.Errorf("Unknown type in setEmbed: %T", typed)
 		}
 	}
 
@@ -1142,13 +1153,11 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 			    m.update_date_time,
 			    m.file_item_uuid
 			from message m
-			left join message me 
-			on (m.chat_id = me.chat_id and m.embed_message_id = me.id and m.embed_message_type = '%v')
 			where m.chat_id = $1 %s 
 			%s
 			%s 
 			limit $2
-		`, dto.EmbedMessageTypeReply, conditionClause, searchClause, orderClause),
+		`, conditionClause, searchClause, orderClause),
 		queryArgs...)
 
 	if err != nil {
@@ -1174,21 +1183,21 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 
 			switch typer.Type {
 			case dto.EmbedMessageTypeReply:
-				var erpl *dto.EmbedReply
-				err = mm.Embed.AssignTo(erpl)
+				var erpl dto.EmbedReply
+				err = mm.Embed.AssignTo(&erpl)
 				if err != nil {
 					return mar, fmt.Errorf("error during mapping on index %d: %w", i, err)
 				}
-				mc.Embed = erpl
+				mc.Embed = &erpl
 			case dto.EmbedMessageTypeResend:
-				var eres *dto.EmbedResend
-				err = mm.Embed.AssignTo(eres)
+				var eres dto.EmbedResend
+				err = mm.Embed.AssignTo(&eres)
 				if err != nil {
 					return mar, fmt.Errorf("error during mapping on index %d: %w", i, err)
 				}
-				mc.Embed = eres
+				mc.Embed = &eres
 			default:
-				return nil, fmt.Errorf("Unknown embed type %v", typer.Type)
+				return nil, fmt.Errorf("Unknown type in GetMessages: %v", typer.Type)
 			}
 		}
 		mar = append(mar, mc)

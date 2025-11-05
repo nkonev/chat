@@ -725,7 +725,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		AdditionalData: copyCommand.AdditionalData,
 	}
 
-	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.EmbedMessage, &mc.MessageCommoned)
+	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.ChatId, copyCommand.EmbedMessage, &mc.MessageCommoned)
 	if err != nil {
 		return 0, err
 	}
@@ -925,7 +925,7 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 		AdditionalData: copyCommand.AdditionalData,
 	}
 
-	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.EmbedMessage, &cp.MessageCommoned)
+	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.ChatId, copyCommand.EmbedMessage, &cp.MessageCommoned)
 	if err != nil {
 		return err
 	}
@@ -985,7 +985,7 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInter
 	return nil
 }
 
-func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, commonProjection *CommonProjection, embedMessageRequest *EmbedMessage, receiver *MessageCommoned) error {
+func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, commonProjection *CommonProjection, currentChatId int64, embedMessageRequest *EmbedMessage, receiver *MessageCommoned) error {
 	if embedMessageRequest != nil {
 		if embedMessageRequest.Id == 0 {
 			return errors.New("Missed embed message id")
@@ -1001,22 +1001,30 @@ func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, comm
 			}
 		}
 
-		m, err := commonProjection.GetMessageBasic(ctx, dba, embedMessageRequest.ChatId, embedMessageRequest.Id)
-		if err != nil {
-			return err
-		}
-		if m == nil {
-			return errors.New("Missing the message")
-		}
-
 		if embedMessageRequest.EmbedType == dto.EmbedMessageTypeReply {
-			receiver.Embed = &dto.EmbedReply{
-				MessageId:      embedMessageRequest.Id,
-				MessageContent: m.Content,
-				OwnerId:        m.OwnerId,
+			m, err := commonProjection.GetMessageBasic(ctx, dba, currentChatId, embedMessageRequest.Id)
+			if err != nil {
+				return err
 			}
+			if m == nil {
+				return errors.New("Missing the message")
+			}
+
+			receiver.Embed = dto.NewEmbedReply(
+				embedMessageRequest.Id,
+				m.Content,
+				m.OwnerId,
+			)
 			return nil
 		} else if embedMessageRequest.EmbedType == dto.EmbedMessageTypeResend {
+			m, err := commonProjection.GetMessageBasic(ctx, dba, embedMessageRequest.ChatId, embedMessageRequest.Id)
+			if err != nil {
+				return err
+			}
+			if m == nil {
+				return errors.New("Missing the message")
+			}
+
 			chat, err := commonProjection.GetChatBasic(ctx, dba, embedMessageRequest.ChatId)
 			if err != nil {
 				return err
@@ -1027,14 +1035,12 @@ func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, comm
 			if !chat.CanResend {
 				return errors.New("Resending is forbidden for this chat")
 			}
-
-			receiver.Embed = &dto.EmbedResend{
-				MessageId:      embedMessageRequest.Id,
-				MessageContent: m.Content,
-				OwnerId:        m.OwnerId,
-				ChatId:         embedMessageRequest.ChatId,
-			}
-
+			receiver.Embed = dto.NewEmbedResend(
+				embedMessageRequest.Id,
+				m.Content,
+				m.OwnerId,
+				embedMessageRequest.ChatId,
+			)
 			return nil
 		}
 		return fmt.Errorf("Unexpected embed type '%v'", embedMessageRequest.EmbedType)

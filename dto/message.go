@@ -33,9 +33,21 @@ type Embeddable interface {
 }
 
 type EmbedReply struct {
+	EmbedTyper
 	MessageId      int64  `json:"messageId"`
 	MessageContent string `json:"messageContent"`
 	OwnerId        int64  `json:"ownerId"`
+}
+
+func NewEmbedReply(messageId int64, messageContent string, ownerId int64) *EmbedReply {
+	return &EmbedReply{
+		EmbedTyper: EmbedTyper{
+			Type: EmbedMessageTypeReply,
+		},
+		MessageId:      messageId,
+		MessageContent: messageContent,
+		OwnerId:        ownerId,
+	}
 }
 
 func (p *EmbedReply) GetType() EmbedMessageType {
@@ -43,10 +55,23 @@ func (p *EmbedReply) GetType() EmbedMessageType {
 }
 
 type EmbedResend struct {
+	EmbedTyper
 	MessageId      int64  `json:"messageId"`
 	MessageContent string `json:"messageContent"`
 	OwnerId        int64  `json:"ownerId"`
 	ChatId         int64  `json:"chatId"`
+}
+
+func NewEmbedResend(messageId int64, messageContent string, ownerId int64, chatId int64) *EmbedResend {
+	return &EmbedResend{
+		EmbedTyper: EmbedTyper{
+			EmbedMessageTypeResend,
+		},
+		MessageId:      messageId,
+		MessageContent: messageContent,
+		OwnerId:        ownerId,
+		ChatId:         chatId,
+	}
 }
 
 func (p *EmbedResend) GetType() EmbedMessageType {

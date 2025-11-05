@@ -134,7 +134,7 @@ func (f *MessageCommoned) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	if f.Embed != nil {
+	if f.RawEmbed != nil && string(f.RawEmbed) != "null" {
 		var v dto.EmbedTyper
 		err = json.Unmarshal(f.RawEmbed, &v)
 		if err != nil {
@@ -146,9 +146,9 @@ func (f *MessageCommoned) UnmarshalJSON(b []byte) error {
 		case dto.EmbedMessageTypeReply:
 			i = &dto.EmbedReply{}
 		case dto.EmbedMessageTypeResend:
-			i = &dto.EmbedReply{}
+			i = &dto.EmbedResend{}
 		default:
-			return fmt.Errorf("Unknown type: %s", v.Type)
+			return fmt.Errorf("Unknown type in unmarshalling: %s", v.Type)
 		}
 
 		err = json.Unmarshal(f.RawEmbed, i)
@@ -165,19 +165,19 @@ func (f *MessageCommoned) MarshalJSON() ([]byte, error) {
 	if f.Embed != nil {
 		switch typed := f.Embed.(type) {
 		case *dto.EmbedReply:
-			b, err := json.Marshal(*typed)
+			b, err := json.Marshal(typed)
 			if err != nil {
 				return nil, err
 			}
 			f.RawEmbed = b
 		case *dto.EmbedResend:
-			b, err := json.Marshal(*typed)
+			b, err := json.Marshal(typed)
 			if err != nil {
 				return nil, err
 			}
 			f.RawEmbed = b
 		default:
-			return nil, fmt.Errorf("Unknown type %T", f.Embed)
+			return nil, fmt.Errorf("Unknown type in marshalling:%T", f.Embed)
 		}
 	}
 
@@ -185,41 +185,13 @@ func (f *MessageCommoned) MarshalJSON() ([]byte, error) {
 }
 
 type MessageCreated struct {
-	MessageCommoned
-	AdditionalData *AdditionalData `json:"additionalData"`
+	MessageCommoned MessageCommoned `json:"messageCommoned"`
+	AdditionalData  *AdditionalData `json:"additionalData"`
 }
 
 type MessageEdited struct {
-	MessageCommoned
-	AdditionalData *AdditionalData `json:"additionalData"`
-}
-
-func (f *MessageCreated) UnmarshalJSON(b []byte) error {
-	type cp MessageCreated
-	err := json.Unmarshal(b, (*cp)(f))
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (f *MessageCreated) MarshalJSON() ([]byte, error) {
-	type res MessageCreated
-	return json.Marshal((*res)(f))
-}
-
-func (f *MessageEdited) UnmarshalJSON(b []byte) error {
-	type cp MessageEdited
-	err := json.Unmarshal(b, (*cp)(f))
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (f *MessageEdited) MarshalJSON() ([]byte, error) {
-	type res MessageEdited
-	return json.Marshal((*res)(f))
+	MessageCommoned MessageCommoned `json:"messageCommoned"`
+	AdditionalData  *AdditionalData `json:"additionalData"`
 }
 
 type MessageEmbedded struct {
@@ -351,11 +323,11 @@ func (s *ChatNotificationSettingsSetted) GetPartitionKey() string {
 }
 
 func (s *MessageCreated) GetPartitionKey() string {
-	return utils.ToString(s.ChatId)
+	return utils.ToString(s.MessageCommoned.ChatId)
 }
 
 func (s *MessageEdited) GetPartitionKey() string {
-	return utils.ToString(s.ChatId)
+	return utils.ToString(s.MessageCommoned.ChatId)
 }
 
 func (s *ChatViewRefreshed) GetPartitionKey() string {
