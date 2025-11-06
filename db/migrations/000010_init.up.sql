@@ -54,9 +54,9 @@ create unlogged table message(
     embed jsonb,
     file_item_uuid varchar(36),
     published boolean not null default false,
-    fts_content tsvector generated always as (to_tsvector('russian', strip_tags(content))) stored,
     create_date_time timestamp not null,
     update_date_time timestamp,
+    fts_all_content tsvector generated always as (to_tsvector('russian', strip_tags(coalesce(content, '')) || ' ' || strip_tags(coalesce(embed ->> 'embedMessageContent', '')))) stored,
     primary key (chat_id, id)
 );
 SELECT create_distributed_table('message', 'chat_id');
