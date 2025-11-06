@@ -205,7 +205,7 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId
 				m.id,
 				m.owner_id, 
 				nullif(trim(left(strip_tags(m.content), $2)), '') as content,
-				nullif(trim(left(strip_tags(embed ->> 'messageContent'), $2)), '') as embed_content
+				nullif(trim(left(strip_tags(embed ->> 'embedMessageContent'), $2)), '') as embed_content
 			from message m 
 			where m.chat_id = $1 and m.id = (select max(mm.id) from message mm where mm.chat_id = $1)
 		)
