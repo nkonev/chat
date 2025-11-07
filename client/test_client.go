@@ -360,6 +360,10 @@ func (rc *TestRestClient) EditMessage(ctx context.Context, behalfUserId int64, c
 	return queryNoResponse[dto.MessageEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message", "message.Edit", &req, nil)
 }
 
+func (rc *TestRestClient) SyncMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
+	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/sync-embed", "message.Sync", nil, nil)
+}
+
 func (rc *TestRestClient) DeleteMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
 	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodDelete, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Delete", nil, nil)
 }

@@ -956,6 +956,7 @@ func TestResendMessage(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -1000,37 +1001,39 @@ func TestResendMessage(t *testing.T) {
 		assert.True(t, chat2Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		// user 2 adds user 1 to chat 2
-		err = testRestClient.AddChatParticipants(ctx, user2, chat2Id, []int64{user1})
+		// user 1 adds user 2 to chat 1
+		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
 		require.NoError(t, err, "error in adding participant")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		// assert user 1 sees chat 2
-		user1ChatsNew, _, err := testRestClient.GetChats(ctx, user1)
+		// assert user 2 sees both chats
+		user2ChatsNew, _, err := testRestClient.GetChats(ctx, user2)
 		require.NoError(t, err, "error in getting chats")
-		assert.Equal(t, 2, len(user1ChatsNew))
-		chat1OfUser1 := user1ChatsNew[0]
-		chat2OfUser1 := user1ChatsNew[1]
-		assert.Equal(t, chat1Name, chat2OfUser1.Title)
-		assert.Equal(t, chat2Name, chat1OfUser1.Title)
+		assert.Equal(t, 2, len(user2ChatsNew))
+		chat1OfUser2 := user2ChatsNew[0]
+		chat2OfUser2 := user2ChatsNew[1]
+		assert.Equal(t, chat2Name, chat2OfUser2.Title)
+		assert.Equal(t, chat1Name, chat1OfUser2.Title)
 
 		const message1Text = "message 1 from chat 1"
 
+		// user 1 creates a message
 		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		// user 1 resends the message from chat 1 to chat 2
-		message1ResentId, err := testRestClient.CreateMessage(ctx, user1, chat2Id, dto.NoMessageContent, client.NewMessageCreateOptionResend(chat1Id, message1Id))
+		// user 2 resends the message from chat 1 to chat 2
+		message1ResentId, err := testRestClient.CreateMessage(ctx, user2, chat2Id, dto.NoMessageContent, client.NewMessageCreateOptionResend(chat1Id, message1Id))
 		require.NoError(t, err, "error in resending message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		// assert that chat 2 contains the embed message
-		chat2Messages, _, err := testRestClient.GetMessages(ctx, user1, chat2Id)
+		chat2Messages, _, err := testRestClient.GetMessages(ctx, user2, chat2Id)
 		require.NoError(t, err, "error in getting messages")
 		assert.Equal(t, 1, len(chat2Messages))
 		resentMessage1 := chat2Messages[0]
 		assert.Equal(t, message1ResentId, resentMessage1.Id)
+		assert.Equal(t, user2, resentMessage1.OwnerId)
 		require.NotNil(t, resentMessage1.EmbedMessage)
 		assert.Equal(t, dto.EmbedMessageTypeResend, resentMessage1.EmbedMessage.EmbedType)
 		assert.Equal(t, message1Text, resentMessage1.EmbedMessage.Text)
@@ -1039,6 +1042,73 @@ func TestResendMessage(t *testing.T) {
 		assert.Equal(t, chat1Name, *resentMessage1.EmbedMessage.ChatName)
 		assert.Equal(t, user1, resentMessage1.EmbedMessage.Owner.Id)
 		assert.Equal(t, user1Login, resentMessage1.EmbedMessage.Owner.Login)
+
+		const message1TextNew = "message 1 from chat 1 new"
+
+		// user 1 changes original message
+		err = testRestClient.EditMessage(ctx, user1, chat1Id, message1Id, message1TextNew)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		testEventsAccumulator.Clean()
+
+		// user 2 synchronizes the resend message
+		err = testRestClient.SyncMessage(ctx, user2, chat2Id, message1ResentId)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert there is message edit with the new embed content
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeMessageEdited &&
+					e.UserId == user2 &&
+					e.ChatId == chat2Id &&
+					e.MessageNotification.Id == message1ResentId &&
+					e.MessageNotification.Content == dto.NoMessageContent &&
+					*e.MessageNotification.EmbedMessage.ChatId == chat1Id &&
+					*e.MessageNotification.EmbedMessage.ChatName == chat1Name &&
+					e.MessageNotification.EmbedMessage.Text == message1TextNew &&
+					e.MessageNotification.EmbedMessage.Id == message1Id &&
+					e.MessageNotification.EmbedMessage.EmbedType == dto.EmbedMessageTypeResend &&
+					e.MessageNotification.EmbedMessage.Owner.Id == user1 &&
+					e.MessageNotification.EmbedMessage.Owner.Login == user1Login &&
+					e.MessageNotification.Owner.Id == user2 &&
+					e.MessageNotification.Owner.Login == user2Login
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeChatEdited &&
+					e.UserId == user2 &&
+					e.ChatNotification.ChatViewDto.Id == chat2Id &&
+					e.ChatNotification.ChatViewDto.Title == chat2Name &&
+					*e.ChatNotification.ChatViewDto.LastMessageId == message1ResentId &&
+					*e.ChatNotification.ChatViewDto.LastMessageOwnerId == user2 &&
+					*e.ChatNotification.ChatViewDto.LastMessageContent == message1TextNew &&
+					len(e.ChatNotification.Participants) == 1 &&
+					e.ChatNotification.Participants[0].Id == user2 &&
+					e.ChatNotification.Participants[0].Login == user2Login &&
+					e.ChatNotification.UnreadMessages == 0
+			},
+		}))
+
+		// assert that chat 2 contains the embed message
+		chat2MessagesNew, _, err := testRestClient.GetMessages(ctx, user2, chat2Id)
+		require.NoError(t, err, "error in getting messages")
+		assert.Equal(t, 1, len(chat2MessagesNew))
+		resentMessage1New := chat2MessagesNew[0]
+		assert.Equal(t, message1ResentId, resentMessage1New.Id)
+		assert.Equal(t, user2, resentMessage1New.OwnerId)
+		require.NotNil(t, resentMessage1New.EmbedMessage)
+		assert.Equal(t, dto.EmbedMessageTypeResend, resentMessage1New.EmbedMessage.EmbedType)
+		assert.Equal(t, message1TextNew, resentMessage1New.EmbedMessage.Text)
+		assert.Equal(t, message1Id, resentMessage1New.EmbedMessage.Id)
+		assert.Equal(t, chat1Id, *resentMessage1New.EmbedMessage.ChatId)
+		assert.Equal(t, chat1Name, *resentMessage1New.EmbedMessage.ChatName)
+		assert.Equal(t, user1, resentMessage1New.EmbedMessage.Owner.Id)
+		assert.Equal(t, user1Login, resentMessage1New.EmbedMessage.Owner.Login)
+
 	})
 }
 
