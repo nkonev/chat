@@ -3056,23 +3056,54 @@ func TestMessageFuzzySearch(t *testing.T) {
 		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
 	) {
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{}, nil)
-
 		const user1 int64 = 1
-		const chat1Name = "new chat 1"
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		const chat1Name = "new chat 1 src"
+		const chat2Name = "new chat 1 dst"
 
 		ctx := context.Background()
 
-		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionResend(true))
 		require.NoError(t, err, "error in creating chat")
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
+		chat2Id, err := testRestClient.CreateChat(ctx, user2, chat2Name)
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat2Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
 		const messageText1 = "сообщение Опубликована платформа Node.js 25.0.0"
 
-		_, err = testRestClient.CreateMessage(ctx, user1, chat1Id, messageText1)
+		messageId1, err := testRestClient.CreateMessage(ctx, user1, chat1Id, messageText1)
 		require.NoError(t, err, "error in creating message")
+		waitForMessageExists(lgr, dba, chat1Id, messageId1)
 
 		const message2Text = "samsung"
 
@@ -3098,6 +3129,23 @@ func TestMessageFuzzySearch(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(resp3Search))
 		assert.Equal(t, resp3Search[0].Content, message2Text)
+
+		// user 1 adds user 2 to chat 1
+		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
+		require.NoError(t, err, "error in adding participant")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// user 2 resends the message from chat 1 to chat 2
+		message1ResentId, err := testRestClient.CreateMessage(ctx, user2, chat2Id, dto.NoMessageContent, client.NewMessageCreateOptionResend(chat1Id, messageId1))
+		require.NoError(t, err, "error in resending message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// user 2 searches for the message
+		resp22Search, _, err := testRestClient.GetMessages(ctx, user2, chat2Id, client.NewMessageGetOptionWithSearch(searchString1))
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(resp22Search))
+		assert.Equal(t, resp22Search[0].EmbedMessage.Text, messageText1)
+		assert.Equal(t, resp22Search[0].Id, message1ResentId)
 	})
 }
 
