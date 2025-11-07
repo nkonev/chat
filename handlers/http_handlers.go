@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-const headerTraceId = "trace-id"
+const headerTraceId = "X-Traceid"
 const headerCorrelationId = "X-CorrelationId"
 
 func CreateHttpRouter(

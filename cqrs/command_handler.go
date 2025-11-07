@@ -998,7 +998,7 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 	}
 
 	if shouldSkip {
-		lgr.InfoContext(ctx, "Skipping handling MessageSyncEmbed")
+		lgr.InfoContext(ctx, "Skipping handling MessageSyncEmbed", "message_id", copyCommand.MessageId, "chat_id", copyCommand.ChatId)
 		return nil
 	}
 
