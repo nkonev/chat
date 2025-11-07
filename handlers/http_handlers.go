@@ -95,10 +95,7 @@ func CreateHttpRouter(
 	ginRouter.GET("/internal/does-chats-exist", chatHandler.IsExists)
 	ginRouter.GET("/internal/participant-ids", participantHandler.GetChatParticipants)
 
-	ginRouter.GET("/internal/health", func(g *gin.Context) {
-		g.Status(http.StatusOK)
-	})
-
+	ginRouter.GET("/internal/health", technicalHandler.Health)
 	if cfg.Cqrs.TestHelperMethods {
 		ginRouter.DELETE("/internal/truncate", technicalHandler.Truncate)
 	}

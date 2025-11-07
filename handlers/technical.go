@@ -33,6 +33,10 @@ func NewTechnicalHandler(
 	}
 }
 
+func (ch *TechnicalHandler) Health(g *gin.Context) {
+	g.Status(http.StatusOK)
+}
+
 func (ch *TechnicalHandler) Truncate(g *gin.Context) {
 	cc := cqrs.Truncate{}
 
