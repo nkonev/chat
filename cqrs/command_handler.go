@@ -171,7 +171,7 @@ type ParticipantChange struct {
 }
 
 type EmbedMessage struct {
-	Id        int64
+	Id        int64 // message id
 	ChatId    int64
 	EmbedType string
 }
@@ -191,6 +191,12 @@ type MessageEdit struct {
 	Content        string
 	EmbedMessage   *EmbedMessage
 	FileItemUuid   *string
+}
+
+type MessageSyncEmbed struct {
+	AdditionalData *AdditionalData
+	ChatId         int64
+	MessageId      int64
 }
 
 func (a *MessageCreate) Validate() error {
@@ -954,6 +960,77 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 	return nil
 }
 
+func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy) error {
+	var copyCommand *MessageSyncEmbed
+	err := reprint.FromTo(&sp, &copyCommand)
+	if err != nil {
+		return err
+	}
+
+	participant, err := commonProjection.IsParticipant(ctx, dba, copyCommand.AdditionalData.BehalfUserId, sp.ChatId)
+	if err != nil {
+		return err
+	}
+	if !participant {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", copyCommand.AdditionalData.BehalfUserId, sp.ChatId))
+	}
+
+	ownerId, err := commonProjection.GetMessageOwner(ctx, copyCommand.ChatId, copyCommand.MessageId)
+	if err != nil {
+		return err
+	}
+
+	if ownerId != copyCommand.AdditionalData.BehalfUserId {
+		return NewUnauthorizedError(fmt.Sprintf("User %v is not an owner of message %v in chat %v", copyCommand.AdditionalData.BehalfUserId, copyCommand.MessageId, copyCommand.ChatId))
+	}
+
+	cp := &MessageEdited{
+		MessageCommoned: MessageCommoned{
+			Id:     copyCommand.MessageId,
+			ChatId: copyCommand.ChatId,
+		},
+		AdditionalData: copyCommand.AdditionalData,
+	}
+
+	embedMessageRequest, shouldSkip, err := buildEmbedRequestFromMessage(ctx, dba, commonProjection, copyCommand.ChatId, copyCommand.MessageId)
+	if err != nil {
+		return err
+	}
+
+	if shouldSkip {
+		lgr.InfoContext(ctx, "Skipping handling MessageSyncEmbed")
+		return nil
+	}
+
+	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.ChatId, embedMessageRequest, &cp.MessageCommoned)
+	if err != nil {
+		return err
+	}
+
+	err = eventBus.Publish(ctx, cp)
+	if err != nil {
+		return err
+	}
+
+	lastMessageId, err := commonProjection.GetLastMessageId(ctx, copyCommand.ChatId)
+	if lastMessageId == copyCommand.MessageId {
+		ui := &ChatViewRefreshed{
+			AdditionalData:             copyCommand.AdditionalData,
+			ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
+			AllParticipantIdsExcepting: []int64{},
+			ChatId:                     copyCommand.ChatId,
+			LastMessageAction:          LastMessageActionRefresh,
+		}
+
+		errInner := eventBus.Publish(ctx, ui)
+		if errInner != nil {
+			return errInner
+		}
+		return nil
+	}
+	return nil
+}
+
 func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, policy *sanitizer.SanitizerPolicy) error {
 	participant, err := commonProjection.IsParticipant(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
@@ -983,6 +1060,39 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInter
 	}
 
 	return nil
+}
+
+func buildEmbedRequestFromMessage(ctx context.Context, dba *db.DB, commonProjection *CommonProjection, chatId int64, messageId int64) (*EmbedMessage, bool, error) {
+	embed, err := commonProjection.GetMessageEmbed(ctx, dba, chatId, messageId)
+	if err != nil {
+		return nil, false, err
+	}
+	if embed == nil {
+		return nil, false, NewValidationError("logical error - not got the embed message in the target chat")
+	}
+
+	ret := &EmbedMessage{}
+	switch typed := embed.(type) {
+	case *dto.EmbedReply:
+		ret.EmbedType = string(typed.EmbedTyper.Type)
+		ret.Id = typed.MessageId
+		ret.ChatId = chatId
+	case *dto.EmbedResend:
+		ret.EmbedType = string(typed.EmbedTyper.Type)
+		ret.Id = typed.MessageId
+		ret.ChatId = typed.ChatId
+	}
+
+	exists, err := commonProjection.IsMessageExists(ctx, dba, ret.ChatId, ret.Id)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if !exists {
+		return nil, true, nil
+	}
+
+	return ret, false, nil
 }
 
 func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, commonProjection *CommonProjection, currentChatId int64, embedMessageRequest *EmbedMessage, receiver *MessageCommoned) error {

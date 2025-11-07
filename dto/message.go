@@ -102,10 +102,11 @@ type MessageViewEnrichedDto struct {
 	Owner     *User             `json:"owner"`
 	Reactions []ReactionViewDto `json:"reactions"`
 
-	CanEdit    bool `json:"canEdit"`
-	CanDelete  bool `json:"canDelete"`
-	CanPublish bool `json:"canPublish"`
-	CanPin     bool `json:"canPin"`
+	CanEdit      bool `json:"canEdit"`
+	CanSyncEmbed bool `json:"canSyncEmbed"`
+	CanDelete    bool `json:"canDelete"`
+	CanPublish   bool `json:"canPublish"`
+	CanPin       bool `json:"canPin"`
 
 	UserId int64 `json:"-"` // behalf user id
 }

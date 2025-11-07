@@ -971,24 +971,27 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 	if chat != nil {
 		chatv = *chat
 	}
-	SetMessagePersonalizedFields(&me, chatv.RegularParticipantCanPublishMessage, chatv.RegularParticipantCanPinMessage, chatv.RegularCanWriteMessage, areAdmins[behalfUserId], behalfUserId)
+
+	setMessagePersonalizedFields(&me, chatv.RegularParticipantCanPublishMessage, chatv.RegularParticipantCanPinMessage, chatv.RegularCanWriteMessage, areAdmins[behalfUserId], behalfUserId)
+
 	return &me, nil
 }
 
-func SetMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64) {
+func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64) {
 	canWriteMessage := chatIsAdmin || chatCanWriteMessage
 
 	copied.CanEdit = ((copied.OwnerId == participantId) && (copied.EmbedMessage == nil || copied.EmbedMessage.EmbedType != dto.EmbedMessageTypeResend)) && canWriteMessage
+	copied.CanSyncEmbed = copied.OwnerId == participantId && copied.EmbedMessage != nil
 	copied.CanDelete = copied.OwnerId == participantId && canWriteMessage
-	copied.CanPublish = CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, copied.OwnerId, participantId)
-	copied.CanPin = CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin)
+	copied.CanPublish = canPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, copied.OwnerId, participantId)
+	copied.CanPin = canPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin)
 }
 
-func CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
+func canPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
 	return chatIsAdmin || (chatRegularParticipantCanPublishMessage && messageOwnerId == behalfUserId)
 }
 
-func CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin bool) bool {
+func canPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin bool) bool {
 	return chatIsAdmin || chatRegularParticipantCanPinMessage
 }
 
@@ -1174,36 +1177,47 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 			UpdateDateTime: mm.UpdateDateTime,
 			FileItemUuid:   mm.FileItemUuid,
 		}
-		if mm.Embed.Status == pgtype.Present {
-			var typer dto.EmbedTyper
-			err = mm.Embed.AssignTo(&typer)
-			if err != nil {
-				return mar, fmt.Errorf("error during mapping on index %d: %w", i, err)
-			}
 
-			switch typer.Type {
-			case dto.EmbedMessageTypeReply:
-				var erpl dto.EmbedReply
-				err = mm.Embed.AssignTo(&erpl)
-				if err != nil {
-					return mar, fmt.Errorf("error during mapping on index %d: %w", i, err)
-				}
-				mc.Embed = &erpl
-			case dto.EmbedMessageTypeResend:
-				var eres dto.EmbedResend
-				err = mm.Embed.AssignTo(&eres)
-				if err != nil {
-					return mar, fmt.Errorf("error during mapping on index %d: %w", i, err)
-				}
-				mc.Embed = &eres
-			default:
-				return nil, fmt.Errorf("Unknown type in GetMessages: %v", typer.Type)
-			}
+		embeddable, err := makeEmbedddable(mm.Embed)
+		if err != nil {
+			return mar, fmt.Errorf("error during mapping on index %d: %w", i, err)
 		}
+		mc.Embed = embeddable
+
 		mar = append(mar, mc)
 	}
 
 	return mar, nil
+}
+
+func makeEmbedddable(embedJsonb pgtype.JSONB) (dto.Embeddable, error) {
+	if embedJsonb.Status == pgtype.Present {
+		var typer dto.EmbedTyper
+		err := embedJsonb.AssignTo(&typer)
+		if err != nil {
+			return nil, fmt.Errorf("error during mapping %w", err)
+		}
+
+		switch typer.Type {
+		case dto.EmbedMessageTypeReply:
+			var erpl dto.EmbedReply
+			err = embedJsonb.AssignTo(&erpl)
+			if err != nil {
+				return nil, fmt.Errorf("error during mapping: %w", err)
+			}
+			return &erpl, nil
+		case dto.EmbedMessageTypeResend:
+			var eres dto.EmbedResend
+			err = embedJsonb.AssignTo(&eres)
+			if err != nil {
+				return nil, fmt.Errorf("error during mapping: %w", err)
+			}
+			return &eres, nil
+		default:
+			return nil, fmt.Errorf("Unknown type in GetMessages: %v", typer.Type)
+		}
+	}
+	return nil, nil
 }
 
 func (m *CommonProjection) GetMessageBasic(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.MessageBasic, error) {
@@ -1219,6 +1233,38 @@ func (m *CommonProjection) GetMessageBasic(ctx context.Context, co db.CommonOper
 		return nil, err
 	}
 	return &msg, nil
+}
+
+func (m *CommonProjection) GetMessageEmbed(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (dto.Embeddable, error) {
+	var embed pgtype.JSONB
+	err := sqlscan.Get(ctx, co, &embed, `
+	select m.embed
+	from message m where m.chat_id = $1 and m.id = $2
+	`, chatId, messageId)
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	embeddable, err := makeEmbedddable(embed)
+	if err != nil {
+		return nil, fmt.Errorf("error during mapping: %w", err)
+	}
+
+	return embeddable, nil
+}
+
+func (m *CommonProjection) IsMessageExists(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
+	var exists bool
+	err := sqlscan.Get(ctx, co, &exists, `
+	select exists (select * from message m where m.chat_id = $1 and m.id = $2)
+	`, chatId, messageId)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
 }
 
 func (m *EnrichingProjection) MessageFilter(ctx context.Context, co db.CommonOperations, behalfUserId, chatId int64, searchString string, messageId int64) (bool, error) {

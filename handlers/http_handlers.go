@@ -69,6 +69,7 @@ func CreateHttpRouter(
 	}
 	ginRouter.POST("/api/chat/:id/message", messageHandler.CreateMessage)
 	ginRouter.PUT("/api/chat/:id/message", messageHandler.EditMessage)
+	ginRouter.PUT("/api/chat/:id/message/:messageId/sync-embed", messageHandler.SyncEmbed)
 	ginRouter.DELETE("/api/chat/:id/message/:messageId", messageHandler.DeleteMessage)
 	ginRouter.GET("/api/chat/:id/message/read/:messageId", messageHandler.GetReadMessageUsers)
 	ginRouter.PUT("/api/chat/:id/message/read/:messageId", messageHandler.ReadMessage)
