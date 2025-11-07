@@ -29,6 +29,7 @@ func CreateHttpRouter(
 	participantHandler *ParticipantHandler,
 	messageHandler *MessageHandler,
 	blogHandler *BlogHandler,
+	technicalHandler *TechnicalHandler,
 ) *gin.Engine {
 	// https://gin-gonic.com/en/docs/examples/graceful-restart-or-stop/
 	gin.SetMode(gin.ReleaseMode)
@@ -64,9 +65,6 @@ func CreateHttpRouter(
 	ginRouter.POST("/api/chat/:id/participant/count", participantHandler.CountParticipants)
 	ginRouter.PUT("/api/chat/:id/leave", participantHandler.LeaveChat)
 	ginRouter.PUT("/api/chat/:id/join", participantHandler.JoinChat)
-	if cfg.Cqrs.TestHelperMethods {
-		ginRouter.DELETE("/internal/truncate", participantHandler.Truncate)
-	}
 	ginRouter.POST("/api/chat/:id/message", messageHandler.CreateMessage)
 	ginRouter.PUT("/api/chat/:id/message", messageHandler.EditMessage)
 	ginRouter.PUT("/api/chat/:id/message/:messageId/sync-embed", messageHandler.SyncEmbed)
@@ -92,14 +90,18 @@ func CreateHttpRouter(
 	ginRouter.GET("/api/blog/:id/comment/search", blogHandler.SearchComments)
 	ginRouter.GET("/api/chat/can-create-blog", blogHandler.CanCreateBlog)
 
-	ginRouter.GET("/internal/health", func(g *gin.Context) {
-		g.Status(http.StatusOK)
-	})
-
 	ginRouter.GET("/internal/access", chatHandler.CheckAccess)
 	ginRouter.GET("/internal/is-admin", chatHandler.IsAdmin)
 	ginRouter.GET("/internal/does-chats-exist", chatHandler.IsExists)
 	ginRouter.GET("/internal/participant-ids", participantHandler.GetChatParticipants)
+
+	ginRouter.GET("/internal/health", func(g *gin.Context) {
+		g.Status(http.StatusOK)
+	})
+
+	if cfg.Cqrs.TestHelperMethods {
+		ginRouter.DELETE("/internal/truncate", technicalHandler.Truncate)
+	}
 
 	return ginRouter
 }
