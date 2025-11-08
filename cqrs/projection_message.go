@@ -762,7 +762,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 				return nil, err
 			}
 		}
-		chats, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserIds)
+		chatsByUserIdByChatId, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), behalfUserIds)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", err)
 			return nil, err
@@ -781,7 +781,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		messagesEnriched := make([]dto.MessageViewEnrichedDto, 0, len(messages))
 		for _, mm := range messages {
-			me, err := enrichMessage(mm, chatId, utils.ToMap(users), chats, reactions, mm.UserId, areAdmins)
+			me, err := enrichMessage(mm, chatId, utils.ToMap(users), chatsByUserIdByChatId, reactions, mm.UserId, areAdmins)
 			if err != nil {
 				return nil, err
 			}
@@ -945,7 +945,7 @@ func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, messageRe
 	}
 }
 
-func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool) (*dto.MessageViewEnrichedDto, error) {
+func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, chatsByUserIdByChatId map[int64]map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool) (*dto.MessageViewEnrichedDto, error) {
 	me := dto.MessageViewEnrichedDto{
 		Id:             m.Id,
 		ChatId:         chatId,
@@ -958,7 +958,7 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 		UserId:         behalfUserId,
 		FileItemUuid:   m.FileItemUuid,
 	}
-	err := setEmbed(m, &me, users, chats)
+	err := setEmbed(m, &me, users, chatsByUserIdByChatId, behalfUserId)
 	if err != nil {
 		return nil, err
 	}
@@ -966,13 +966,12 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 	rl := reactions[m.Id]
 	setReactions(&me, users, rl)
 
-	var chatv dto.BasicChatDtoExtended
-	chat := chats[chatId]
-	if chat != nil {
-		chatv = *chat
+	chat := chatsByUserIdByChatId[behalfUserId][chatId]
+	if chat == nil {
+		return nil, fmt.Errorf("Logical error during enriching messages not found chat by chatId = %v, userId = %v", chatId, behalfUserId)
 	}
 
-	setMessagePersonalizedFields(&me, chatv.RegularParticipantCanPublishMessage, chatv.RegularParticipantCanPinMessage, chatv.RegularCanWriteMessage, areAdmins[behalfUserId], behalfUserId)
+	setMessagePersonalizedFields(&me, chat.RegularParticipantCanPublishMessage, chat.RegularParticipantCanPinMessage, chat.RegularCanWriteMessage, areAdmins[behalfUserId], behalfUserId)
 
 	return &me, nil
 }
@@ -1022,7 +1021,7 @@ func getDeletedUser(id int64) *dto.User {
 	return &dto.User{Login: fmt.Sprintf("deleted_user_%v", id), Id: id}
 }
 
-func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, users map[int64]*dto.User, chats map[int64]*dto.BasicChatDtoExtended) error {
+func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, users map[int64]*dto.User, chatsByUserIdByChatId map[int64]map[int64]*dto.BasicChatDtoExtended, behalfUserId int64) error {
 	if srcDbMessage.Embed != nil {
 
 		switch typed := srcDbMessage.Embed.(type) {
@@ -1036,7 +1035,7 @@ func setEmbed(srcDbMessage dto.MessageDto, dstRet *dto.MessageViewEnrichedDto, u
 			}
 		case *dto.EmbedResend:
 			embeddedUser := users[typed.OwnerId]
-			basicEmbeddedChat := chats[typed.ChatId]
+			basicEmbeddedChat := chatsByUserIdByChatId[behalfUserId][typed.ChatId]
 			var embedChatName *string = nil
 			var isParticipant bool
 			if basicEmbeddedChat != nil { // basicEmbeddedChat can be deleted

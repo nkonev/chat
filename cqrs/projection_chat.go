@@ -919,16 +919,28 @@ func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperati
 	return &cht, nil
 }
 
-func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.CommonOperations, chatIds []int64, behalfParticipantIds []int64) (map[int64]*dto.BasicChatDtoExtended, error) {
-	result := map[int64]*dto.BasicChatDtoExtended{}
+// result: map[userId][chatId]*dto.BasicChatDtoExtended
+func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.CommonOperations, chatIds []int64, behalfParticipantIds []int64) (map[int64]map[int64]*dto.BasicChatDtoExtended, error) {
+	result := map[int64]map[int64]*dto.BasicChatDtoExtended{}
 	if len(chatIds) == 0 {
 		return result, nil
 	}
 
 	list := []dto.BasicChatDtoExtended{}
 	err := sqlscan.Select(ctx, co, &list, `
+		with requested_participants as (
+			select * from unnest(cast ($1 as bigint[])) as t(user_id)
+		),
+		chats_participants as (
+			select 
+				user_id,
+				chat_id 
+			from chat_participant cp 
+			where cp.chat_id = any($2) AND cp.user_id = any($1)
+		)
 		SELECT 
-			c.id, 
+			re.user_id,
+			c.id,
 			c.title,
 			(cp.user_id is not null) as behalf_user_is_participant,
 			c.tet_a_tet,
@@ -938,16 +950,23 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 			c.regular_participant_can_write_message,
 			b.id is not null as blog,
 			c.available_to_search
-		FROM chat_common c 
-		LEFT JOIN chat_participant cp ON (c.id = cp.chat_id AND cp.user_id = any($1))
+		FROM chat_common c
+		CROSS JOIN requested_participants re
+		LEFT JOIN chats_participants cp ON (c.id = cp.chat_id and re.user_id = cp.user_id)
 		left join blog b on c.id = b.id
-		WHERE c.id = any($2)`,
+		WHERE c.id = any($2)
+	`,
 		behalfParticipantIds, chatIds)
 	if err != nil {
 		return nil, err
 	}
 	for _, bc := range list {
-		result[bc.Id] = &bc
+		innerMap, ok := result[bc.BehalfUserId]
+		if !ok {
+			innerMap = map[int64]*dto.BasicChatDtoExtended{}
+			result[bc.BehalfUserId] = innerMap
+		}
+		innerMap[bc.Id] = &bc
 	}
 	return result, nil
 }
