@@ -905,9 +905,22 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 		return err
 	}
 
-	if ownerId != copyCommand.AdditionalData.BehalfUserId {
-		return NewUnauthorizedError(fmt.Sprintf("User %v is not an owner of message %v in chat %v", copyCommand.AdditionalData.BehalfUserId, copyCommand.MessageId, copyCommand.ChatId))
+	//if ownerId != copyCommand.AdditionalData.BehalfUserId {
+	//	return NewUnauthorizedError(fmt.Sprintf("User %v is not an owner of message %v in chat %v", copyCommand.AdditionalData.BehalfUserId, copyCommand.MessageId, copyCommand.ChatId))
+	//}
+
+	isAdmin, err := commonProjection.IsChatAdmin(ctx, dba, copyCommand.AdditionalData.BehalfUserId, sp.ChatId)
+	if err != nil {
+		return err
 	}
+
+	chatBasic, err := commonProjection.GetChatBasic(ctx, dba, sp.ChatId)
+	if err != nil {
+		return err
+	}
+
+	canWrite := CanWriteMessage(isAdmin, chatBasic.RegularCanWriteMessage)
+	CanEditMessage(ownerId, copyCommand.AdditionalData.BehalfUserId, nil /*TODO*/, canWrite)
 
 	trimmedAndSanitized, err := sanitizer.TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
 	if err != nil {

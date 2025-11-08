@@ -65,6 +65,7 @@ func CreateHttpRouter(
 	ginRouter.POST("/api/chat/:id/participant/count", participantHandler.CountParticipants)
 	ginRouter.PUT("/api/chat/:id/leave", participantHandler.LeaveChat)
 	ginRouter.PUT("/api/chat/:id/join", participantHandler.JoinChat)
+
 	ginRouter.POST("/api/chat/:id/message", messageHandler.CreateMessage)
 	ginRouter.PUT("/api/chat/:id/message", messageHandler.EditMessage)
 	ginRouter.PUT("/api/chat/:id/message/:messageId/sync-embed", messageHandler.SyncEmbed)

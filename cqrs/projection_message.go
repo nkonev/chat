@@ -977,13 +977,20 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 }
 
 func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64) {
-	canWriteMessage := chatIsAdmin || chatCanWriteMessage
-
-	copied.CanEdit = ((copied.OwnerId == participantId) && (copied.EmbedMessage == nil || copied.EmbedMessage.EmbedType != dto.EmbedMessageTypeResend)) && canWriteMessage
+	canWriteMessage := CanWriteMessage(chatIsAdmin, chatCanWriteMessage)
+	copied.CanEdit = CanEditMessage(copied.OwnerId, participantId, copied.EmbedMessage, canWriteMessage)
 	copied.CanSyncEmbed = copied.OwnerId == participantId && copied.EmbedMessage != nil
 	copied.CanDelete = copied.OwnerId == participantId && canWriteMessage
 	copied.CanPublish = canPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, copied.OwnerId, participantId)
 	copied.CanPin = canPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin)
+}
+
+func CanWriteMessage(chatIsAdmin, chatCanWriteMessage bool) bool {
+	return chatIsAdmin || chatCanWriteMessage
+}
+
+func CanEditMessage(messageOwnerId, behalfUserId int64, embed *dto.EmbedMessageResponse, canWriteMessage bool) bool {
+	return ((messageOwnerId == behalfUserId) && (embed == nil || embed.EmbedType != dto.EmbedMessageTypeResend)) && canWriteMessage
 }
 
 func canPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
