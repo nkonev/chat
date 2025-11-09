@@ -542,12 +542,16 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 }
 
 func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig) error {
-	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
+	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
-	if !s.IsLeaving && !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+	if !adt.IsChatAdmin {
+		if s.IsLeaving && CanLeaveChat(adt.IsChatAdmin, adt.ChatIsTetATet, adt.IsParticipant) {
+			// ok
+		} else {
+			return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to delete the chat %v participant %v", s.AdditionalData.BehalfUserId, s.ChatId, s.ParticipantIds))
+		}
 	}
 
 	if int32(len(s.ParticipantIds)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {

@@ -646,7 +646,7 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 	copied.CanEdit = &canEdit
 	canDelete := CanDeleteChat(admin)
 	copied.CanDelete = &canDelete
-	canLeave := !admin && !copied.TetATet && participant
+	canLeave := CanLeaveChat(admin, copied.TetATet, participant)
 	copied.CanLeave = &canLeave
 	copied.CanVideoKick = admin
 	copied.CanAudioMute = admin
@@ -669,6 +669,10 @@ func CanEditChat(isAdmin, tetATet bool) bool {
 
 func CanDeleteChat(isAdmin bool) bool {
 	return isAdmin
+}
+
+func CanLeaveChat(isAdmin, tetATet, isParticipant bool) bool {
+	return !isAdmin && !tetATet && isParticipant
 }
 
 func CanReactOnMessage(chatCanReact bool, isParticipant bool) bool {
