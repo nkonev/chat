@@ -644,7 +644,7 @@ func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto,
 func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, participant bool) {
 	canEdit := CanEditChat(admin, copied.TetATet)
 	copied.CanEdit = &canEdit
-	canDelete := admin
+	canDelete := CanDeleteChat(admin)
 	copied.CanDelete = &canDelete
 	canLeave := !admin && !copied.TetATet && participant
 	copied.CanLeave = &canLeave
@@ -665,6 +665,10 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 
 func CanEditChat(isAdmin, tetATet bool) bool {
 	return isAdmin && !tetATet
+}
+
+func CanDeleteChat(isAdmin bool) bool {
+	return isAdmin
 }
 
 func CanReactOnMessage(chatCanReact bool, isParticipant bool) bool {

@@ -445,12 +445,13 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 }
 
 func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
-	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
+	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
-	if !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+
+	if !CanDeleteChat(adt.IsChatAdmin) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to delete the chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	pa := &ParticipantDeleted{
