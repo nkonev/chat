@@ -20,11 +20,15 @@ type AsyncMessageService struct {
 	lgr                          *logger.LoggerWrapper
 	tr                           trace.Tracer
 	rabbitmqOutputEventPublisher *producer.RabbitInternalEventsPublisher
+	dbWrapper                    *db.DB
+	commonProjection             *cqrs.CommonProjection
 }
 
 func NewAsyncMessageService(
 	lgr *logger.LoggerWrapper,
 	rabbitmqEventPublisher *producer.RabbitInternalEventsPublisher,
+	dbWrapper *db.DB,
+	commonProjection *cqrs.CommonProjection,
 ) *AsyncMessageService {
 	tr := otel.Tracer("event")
 
@@ -32,10 +36,21 @@ func NewAsyncMessageService(
 		lgr:                          lgr,
 		tr:                           tr,
 		rabbitmqOutputEventPublisher: rabbitmqEventPublisher,
+		commonProjection:             commonProjection,
+		dbWrapper:                    dbWrapper,
 	}
 }
-func (p *AsyncMessageService) BroadcastMessage(ctx context.Context, messageText string, chatId, userId int64, userLogin string) {
-	err := p.rabbitmqOutputEventPublisher.Publish(ctx, dto.PublishBroadcastMessage{
+func (p *AsyncMessageService) BroadcastMessage(ctx context.Context, messageText string, chatId, userId int64, userLogin string) error {
+	adt, err := p.commonProjection.GetChatDataForAuthorization(ctx, p.dbWrapper, userId, chatId)
+	if err != nil {
+		return err
+	}
+
+	if !cqrs.CanBroadcast(adt.IsChatAdmin) {
+		return cqrs.NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to broadcast in the chat %v", userId, chatId))
+	}
+
+	err = p.rabbitmqOutputEventPublisher.Publish(ctx, dto.PublishBroadcastMessage{
 		MessageText: messageText,
 		ChatId:      chatId,
 		UserId:      userId,
@@ -44,6 +59,7 @@ func (p *AsyncMessageService) BroadcastMessage(ctx context.Context, messageText 
 	if err != nil {
 		p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 	}
+	return nil
 }
 
 func (p *AsyncMessageService) TypeMessage(ctx context.Context, chatId, userId int64, userLogin string) {

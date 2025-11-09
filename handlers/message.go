@@ -539,18 +539,6 @@ func (mc *MessageHandler) BroadcastMessage(g *gin.Context) {
 		return
 	}
 
-	participant, err := mc.commonProjection.IsParticipant(g.Request.Context(), mc.dbWrapper, userId, chatId)
-	if err != nil {
-		mc.lgr.ErrorContext(g.Request.Context(), "Error checking is participant", "err", err)
-		g.Status(http.StatusInternalServerError)
-		return
-	}
-	if !participant {
-		mc.lgr.InfoContext(g.Request.Context(), fmt.Sprintf("User %v is not participant of chat %v, skipping", userId, chatId))
-		g.Status(http.StatusOK)
-		return
-	}
-
 	d := new(dto.BroadcastDto)
 
 	err = g.Bind(d)
@@ -560,7 +548,16 @@ func (mc *MessageHandler) BroadcastMessage(g *gin.Context) {
 		return
 	}
 
-	mc.asyncMessageService.BroadcastMessage(g.Request.Context(), d.Text, chatId, userId, userLogin)
+	err = mc.asyncMessageService.BroadcastMessage(g.Request.Context(), d.Text, chatId, userId, userLogin)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error during broadcast message", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
 
 	g.Status(http.StatusOK)
 	return
