@@ -11,6 +11,7 @@ type EmbedMessageType string
 
 const EmbedMessageTypeReply = "reply"
 const EmbedMessageTypeResend = "resend"
+const EmbedMessageTypeNone = ""
 
 type MessageDto struct {
 	Id             int64
@@ -28,6 +29,7 @@ type EmbedTyper struct {
 	Type EmbedMessageType `json:"embedMessageType"`
 }
 
+// stored in both database and in kafka
 type Embeddable interface {
 	GetType() EmbedMessageType
 }
@@ -109,6 +111,14 @@ type MessageViewEnrichedDto struct {
 	CanPin       bool `json:"canPin"`
 
 	UserId int64 `json:"-"` // behalf user id
+}
+
+func (p *MessageViewEnrichedDto) GetEmbedType() string {
+	if p.EmbedMessage != nil {
+		return p.EmbedMessage.EmbedType
+	} else {
+		return EmbedMessageTypeNone
+	}
 }
 
 type MessagesResponseDto struct {
@@ -257,7 +267,11 @@ type MessageReadResponse struct {
 }
 
 type MessageAuthorizationData struct {
-	IsParticipant       bool `db:"is_chat_participant"`
-	IsChatAdmin         bool `db:"is_chat_admin"`
-	ChatCanWriteMessage bool `db:"chat_can_write_message"`
+	IsParticipant        bool   `db:"is_chat_participant"`
+	IsChatAdmin          bool   `db:"is_chat_admin"`
+	ChatCanWriteMessage  bool   `db:"chat_can_write_message"`
+	IsMessageFound       bool   `db:"is_message_found"`
+	MessageOwnerId       int64  `db:"message_owner_id"`
+	HasEmbedMessage      bool   `db:"message_has_embed"`
+	EmbedMessageTypeSafe string `db:"message_embed_type"`
 }

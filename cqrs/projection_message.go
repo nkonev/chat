@@ -981,7 +981,7 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64, isParticipant bool) {
 	canWriteMessage := CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage)
 
-	copied.CanEdit = ((copied.OwnerId == participantId) && (copied.EmbedMessage == nil || copied.EmbedMessage.EmbedType != dto.EmbedMessageTypeResend)) && canWriteMessage
+	copied.CanEdit = CanEditMessage(participantId, copied.OwnerId, copied.EmbedMessage != nil, copied.GetEmbedType(), canWriteMessage)
 	copied.CanSyncEmbed = copied.OwnerId == participantId && copied.EmbedMessage != nil
 	copied.CanDelete = copied.OwnerId == participantId && canWriteMessage
 	copied.CanPublish = CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, copied.OwnerId, participantId)
@@ -992,6 +992,10 @@ func CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage bool) bool 
 	return isParticipant && (chatIsAdmin || chatCanWriteMessage)
 }
 
+func CanEditMessage(behalfParticipantId int64, messageOwnerId int64, hasEmbed bool, embedTypeSafe string, canWriteMessage bool) bool {
+	return ((messageOwnerId == behalfParticipantId) && (!hasEmbed || embedTypeSafe != dto.EmbedMessageTypeResend)) && canWriteMessage
+}
+
 func CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
 	return chatIsAdmin || (chatRegularParticipantCanPublishMessage && messageOwnerId == behalfUserId)
 }
@@ -1000,30 +1004,27 @@ func CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin bool) bool {
 	return chatIsAdmin || chatRegularParticipantCanPinMessage
 }
 
-func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, co db.CommonOperations, userId, chatId int64) (dto.MessageAuthorizationData, error) {
+func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, co db.CommonOperations, userId, chatId, messageId int64) (dto.MessageAuthorizationData, error) {
 	d := dto.MessageAuthorizationData{}
 	err := sqlscan.Get(ctx, co, &d, `
 		with
 		chat_participant_row as (
 			SELECT user_id, chat_admin FROM chat_participant WHERE user_id = $1 AND chat_id = $2 LIMIT 1
 		),
-		participance as (
-			SELECT exists(SELECT * FROM chat_participant_row) as participant 
-		),
-		adminship as (
-			SELECT exists(SELECT * FROM chat_participant_row WHERE chat_admin) as admin 
-		),
 		chat_info as (
-			select 
-				* 
-			from chat_common 
-			where id = $2
+			select * from chat_common where id = $2
+		),
+		message_info as (
+			select * from message m where chat_id = $2 and id = $3
 		)
 		SELECT 
-			(select p.participant as is_chat_participant from participance p)
-			,(select a.admin as is_chat_admin from adminship a)
+			(SELECT exists(SELECT * FROM chat_participant_row) as is_chat_participant)
+			,(SELECT exists(SELECT * FROM chat_participant_row WHERE chat_admin) as is_chat_admin)
 			,(select cc.regular_participant_can_write_message as chat_can_write_message from chat_info cc)
-	`, userId, chatId)
+			,(select exists(select * from message_info mm) as is_message_found)
+			,(select coalesce((select mm.owner_id from message_info mm), $4) as message_owner_id)
+			,(select coalesce((select mm.embed ->> 'embedMessageType' from message_info mm), $5) as message_embed_type)
+	`, userId, chatId, messageId, dto.NoOwner, dto.EmbedMessageTypeNone)
 	if err != nil {
 		return d, err
 	}
