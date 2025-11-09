@@ -841,21 +841,15 @@ func (s *MakeMessageBlogPost) Handle(ctx context.Context, eventBus EventBusInter
 }
 
 func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
-	participant, err := commonProjection.IsParticipant(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
-	if err != nil {
-		return err
-	}
-	if !participant {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
-	}
-
-	ownerId, err := commonProjection.GetMessageOwner(ctx, s.ChatId, s.MessageId)
+	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
 	if err != nil {
 		return err
 	}
 
-	if ownerId != s.AdditionalData.BehalfUserId {
-		return fmt.Errorf("User %v is not an owner of message %v in chat %v", s.AdditionalData.BehalfUserId, s.MessageId, s.ChatId)
+	canWriteMessage := CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage)
+
+	if !CanDeleteMessage(s.AdditionalData.BehalfUserId, adt.MessageOwnerId, canWriteMessage) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to delete the message in chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	cp := &MessageDeleted{
@@ -968,7 +962,7 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 
 	canWriteMessage := CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage)
 
-	if !CanSyncEmbed(copyCommand.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.HasEmbedMessage, canWriteMessage) {
+	if !CanSyncEmbedMessage(copyCommand.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.HasEmbedMessage, canWriteMessage) {
 		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to sync the embed message in chat %v", sp.AdditionalData.BehalfUserId, sp.ChatId))
 	}
 
