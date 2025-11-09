@@ -981,8 +981,8 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64, isParticipant bool) {
 	canWriteMessage := CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage)
 
-	copied.CanEdit = CanEditMessage(participantId, copied.OwnerId, copied.EmbedMessage != nil, copied.GetEmbedType(), canWriteMessage)
-	copied.CanSyncEmbed = copied.OwnerId == participantId && copied.EmbedMessage != nil
+	copied.CanEdit = CanEditMessage(participantId, copied.OwnerId, copied.EmbedMessage != nil, copied.GetEmbedTypeSafe(), canWriteMessage)
+	copied.CanSyncEmbed = CanSyncEmbed(participantId, copied.OwnerId, copied.EmbedMessage != nil, canWriteMessage)
 	copied.CanDelete = copied.OwnerId == participantId && canWriteMessage
 	copied.CanPublish = CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, copied.OwnerId, participantId)
 	copied.CanPin = CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin)
@@ -994,6 +994,10 @@ func CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage bool) bool 
 
 func CanEditMessage(behalfParticipantId int64, messageOwnerId int64, hasEmbed bool, embedTypeSafe string, canWriteMessage bool) bool {
 	return ((messageOwnerId == behalfParticipantId) && (!hasEmbed || embedTypeSafe != dto.EmbedMessageTypeResend)) && canWriteMessage
+}
+
+func CanSyncEmbed(behalfParticipantId int64, messageOwnerId int64, hasEmbed bool, canWriteMessage bool) bool {
+	return messageOwnerId == behalfParticipantId && hasEmbed && canWriteMessage
 }
 
 func CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
@@ -1022,6 +1026,7 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 			,(SELECT exists(SELECT * FROM chat_participant_row WHERE chat_admin) as is_chat_admin)
 			,(select cc.regular_participant_can_write_message as chat_can_write_message from chat_info cc)
 			,(select exists(select * from message_info mm) as is_message_found)
+			,(select((select exists(select * from message_info mm)) and (select (mm.embed is not null) from message_info mm))) as message_has_embed
 			,(select coalesce((select mm.owner_id from message_info mm), $4) as message_owner_id)
 			,(select coalesce((select mm.embed ->> 'embedMessageType' from message_info mm), $5) as message_embed_type)
 	`, userId, chatId, messageId, dto.NoOwner, dto.EmbedMessageTypeNone)

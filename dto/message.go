@@ -113,7 +113,7 @@ type MessageViewEnrichedDto struct {
 	UserId int64 `json:"-"` // behalf user id
 }
 
-func (p *MessageViewEnrichedDto) GetEmbedType() string {
+func (p *MessageViewEnrichedDto) GetEmbedTypeSafe() string {
 	if p.EmbedMessage != nil {
 		return p.EmbedMessage.EmbedType
 	} else {

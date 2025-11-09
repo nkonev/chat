@@ -961,21 +961,15 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 		return err
 	}
 
-	participant, err := commonProjection.IsParticipant(ctx, dba, copyCommand.AdditionalData.BehalfUserId, sp.ChatId)
-	if err != nil {
-		return err
-	}
-	if !participant {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", copyCommand.AdditionalData.BehalfUserId, sp.ChatId))
-	}
-
-	ownerId, err := commonProjection.GetMessageOwner(ctx, copyCommand.ChatId, copyCommand.MessageId)
+	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId, copyCommand.MessageId)
 	if err != nil {
 		return err
 	}
 
-	if ownerId != copyCommand.AdditionalData.BehalfUserId {
-		return NewUnauthorizedError(fmt.Sprintf("User %v is not an owner of message %v in chat %v", copyCommand.AdditionalData.BehalfUserId, copyCommand.MessageId, copyCommand.ChatId))
+	canWriteMessage := CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage)
+
+	if !CanSyncEmbed(copyCommand.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.HasEmbedMessage, canWriteMessage) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to sync the embed message in chat %v", sp.AdditionalData.BehalfUserId, sp.ChatId))
 	}
 
 	cp := &MessageEdited{
