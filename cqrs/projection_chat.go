@@ -642,7 +642,7 @@ func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto,
 }
 
 func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, participant bool) {
-	canEdit := admin && !copied.TetATet
+	canEdit := CanEditChat(admin, copied.TetATet)
 	copied.CanEdit = &canEdit
 	canDelete := admin
 	copied.CanDelete = &canDelete
@@ -665,6 +665,10 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 	if !copied.RegularParticipantCanWriteMessage && !admin {
 		copied.CanWriteMessage = false
 	}
+}
+
+func CanEditChat(isAdmin, tetATet bool) bool {
+	return isAdmin && !tetATet
 }
 
 func CanReactOnMessage(chatCanReact bool, isParticipant bool) bool {
@@ -691,6 +695,7 @@ func (m *CommonProjection) GetChatDataForAuthorization(ctx context.Context, co d
 			,(select cc.regular_participant_can_write_message as chat_can_write_message from chat_info cc)
 			,(select cc.can_resend as chat_can_resend_message from chat_info cc)
 			,(select cc.can_react as chat_can_react_on_message from chat_info cc)
+			,(select cc.tet_a_tet as chat_is_tet_a_tet from chat_info cc)
 	`, userId, chatId)
 	if err != nil {
 		return d, err

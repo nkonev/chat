@@ -353,12 +353,13 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		return err
 	}
 
-	admin, err := commonProjection.IsChatAdmin(ctx, dba, copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId)
+	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId)
 	if err != nil {
 		return err
 	}
-	if !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId))
+
+	if !CanEditChat(adt.IsChatAdmin, adt.ChatIsTetATet) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to edit the chat %v", sp.AdditionalData.BehalfUserId, sp.ChatId))
 	}
 
 	if int32(len(copyCommand.ParticipantIdsToAdd)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
