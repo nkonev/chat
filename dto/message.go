@@ -275,3 +275,11 @@ type MessageAuthorizationData struct {
 	HasEmbedMessage      bool   `db:"message_has_embed"`
 	EmbedMessageTypeSafe string `db:"message_embed_type"`
 }
+
+type ChatAuthorizationData struct {
+	IsParticipant         bool `db:"is_chat_participant"`
+	IsChatAdmin           bool `db:"is_chat_admin"`
+	ChatCanWriteMessage   bool `db:"chat_can_write_message"`
+	ChatCanResendMessage  bool `db:"chat_can_resend_message"`
+	ChatCanReactOnMessage bool `db:"chat_can_react_on_message"`
+}

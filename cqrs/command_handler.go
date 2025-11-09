@@ -1014,13 +1014,13 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 }
 
 func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, policy *sanitizer.SanitizerPolicy) error {
-	participant, err := commonProjection.IsParticipant(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
+	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
 
-	if !participant {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+	if !CanReactOnMessage(adt.ChatCanReactOnMessage, adt.IsParticipant) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to react on a message in chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	sanitizedReaction := sanitizer.TrimAmdSanitize(policy, s.Reaction)

@@ -653,6 +653,9 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 	copied.CanChangeChatAdmins = admin && !copied.TetATet
 	copied.CanBroadcast = admin
 
+	// yes, mutate the field
+	copied.CanReact = CanReactOnMessage(copied.CanReact, participant)
+
 	// participant can be false in case result from search for publicly available chats
 	copied.IsResultFromSearch = !participant
 
@@ -661,6 +664,33 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 	if !copied.RegularParticipantCanWriteMessage && !admin {
 		copied.CanWriteMessage = false
 	}
+}
+
+func CanReactOnMessage(chatCanReact bool, isParticipant bool) bool {
+	return chatCanReact && isParticipant
+}
+
+func (m *CommonProjection) GetChatDataForAuthorization(ctx context.Context, co db.CommonOperations, userId, chatId int64) (dto.ChatAuthorizationData, error) {
+	d := dto.ChatAuthorizationData{}
+	err := sqlscan.Get(ctx, co, &d, `
+		with
+		chat_participant_row as (
+			SELECT user_id, chat_admin FROM chat_participant WHERE user_id = $1 AND chat_id = $2 LIMIT 1
+		),
+		chat_info as (
+			select * from chat_common where id = $2
+		)
+		SELECT 
+			(SELECT exists(SELECT * FROM chat_participant_row) as is_chat_participant)
+			,(SELECT exists(SELECT * FROM chat_participant_row WHERE chat_admin) as is_chat_admin)
+			,(select cc.regular_participant_can_write_message as chat_can_write_message from chat_info cc)
+			,(select cc.can_resend as chat_can_resend_message from chat_info cc)
+			,(select cc.can_react as chat_can_react_on_message from chat_info cc)
+	`, userId, chatId)
+	if err != nil {
+		return d, err
+	}
+	return d, nil
 }
 
 func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations, participantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, additionalFoundUserIds []int64, chatId *int64) ([]dto.ChatViewDto, error) {
