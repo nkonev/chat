@@ -982,15 +982,15 @@ func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegula
 	copied.CanEdit = ((copied.OwnerId == participantId) && (copied.EmbedMessage == nil || copied.EmbedMessage.EmbedType != dto.EmbedMessageTypeResend)) && canWriteMessage
 	copied.CanSyncEmbed = copied.OwnerId == participantId && copied.EmbedMessage != nil
 	copied.CanDelete = copied.OwnerId == participantId && canWriteMessage
-	copied.CanPublish = canPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, copied.OwnerId, participantId)
-	copied.CanPin = canPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin)
+	copied.CanPublish = CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, copied.OwnerId, participantId)
+	copied.CanPin = CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin)
 }
 
-func canPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
+func CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
 	return chatIsAdmin || (chatRegularParticipantCanPublishMessage && messageOwnerId == behalfUserId)
 }
 
-func canPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin bool) bool {
+func CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin bool) bool {
 	return chatIsAdmin || chatRegularParticipantCanPinMessage
 }
 
