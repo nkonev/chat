@@ -631,12 +631,13 @@ func (s *Truncate) Handle(ctx context.Context, eventBus EventBusInterface, dba *
 }
 
 func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
-	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
+	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
-	if !admin {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+
+	if !CanChangeChatParticipants(adt.IsChatAdmin, adt.ChatIsTetATet) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to change the chat %v participants", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	pa := &ParticipantChanged{
