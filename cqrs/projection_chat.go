@@ -653,8 +653,9 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 	copied.CanChangeChatAdmins = admin && !copied.TetATet
 	copied.CanBroadcast = admin
 
-	// yes, mutate the field
+	// yes, mutate the fields
 	copied.CanReact = CanReactOnMessage(copied.CanReact, participant)
+	copied.CanResend = CanResendMessage(copied.CanResend, participant)
 
 	// participant can be false in case result from search for publicly available chats
 	copied.IsResultFromSearch = !participant
@@ -668,6 +669,10 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 
 func CanReactOnMessage(chatCanReact bool, isParticipant bool) bool {
 	return chatCanReact && isParticipant
+}
+
+func CanResendMessage(chatCanResend bool, isParticipant bool) bool {
+	return chatCanResend && isParticipant
 }
 
 func (m *CommonProjection) GetChatDataForAuthorization(ctx context.Context, co db.CommonOperations, userId, chatId int64) (dto.ChatAuthorizationData, error) {

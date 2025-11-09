@@ -731,7 +731,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		AdditionalData: copyCommand.AdditionalData,
 	}
 
-	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.ChatId, copyCommand.EmbedMessage, &mc.MessageCommoned)
+	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.ChatId, copyCommand.EmbedMessage, &mc.MessageCommoned, adt.IsParticipant)
 	if err != nil {
 		return 0, err
 	}
@@ -919,7 +919,7 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 		AdditionalData: copyCommand.AdditionalData,
 	}
 
-	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.ChatId, copyCommand.EmbedMessage, &cp.MessageCommoned)
+	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.ChatId, copyCommand.EmbedMessage, &cp.MessageCommoned, adt.IsParticipant)
 	if err != nil {
 		return err
 	}
@@ -984,7 +984,7 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 		return nil
 	}
 
-	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.ChatId, embedMessageRequest, &cp.MessageCommoned)
+	err = validateAndSetEmbedFieldsEmbedMessage(ctx, dba, commonProjection, copyCommand.ChatId, embedMessageRequest, &cp.MessageCommoned, adt.IsParticipant)
 	if err != nil {
 		return err
 	}
@@ -1077,7 +1077,7 @@ func buildEmbedRequestFromMessage(ctx context.Context, dba *db.DB, commonProject
 	return ret, false, nil
 }
 
-func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, commonProjection *CommonProjection, currentChatId int64, embedMessageRequest *EmbedMessage, receiver *MessageCommoned) error {
+func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, commonProjection *CommonProjection, currentChatId int64, embedMessageRequest *EmbedMessage, receiver *MessageCommoned, isParticipant bool) error {
 	if embedMessageRequest != nil {
 		if embedMessageRequest.Id == 0 {
 			return errors.New("Missed embed message id")
@@ -1124,7 +1124,8 @@ func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, comm
 			if chat == nil {
 				return errors.New("Missing the chat")
 			}
-			if !chat.CanResend {
+
+			if !CanResendMessage(chat.CanResend, isParticipant) {
 				return errors.New("Resending is forbidden for this chat")
 			}
 			receiver.Embed = dto.NewEmbedResend(
