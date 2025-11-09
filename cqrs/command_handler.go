@@ -701,13 +701,13 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		return 0, err
 	}
 
-	participant, err := commonProjection.IsParticipant(ctx, dba, sp.AdditionalData.BehalfUserId, sp.ChatId)
+	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId)
 	if err != nil {
 		return 0, err
 	}
 
-	if !participant {
-		return 0, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", sp.AdditionalData.BehalfUserId, sp.ChatId))
+	if !CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage) {
+		return 0, NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to write the message in chat %v", sp.AdditionalData.BehalfUserId, sp.ChatId))
 	}
 
 	trimmedAndSanitized, err := sanitizer.TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)

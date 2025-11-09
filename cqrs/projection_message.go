@@ -779,9 +779,11 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			m.lgr.WarnContext(ctx, "unable to get users")
 		}
 
+		notAparticipant := false
+
 		messagesEnriched := make([]dto.MessageViewEnrichedDto, 0, len(messages))
 		for _, mm := range messages {
-			me, err := enrichMessage(mm, chatId, utils.ToMap(users), chatsByUserIdByChatId, reactions, mm.UserId, areAdmins)
+			me, err := enrichMessage(mm, chatId, utils.ToMap(users), chatsByUserIdByChatId, reactions, mm.UserId, areAdmins, !notAparticipant)
 			if err != nil {
 				return nil, err
 			}
@@ -789,7 +791,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 		}
 		return &resDto{
 			items:           messagesEnriched,
-			notAparticipant: false,
+			notAparticipant: notAparticipant,
 		}, nil
 	})
 
@@ -945,7 +947,7 @@ func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, messageRe
 	}
 }
 
-func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, chatsByUserIdByChatId map[int64]map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool) (*dto.MessageViewEnrichedDto, error) {
+func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, chatsByUserIdByChatId map[int64]map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool, isParticipant bool) (*dto.MessageViewEnrichedDto, error) {
 	me := dto.MessageViewEnrichedDto{
 		Id:             m.Id,
 		ChatId:         chatId,
@@ -971,13 +973,13 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 		return nil, fmt.Errorf("Logical error during enriching messages not found chat by chatId = %v, userId = %v", chatId, behalfUserId)
 	}
 
-	setMessagePersonalizedFields(&me, chat.RegularParticipantCanPublishMessage, chat.RegularParticipantCanPinMessage, chat.RegularCanWriteMessage, areAdmins[behalfUserId], behalfUserId)
+	setMessagePersonalizedFields(&me, chat.RegularParticipantCanPublishMessage, chat.RegularParticipantCanPinMessage, chat.RegularCanWriteMessage, areAdmins[behalfUserId], behalfUserId, isParticipant)
 
 	return &me, nil
 }
 
-func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64) {
-	canWriteMessage := chatIsAdmin || chatCanWriteMessage
+func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64, isParticipant bool) {
+	canWriteMessage := CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage)
 
 	copied.CanEdit = ((copied.OwnerId == participantId) && (copied.EmbedMessage == nil || copied.EmbedMessage.EmbedType != dto.EmbedMessageTypeResend)) && canWriteMessage
 	copied.CanSyncEmbed = copied.OwnerId == participantId && copied.EmbedMessage != nil
@@ -986,12 +988,46 @@ func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegula
 	copied.CanPin = CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin)
 }
 
+func CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage bool) bool {
+	return isParticipant && (chatIsAdmin || chatCanWriteMessage)
+}
+
 func CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
 	return chatIsAdmin || (chatRegularParticipantCanPublishMessage && messageOwnerId == behalfUserId)
 }
 
 func CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin bool) bool {
 	return chatIsAdmin || chatRegularParticipantCanPinMessage
+}
+
+func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, co db.CommonOperations, userId, chatId int64) (dto.MessageAuthorizationData, error) {
+	d := dto.MessageAuthorizationData{}
+	err := sqlscan.Get(ctx, co, &d, `
+		with
+		chat_participant_row as (
+			SELECT user_id, chat_admin FROM chat_participant WHERE user_id = $1 AND chat_id = $2 LIMIT 1
+		),
+		participance as (
+			SELECT exists(SELECT * FROM chat_participant_row) as participant 
+		),
+		adminship as (
+			SELECT exists(SELECT * FROM chat_participant_row WHERE chat_admin) as admin 
+		),
+		chat_info as (
+			select 
+				* 
+			from chat_common 
+			where id = $2
+		)
+		SELECT 
+			(select p.participant as is_chat_participant from participance p)
+			,(select a.admin as is_chat_admin from adminship a)
+			,(select cc.regular_participant_can_write_message as chat_can_write_message from chat_info cc)
+	`, userId, chatId)
+	if err != nil {
+		return d, err
+	}
+	return d, nil
 }
 
 func setReactions(dst *dto.MessageViewEnrichedDto, users map[int64]*dto.User, reactionsList []dto.ReactionDto) {

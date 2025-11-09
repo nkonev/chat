@@ -255,3 +255,9 @@ type MessageReadResponse struct {
 	ParticipantsWrapper
 	Text string `json:"text"`
 }
+
+type MessageAuthorizationData struct {
+	IsParticipant       bool `db:"is_chat_participant"`
+	IsChatAdmin         bool `db:"is_chat_admin"`
+	ChatCanWriteMessage bool `db:"chat_can_write_message"`
+}
