@@ -18,7 +18,7 @@ type ChatEvent struct {
 	MessageNotification          *MessageViewEnrichedDto       `json:"messageNotification"`
 	MessageDeletedNotification   *MessageDeletedDto            `json:"messageDeletedNotification"`
 	MessageBroadcastNotification *MessageBroadcastNotification `json:"messageBroadcastNotification"`
-	Participants                 *[]*UserWithAdmin             `json:"participants"`
+	Participants                 *[]*UserViewEnrichedDto       `json:"participants"`
 	PromoteMessageNotification   *PinnedMessageEvent           `json:"promoteMessageNotification"`
 	PublishedMessageNotification *PublishedMessageEvent        `json:"publishedMessageEvent"`
 	ReactionChangedEvent         *ReactionChangedEvent         `json:"reactionChangedEvent"`

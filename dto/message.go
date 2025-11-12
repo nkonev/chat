@@ -22,7 +22,7 @@ type MessageDto struct {
 	CreateDateTime time.Time
 	UpdateDateTime *time.Time
 	FileItemUuid   *string
-	UserId         int64
+	BehalfUserId   int64 // behalf userId
 }
 
 type EmbedTyper struct {

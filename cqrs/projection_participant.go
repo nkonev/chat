@@ -230,48 +230,141 @@ func (m *CommonProjection) ParticipantsExistence(ctx context.Context, co db.Comm
 	return list, nil
 }
 
-func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behalfUserId int64, chatId int64, size int32, offset int64, searchString string) ([]*dto.UserWithAdmin, int64, error) {
-	participant, err := m.cp.IsParticipant(ctx, m.cp.db, behalfUserId, chatId)
-	if err != nil {
-		return nil, 0, err
-	}
-	if !participant {
-		return nil, 0, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", behalfUserId, chatId))
+// output: behalfUserId:[]*dto.UserViewEnrichedDto
+func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behalfUserIds []int64, chatId int64, size int32, offset int64, searchString string, needCount bool, userIds []int64) (map[int64][]*dto.UserViewEnrichedDto, int64, error) {
+	isSingleBehalf := len(behalfUserIds) == 1
+
+	if isSingleBehalf {
+		behalfUserId := behalfUserIds[0]
+		participant, err := m.cp.IsParticipant(ctx, m.cp.db, behalfUserId, chatId)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !participant {
+			return nil, 0, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", behalfUserId, chatId))
+		}
 	}
 
 	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
+
+	if !isSingleBehalf && len(searchString) > 0 {
+		return nil, 0, fmt.Errorf("Wrong invariant - we cannot use both searchString and multiple behalfs")
+	}
+
+	if offset > 0 && len(userIds) > 0 {
+		return nil, 0, fmt.Errorf("Wrong invariant - we cannot use both offset and multiple userIds")
+	}
+
 	const reverse = true
 
+	type participantsWithCount struct {
+		participants       []*ParticipantWithAdmin
+		count              int64
+		areAdminsOfUserIds map[int64]bool
+		chat               *dto.ChatBasic
+	}
+
+	type usersWithCount struct {
+		usersWithAdmin     []*dto.UserWithAdmin
+		count              int64
+		areAdminsOfUserIds map[int64]bool
+		chat               *dto.ChatBasic
+	}
+
 	if len(searchString) > 0 {
-		usersWithAdmin, count, err := m.SearchUsersContaining(ctx, m.cp.db, searchString, chatId, size, offset, reverse)
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
-			return nil, 0, err
-		}
-		return usersWithAdmin, count, nil
-	} else {
-		type participantsWithCount struct {
-			participants []*ParticipantWithAdmin
-			count        int64
+		if len(behalfUserIds) != 1 {
+			return nil, 0, fmt.Errorf("Wrong invariant - for searchString we should have exactly 1 behalfUserId")
 		}
 
-		pwc, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*participantsWithCount, error) {
-			participants, err := getParticipantsCommonExcepting(ctx, m.cp.db, chatId, nil, size, offset, reverse)
+		behalfUserId := behalfUserIds[0]
+
+		pwc, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*usersWithCount, error) {
+			usersWithAdmin, count, err := m.SearchUsersContaining(ctx, tx, searchString, chatId, size, offset, reverse, needCount)
 			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error getting participants", "err", err)
-
+				m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
 				return nil, err
 			}
-			count, err := getParticipantsCount(ctx, m.cp.db, chatId)
-			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error getting participant count", "err", err)
 
+			areAdminsOfUserIds, err := m.cp.getAreAdminsOfUserIds(ctx, tx, behalfUserIds, chatId)
+			if err != nil {
 				return nil, err
+			}
+
+			chat, err := m.cp.GetChatBasic(ctx, tx, chatId)
+			if err != nil {
+				return nil, err
+			}
+
+			if chat == nil {
+				return nil, fmt.Errorf("No chat found", "chat_id", chat)
+			}
+
+			return &usersWithCount{
+				usersWithAdmin:     usersWithAdmin,
+				count:              count,
+				areAdminsOfUserIds: areAdminsOfUserIds,
+				chat:               chat,
+			}, nil
+		})
+		if errOuter != nil {
+			return nil, 0, errors.New("Error getting participants")
+		}
+
+		enrichedUsers := makeEnrichedUsers(pwc.usersWithAdmin, behalfUserId, pwc.areAdminsOfUserIds[behalfUserId], pwc.chat.TetATet)
+
+		return map[int64][]*dto.UserViewEnrichedDto{
+			behalfUserId: enrichedUsers,
+		}, pwc.count, nil
+	} else {
+		pwc, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*participantsWithCount, error) {
+			var participants []*ParticipantWithAdmin
+			var err error
+
+			if len(userIds) == 0 {
+				participants, err = getParticipantsCommonExcepting(ctx, tx, chatId, nil, size, offset, reverse)
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error getting participants", "err", err)
+
+					return nil, err
+				}
+			} else {
+				participants, err = getParticipantsCommonIncluding(ctx, tx, chatId, userIds, int32(len(userIds)), 0, reverse)
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error getting participants", "err", err)
+
+					return nil, err
+				}
+			}
+
+			areAdminsOfUserIds, err := m.cp.getAreAdminsOfUserIds(ctx, tx, behalfUserIds, chatId)
+			if err != nil {
+				return nil, err
+			}
+
+			chat, err := m.cp.GetChatBasic(ctx, tx, chatId)
+			if err != nil {
+				return nil, err
+			}
+
+			if chat == nil {
+				return nil, fmt.Errorf("No chat found", "chat_id", chat)
+			}
+
+			var theCount int64
+			if needCount {
+				theCount, err = getParticipantsCount(ctx, tx, chatId)
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error getting participant count", "err", err)
+
+					return nil, err
+				}
 			}
 
 			return &participantsWithCount{
-				participants: participants,
-				count:        count,
+				participants:       participants,
+				areAdminsOfUserIds: areAdminsOfUserIds,
+				count:              theCount,
+				chat:               chat,
 			}, nil
 		})
 		if errOuter != nil {
@@ -287,8 +380,38 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 
 		orderedEnrichedParticipants := makeParticipantsWithAdmin(pwc.participants, utils.ToMap(users))
 
-		return orderedEnrichedParticipants, pwc.count, nil
+		res := map[int64][]*dto.UserViewEnrichedDto{}
+
+		for _, behalfUserId := range behalfUserIds {
+			enrichedUsersBehalfUser := makeEnrichedUsers(orderedEnrichedParticipants, behalfUserId, pwc.areAdminsOfUserIds[behalfUserId], pwc.chat.TetATet)
+			res[behalfUserId] = enrichedUsersBehalfUser
+		}
+
+		return res, pwc.count, nil
 	}
+}
+
+func makeEnrichedUsers(users []*dto.UserWithAdmin, behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat bool) []*dto.UserViewEnrichedDto {
+	var res = make([]*dto.UserViewEnrichedDto, 0, len(users))
+	for _, u := range users {
+		enriched := dto.UserViewEnrichedDto{
+			BehalfUserId:  behalfUserId,
+			UserWithAdmin: *u,
+			CanChange:     CanChangeParticipant(behalfUserId, behalfIsChatAdmin, isTetATetChat, u),
+			CanDelete:     CanDeleteParticipant(behalfUserId, behalfIsChatAdmin, isTetATetChat, u),
+		}
+		res = append(res, &enriched)
+	}
+
+	return res
+}
+
+func CanChangeParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat bool, user *dto.UserWithAdmin) bool {
+	return CanEditChat(behalfIsChatAdmin, isTetATetChat) && CanChangeChatParticipants(behalfIsChatAdmin, isTetATetChat) && user.Id != behalfUserId
+}
+
+func CanDeleteParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat bool, user *dto.UserWithAdmin) bool {
+	return CanEditChat(behalfIsChatAdmin, isTetATetChat) && user.Id != behalfUserId
 }
 
 func (m *EnrichingProjection) ParticipantsFilter(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, requestedParticipantIds []int64) ([]dto.FilteredParticipantItemResponse, error) {
@@ -330,7 +453,7 @@ func (m *EnrichingProjection) ParticipantsFilter(ctx context.Context, co db.Comm
 	return response, nil
 }
 
-func (m *EnrichingProjection) SearchUsersContaining(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, pageSize int32, requestOffset int64, reverse bool) ([]*dto.UserWithAdmin, int64, error) {
+func (m *EnrichingProjection) SearchUsersContaining(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, pageSize int32, requestOffset int64, reverse bool, needCount bool) ([]*dto.UserWithAdmin, int64, error) {
 	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
 
 	var resUsers = make([]*dto.UserWithAdmin, 0)
@@ -385,7 +508,11 @@ func (m *EnrichingProjection) SearchUsersContaining(ctx context.Context, co db.C
 					}
 				}
 				processedItems++
+			} else if !needCount {
+				shouldContinue = false
+				break
 			}
+
 			totalCountInChat++ // users portion is a subset of participantsPortion, so here we have the actual counter
 		}
 	}

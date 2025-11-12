@@ -486,7 +486,7 @@ func (r *ParticipantGetOptionWithSearch) Apply(queryParams *url.Values) *url.Val
 	return queryParams
 }
 
-func (rc *TestRestClient) GetChatParticipants(ctx context.Context, behalfUserId int64, chatId int64, participantGetOptions ...ParticipantGetOption) ([]*dto.UserWithAdmin, int64, error) {
+func (rc *TestRestClient) GetChatParticipants(ctx context.Context, behalfUserId int64, chatId int64, participantGetOptions ...ParticipantGetOption) ([]*dto.UserViewEnrichedDto, int64, error) {
 	var queryParams *url.Values
 	for _, opt := range participantGetOptions {
 		if opt != nil {
@@ -496,7 +496,7 @@ func (rc *TestRestClient) GetChatParticipants(ctx context.Context, behalfUserId 
 
 	res, err := query[any, dto.ParticipantsWithAdminWrapper](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/participant/search", "participants.Get", nil, queryParams)
 	if err != nil {
-		return []*dto.UserWithAdmin{}, 0, err
+		return []*dto.UserViewEnrichedDto{}, 0, err
 	}
 	return res.Data, res.Count, nil
 }

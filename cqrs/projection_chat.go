@@ -501,12 +501,12 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 		for _, ch := range chats {
 			var admin bool
 			if multipleBehalfUserId {
-				admin = areAdminsOfUserIds[ch.UserId]
+				admin = areAdminsOfUserIds[ch.BehalfUserId]
 			} else {
 				admin = areAdminsOfChatIds[ch.Id]
 			}
 
-			che := m.enrichChat(ch.UserId, ch, usersMap, admin)
+			che := m.enrichChat(ch.BehalfUserId, ch, usersMap, admin)
 			chatsEnriched = append(chatsEnriched, che)
 		}
 
@@ -865,7 +865,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 	for i, de := range list {
 		mapped := dto.ChatViewDto{
 			Id:                                  de.Id,
-			UserId:                              de.UserId,
+			BehalfUserId:                        de.UserId,
 			Title:                               de.Title,
 			Pinned:                              de.Pinned,
 			UnreadMessages:                      de.UnreadMessages,

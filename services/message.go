@@ -199,7 +199,7 @@ func (p *MessageService) SearchForUsersToMention(ctx context.Context, chatId, us
 
 	searchString = sanitizer.TrimAmdSanitize(p.policy, searchString)
 
-	usersWithAdmin, _, err := p.enrichingProjection.SearchUsersContaining(ctx, p.dbWrapper, searchString, chatId, utils.DefaultSize, utils.DefaultOffset, true)
+	usersWithAdmin, _, err := p.enrichingProjection.SearchUsersContaining(ctx, p.dbWrapper, searchString, chatId, utils.DefaultSize, utils.DefaultOffset, true, false)
 	if err != nil {
 		return nil, err
 	}

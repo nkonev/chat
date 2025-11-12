@@ -731,14 +731,14 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 				var messagesTmp []dto.MessageDto
 				for _, userId := range behalfUserIds {
 					msg := messages[0]
-					msg.UserId = userId
+					msg.BehalfUserId = userId
 					messagesTmp = append(messagesTmp, msg)
 				}
 				messages = messagesTmp
 			}
 		} else if len(behalfUserIds) == 1 {
 			for i := range messages {
-				messages[i].UserId = behalfUserIds[0]
+				messages[i].BehalfUserId = behalfUserIds[0]
 			}
 		} else {
 			return nil, fmt.Errorf("Unknown invariant")
@@ -783,7 +783,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		messagesEnriched := make([]dto.MessageViewEnrichedDto, 0, len(messages))
 		for _, mm := range messages {
-			me, err := enrichMessage(mm, chatId, utils.ToMap(users), chatsByUserIdByChatId, reactions, mm.UserId, areAdmins, !notAparticipant)
+			me, err := enrichMessage(mm, chatId, utils.ToMap(users), chatsByUserIdByChatId, reactions, mm.BehalfUserId, areAdmins, !notAparticipant)
 			if err != nil {
 				return nil, err
 			}

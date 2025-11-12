@@ -34,6 +34,13 @@ type UserWithAdmin struct {
 	ChatAdmin bool `json:"admin"`
 }
 
+type UserViewEnrichedDto struct {
+	UserWithAdmin
+	BehalfUserId int64 `json:"-"` // behalf userId
+	CanChange    bool  `json:"canChange"`
+	CanDelete    bool  `json:"canDelete"`
+}
+
 type AdditionalData struct {
 	Enabled   bool     `json:"enabled"`
 	Expired   bool     `json:"expired"`
@@ -47,8 +54,8 @@ type ParticipantAddDto struct {
 }
 
 type ParticipantsWithAdminWrapper struct {
-	Data  []*UserWithAdmin `json:"items"`
-	Count int64            `json:"count"` // for paginating purposes
+	Data  []*UserViewEnrichedDto `json:"items"`
+	Count int64                  `json:"count"` // for paginating purposes
 }
 
 type CountRequestDto struct {

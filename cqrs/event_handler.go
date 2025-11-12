@@ -57,7 +57,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	}
 
 	// we don't need to change GetChatsEnriched to additionally process [behalf]userIds because we've already added users in our projection and the projection return all the users
-	chatViews, usersMap, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId)
+	chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId)
 	if err != nil {
 		return err
 	}
@@ -70,11 +70,11 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 
 	for _, cv := range chatViews {
 		dt := dto.GlobalUserEvent{
-			UserId:           cv.UserId,
+			UserId:           cv.BehalfUserId,
 			EventType:        eventTypeChatCreated,
 			ChatNotification: &cv,
 		}
-		if event.IsJoining && cv.UserId == event.AdditionalData.BehalfUserId {
+		if event.IsJoining && cv.BehalfUserId == event.AdditionalData.BehalfUserId {
 			dt.EventType = dto.EventTypeChatEdited
 		}
 		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dt)
@@ -83,10 +83,10 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 		}
 
 		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-			UserId:    cv.UserId,
+			UserId:    cv.BehalfUserId,
 			EventType: eventTypeUnreadMessagesChanged,
 			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
-				HasUnreadMessages: hasUnreadMessages[cv.UserId],
+				HasUnreadMessages: hasUnreadMessages[cv.BehalfUserId],
 			},
 		})
 		if err != nil {
@@ -94,19 +94,22 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 		}
 	}
 
-	addedUsersWithAdmins := m.buildUserWithAdminBasedOnParticipantWithAdmin(event.Participants, usersMap)
-
 	m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantAdded, "user_ids", userIds)
 
 	// this is an event for ChatParticipantsModal.vue
 	err = m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+		participants, _, errInn := m.enrichingProjection.GetParticipantsEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(userIds)), utils.DefaultOffset, dto.NoSearchString, false, userIds)
+		if errInn != nil {
+			return errInn
+		}
+
 		// for every participant of chat we send an info about the newly added participants
-		for _, participantId := range participantIdsPortion {
+		for behalfUserId, hisParticipantsViews := range participants {
 			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:    eventTypeParticipantAdded,
-				UserId:       participantId,
+				UserId:       behalfUserId,
 				ChatId:       event.ChatId,
-				Participants: &addedUsersWithAdmins,
+				Participants: &hisParticipantsViews,
 			})
 			if errInn != nil {
 				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
@@ -147,10 +150,12 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
 	m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantDeleted, "user_ids", userIds)
 
-	var pseudoUsers = []*dto.UserWithAdmin{}
+	var pseudoUsers = []*dto.UserViewEnrichedDto{}
 	for _, participantIdToRemove := range userIds {
-		pseudoUsers = append(pseudoUsers, &dto.UserWithAdmin{
-			User: dto.User{Id: participantIdToRemove},
+		pseudoUsers = append(pseudoUsers, &dto.UserViewEnrichedDto{
+			UserWithAdmin: dto.UserWithAdmin{
+				User: dto.User{Id: participantIdToRemove},
+			},
 		})
 	}
 
@@ -224,20 +229,20 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 		return errp
 	}
 
-	usersWithAdmins, err := m.buildUserWithAdminBasedOnUserIds(ctx, userIds, event.ChatId)
-	if err != nil {
-		return err
-	}
-
 	m.lgr.DebugContext(ctx, "Sending notification about the participant", "event_type", eventTypeParticipantChanged, "user_ids", userIds)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-		for _, participantId := range participantIdsPortion {
+		participants, _, errInn := m.enrichingProjection.GetParticipantsEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(userIds)), utils.DefaultOffset, dto.NoSearchString, false, userIds)
+		if errInn != nil {
+			return errInn
+		}
+
+		for behalfUserId, hisParticipantsViews := range participants {
 			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:    eventTypeParticipantChanged,
-				UserId:       participantId,
+				UserId:       behalfUserId,
 				ChatId:       event.ChatId,
-				Participants: &usersWithAdmins,
+				Participants: &hisParticipantsViews,
 			})
 			if errInn != nil {
 				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
@@ -285,7 +290,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 
 		for _, cv := range chatViews {
 			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-				UserId:           cv.UserId,
+				UserId:           cv.BehalfUserId,
 				EventType:        eventType,
 				ChatNotification: &cv,
 			})
@@ -295,10 +300,10 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 
 			if event.UnreadMessagesAction != UnreadMessagesActionUnspecified {
 				err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-					UserId:    cv.UserId,
+					UserId:    cv.BehalfUserId,
 					EventType: eventTypeUnreadMessagesChanged,
 					HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
-						HasUnreadMessages: hasUnreadMessages[cv.UserId],
+						HasUnreadMessages: hasUnreadMessages[cv.BehalfUserId],
 					},
 				})
 				if err != nil {
@@ -325,44 +330,6 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 	}
 
 	return nil
-}
-
-func (m *EventHandler) buildUserWithAdminBasedOnParticipantWithAdmin(participants []ParticipantWithAdmin, usersMap map[int64]*dto.User) []*dto.UserWithAdmin {
-	usersWithAdmins := make([]*dto.UserWithAdmin, 0, len(participants))
-	for _, p := range participants {
-		user := usersMap[p.ParticipantId]
-		if user != nil {
-			usersWithAdmins = append(usersWithAdmins, &dto.UserWithAdmin{
-				User:      *user,
-				ChatAdmin: p.ChatAdmin,
-			})
-		}
-	}
-
-	return usersWithAdmins
-}
-
-func (m *EventHandler) buildUserWithAdminBasedOnUserIds(ctx context.Context, userIds []int64, chatId int64) ([]*dto.UserWithAdmin, error) {
-	users, err := m.aaaRestClient.GetUsers(ctx, userIds)
-	if err != nil {
-		m.lgr.WarnContext(ctx, "unable to get users")
-	}
-	usersMap := utils.ToMap(users)
-	areAdmins, err := m.commonProjection.GetAreAdminsOfUserIds(ctx, m.db, userIds, chatId)
-	if err != nil {
-		return nil, err
-	}
-	usersWithAdmins := make([]*dto.UserWithAdmin, 0, len(userIds))
-	for _, participantId := range userIds {
-		user := usersMap[participantId]
-		if user != nil {
-			usersWithAdmins = append(usersWithAdmins, &dto.UserWithAdmin{
-				User:      *user,
-				ChatAdmin: areAdmins[participantId],
-			})
-		}
-	}
-	return usersWithAdmins, nil
 }
 
 func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreated) error {

@@ -12,7 +12,7 @@ const DefaultRegularParticipantCanWriteMessage = true
 
 type ChatViewDto struct {
 	Id                                  int64      `json:"id"`
-	UserId                              int64      `json:"-"` // behalf user id
+	BehalfUserId                        int64      `json:"-"` // behalf user id
 	Title                               string     `json:"name"`
 	Pinned                              bool       `json:"pinned"`
 	UnreadMessages                      int64      `json:"unreadMessages"`

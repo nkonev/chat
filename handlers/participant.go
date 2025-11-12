@@ -354,7 +354,7 @@ func (ch *ParticipantHandler) SearchParticipants(g *gin.Context) {
 	participantsOffset := utils.GetOffset(participantsPage, participantsSize)
 	searchString := g.Query(dto.SearchStringParam)
 
-	participants, count, err := ch.enrichingProjection.GetParticipantsEnriched(g.Request.Context(), userId, chatId, participantsSize, participantsOffset, searchString)
+	participants, count, err := ch.enrichingProjection.GetParticipantsEnriched(g.Request.Context(), []int64{userId}, chatId, participantsSize, participantsOffset, searchString, true, nil)
 	if err != nil {
 		if translateParticipantError(g, err) {
 			return
@@ -366,7 +366,7 @@ func (ch *ParticipantHandler) SearchParticipants(g *gin.Context) {
 	}
 
 	g.JSON(http.StatusOK, dto.ParticipantsWithAdminWrapper{
-		Data:  participants,
+		Data:  participants[userId],
 		Count: count,
 	})
 }
@@ -441,7 +441,7 @@ func (ch *ParticipantHandler) CountParticipants(g *gin.Context) {
 	totalFoundUserCount := int64(0)
 
 	if userSearchString != "" {
-		_, aCount, err := ch.enrichingProjection.SearchUsersContaining(g.Request.Context(), ch.dbWrapper, userSearchString, chatId, utils.DefaultSize, utils.DefaultOffset, true)
+		_, aCount, err := ch.enrichingProjection.SearchUsersContaining(g.Request.Context(), ch.dbWrapper, userSearchString, chatId, utils.DefaultSize, utils.DefaultOffset, true, true)
 		if err != nil {
 			ch.lgr.ErrorContext(g.Request.Context(), "Error searchUsersContaining", "err", err)
 			g.Status(http.StatusInternalServerError)
