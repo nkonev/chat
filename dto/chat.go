@@ -92,21 +92,21 @@ type GetChatsResponseDto struct {
 }
 
 type ChatBasic struct {
-	Id                int64  `db:"id"`
-	Title             string `db:"title"`
-	CanResend         bool   `db:"can_resend"`
-	TetATet           bool   `db:"tet_a_tet"`
-	IsBlog            bool   `db:"blog"`
-	AvailableToSearch bool   `db:"available_to_search"`
+	Id                                  int64  `db:"id"`
+	Title                               string `db:"title"`
+	CanResend                           bool   `db:"can_resend"`
+	TetATet                             bool   `db:"tet_a_tet"`
+	IsBlog                              bool   `db:"blog"`
+	AvailableToSearch                   bool   `db:"available_to_search"`
+	RegularParticipantCanPublishMessage bool   `db:"regular_participant_can_publish_message"`
+	RegularParticipantCanPinMessage     bool   `db:"regular_participant_can_pin_message"`
+	RegularParticipantCanWriteMessage   bool   `db:"regular_participant_can_write_message"`
 }
 
 type BasicChatDtoExtended struct {
 	ChatBasic
-	BehalfUserId                        int64 `db:"user_id"`
-	BehalfUserIsParticipant             bool  `db:"behalf_user_is_participant"`
-	RegularParticipantCanPublishMessage bool  `db:"regular_participant_can_publish_message"`
-	RegularParticipantCanPinMessage     bool  `db:"regular_participant_can_pin_message"`
-	RegularCanWriteMessage              bool  `db:"regular_participant_can_write_message"`
+	BehalfUserId            int64 `db:"user_id"`
+	BehalfUserIsParticipant bool  `db:"behalf_user_is_participant"`
 }
 
 type UserChatNotificationSettings struct {

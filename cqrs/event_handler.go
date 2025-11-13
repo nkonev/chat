@@ -131,24 +131,23 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
 		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, false)
-	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting {
-		isRemoveAllParticipants := len(event.AllParticipantIdsExcepting) == 0
+	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting { // delete chat
+		isChatRemoving := len(event.AllParticipantIdsExcepting) == 0
 		return m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, event.AllParticipantIdsExcepting, func(participantIdsPortion []int64) error {
-			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isRemoveAllParticipants)
+			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving)
 		})
 	} else {
 		return fmt.Errorf("Unknown event.GetParticipantsType = %v", event.GetParticipantsType)
 	}
 }
 
-func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isRemoveAllParticipants bool) error {
+func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isChatRemoving bool) error {
 	userIds := participantIds
 
 	eventType := dto.EventTypeChatDeleted
 	eventTypeParticipantDeleted := dto.EventTypeParticipantDeleted
 
 	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
-	m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantDeleted, "user_ids", userIds)
 
 	var pseudoUsers = []*dto.UserViewEnrichedDto{}
 	for _, participantIdToRemove := range userIds {
@@ -159,11 +158,11 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 		})
 	}
 
-	// this is an event for ChatParticipantsModal.vue
-	// we send for all the participant an event about removing those
-	err := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, chatId, nil, func(participantIdsPortion []int64) error {
-		// for every participant of chat we send an info about the newly added participants
-		for _, participantId := range participantIdsPortion {
+	if isChatRemoving {
+		m.lgr.DebugContext(ctx, "Sending notification about the participant during chat deletion", "event_type", eventTypeParticipantDeleted, "user_ids", userIds)
+
+		// in case chat removing no sense to send removing events to all the users (m x n), so we send it only to the removee's
+		for _, participantId := range participantIds {
 			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:    eventTypeParticipantDeleted,
 				UserId:       participantId,
@@ -175,20 +174,40 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 			}
 		}
 		return nil
-	})
-	if err != nil {
-		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+	} else {
+		m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantDeleted, "user_ids", userIds)
+
+		// this is an event for ChatParticipantsModal.vue
+		// we send to all the participant an event about removing removees
+		err := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, chatId, nil, func(participantIdsPortion []int64) error {
+			// for every participant of chat we send an info about the newly added participants
+			for _, participantId := range participantIdsPortion {
+				errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.ChatEvent{
+					EventType:    eventTypeParticipantDeleted,
+					UserId:       participantId,
+					ChatId:       chatId,
+					Participants: &pseudoUsers,
+				})
+				if errInn != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
 	}
 
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
-	errp := m.commonProjection.OnParticipantRemoved(ctx, additionalData, userIds, chatId, behalfUserId, isLeaving, isRemoveAllParticipants)
+	errp := m.commonProjection.OnParticipantRemoved(ctx, additionalData, userIds, chatId, behalfUserId, isLeaving, isChatRemoving)
 	if errp != nil {
 		return errp
 	}
 
 	var hasUnreadMessages = map[int64]bool{}
-	hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
+	hasUnreadMessages, err := m.commonProjection.GetHasUnreadMessages(ctx, userIds)
 	if err != nil {
 		return err
 	}
@@ -255,7 +274,63 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errOuter)
 	}
 
+	m.notifyMessagesReloadCommand(ctx, event.ChatId, userIds, event.AdditionalData.GetCorrelationId())
+
 	return nil
+}
+
+func (m *EventHandler) OnChatEdited(ctx context.Context, event *ChatEdited) error {
+
+	chatBasicBefore, err := m.commonProjection.GetChatBasic(ctx, m.commonProjection.db, event.ChatId)
+	if err != nil {
+		return err
+	}
+
+	err = m.commonProjection.OnChatEdited(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	chatBasicAfter, err := m.commonProjection.GetChatBasic(ctx, m.commonProjection.db, event.ChatId)
+	if err != nil {
+		return err
+	}
+
+	// if any of message-related fields were changed we need to reload messages on user's side
+	if chatBasicBefore.RegularParticipantCanPublishMessage != chatBasicAfter.RegularParticipantCanPublishMessage ||
+		chatBasicBefore.RegularParticipantCanPinMessage != chatBasicAfter.RegularParticipantCanPinMessage ||
+		chatBasicBefore.RegularParticipantCanWriteMessage != chatBasicAfter.RegularParticipantCanWriteMessage {
+
+		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+			m.notifyMessagesReloadCommand(ctx, event.ChatId, participantIdsPortion, event.AdditionalData.GetCorrelationId())
+
+			return nil
+		})
+		if errOuter != nil {
+			return errOuter
+		}
+
+	}
+
+	return nil
+}
+
+func (m *EventHandler) notifyMessagesReloadCommand(ctx context.Context, chatId int64, participantIds []int64, correlationId *string) {
+	eventType := dto.EventTypeMessagesReload
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
+	defer messageSpan.End()
+
+	for _, participantId := range participantIds {
+		err := m.rabbitmqOutputEventPublisher.Publish(ctx, correlationId, dto.ChatEvent{
+			EventType: eventType,
+			UserId:    participantId,
+			ChatId:    chatId,
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+	}
+
 }
 
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {

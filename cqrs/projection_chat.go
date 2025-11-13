@@ -951,15 +951,18 @@ func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperati
 
 	err := sqlscan.Get(ctx, co, &cht, `
 		select 
-		    ch.id,
-		    ch.title,
-		    ch.can_resend,
-		    ch.tet_a_tet,
+		    c.id,
+		    c.title,
+		    c.can_resend,
+		    c.tet_a_tet,
 			b.id is not null as blog,
-			ch.available_to_search
-		from chat_common ch 
-		left join blog b on ch.id = b.id
-		where ch.id = $1
+			c.available_to_search,
+			c.regular_participant_can_publish_message,
+			c.regular_participant_can_pin_message,
+			c.regular_participant_can_write_message
+		from chat_common c
+		left join blog b on c.id = b.id
+		where c.id = $1
 	`, chatId)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -997,11 +1000,11 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 			(cp.user_id is not null) as behalf_user_is_participant,
 			c.tet_a_tet,
 			c.can_resend,
+			b.id is not null as blog,
+			c.available_to_search,
 			c.regular_participant_can_publish_message,
 			c.regular_participant_can_pin_message,
-			c.regular_participant_can_write_message,
-			b.id is not null as blog,
-			c.available_to_search
+			c.regular_participant_can_write_message
 		FROM chat_common c
 		CROSS JOIN requested_participants re
 		LEFT JOIN chats_participants cp ON (c.id = cp.chat_id and re.user_id = cp.user_id)

@@ -17,3 +17,4 @@ const EventTypeReactionChanged = "reaction_changed"
 const EventTypeReactionRemoved = "reaction_removed"
 
 const EventTypeParticipantChanged = "participant_changed"
+const EventTypeMessagesReload = "messages_reload"

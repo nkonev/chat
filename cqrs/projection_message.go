@@ -973,7 +973,7 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 		return nil, fmt.Errorf("Logical error during enriching messages not found chat by chatId = %v, userId = %v", chatId, behalfUserId)
 	}
 
-	setMessagePersonalizedFields(&me, chat.RegularParticipantCanPublishMessage, chat.RegularParticipantCanPinMessage, chat.RegularCanWriteMessage, areAdmins[behalfUserId], behalfUserId, isParticipant)
+	setMessagePersonalizedFields(&me, chat.RegularParticipantCanPublishMessage, chat.RegularParticipantCanPinMessage, chat.RegularParticipantCanWriteMessage, areAdmins[behalfUserId], behalfUserId, isParticipant)
 
 	return &me, nil
 }
