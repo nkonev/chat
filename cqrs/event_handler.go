@@ -276,6 +276,9 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 
 	m.notifyMessagesReloadCommand(ctx, event.ChatId, userIds, event.AdditionalData.GetCorrelationId())
 
+	// ParticipantChanged == changing isAdmin, so CanChangeParticipant(), CanDeleteParticipant() are going to yield the different result so we forcibly refresh his ChatParticipantsModal
+	m.notifyParticipantsReloadCommand(ctx, event.ChatId, userIds, event.AdditionalData.GetCorrelationId())
+
 	return nil
 }
 
@@ -331,6 +334,23 @@ func (m *EventHandler) notifyMessagesReloadCommand(ctx context.Context, chatId i
 		}
 	}
 
+}
+
+func (m *EventHandler) notifyParticipantsReloadCommand(ctx context.Context, chatId int64, participantIds []int64, correlationId *string) {
+	eventType := dto.EventTypeParticipantsReload
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
+	defer messageSpan.End()
+
+	for _, participantId := range participantIds {
+		err := m.rabbitmqOutputEventPublisher.Publish(ctx, correlationId, dto.ChatEvent{
+			EventType: eventType,
+			UserId:    participantId,
+			ChatId:    chatId,
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+	}
 }
 
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
