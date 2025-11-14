@@ -300,9 +300,9 @@ func (m *EventHandler) OnChatEdited(ctx context.Context, event *ChatEdited) erro
 	}
 
 	// if any of message-related fields were changed we need to reload messages on user's side
-	if chatBasicBefore.RegularParticipantCanPublishMessage != chatBasicAfter.RegularParticipantCanPublishMessage ||
-		chatBasicBefore.RegularParticipantCanPinMessage != chatBasicAfter.RegularParticipantCanPinMessage ||
-		chatBasicBefore.RegularParticipantCanWriteMessage != chatBasicAfter.RegularParticipantCanWriteMessage {
+	if canPublishMessageInternal(chatBasicBefore.RegularParticipantCanPublishMessage) != canPublishMessageInternal(chatBasicAfter.RegularParticipantCanPublishMessage) ||
+		canPinMessageInternal(chatBasicBefore.RegularParticipantCanPinMessage) != canPinMessageInternal(chatBasicAfter.RegularParticipantCanPinMessage) ||
+		canWriteMessageInternal(chatBasicBefore.RegularParticipantCanWriteMessage) != canWriteMessageInternal(chatBasicAfter.RegularParticipantCanWriteMessage) {
 
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 			m.notifyMessagesReloadCommand(ctx, event.ChatId, participantIdsPortion, event.AdditionalData.GetCorrelationId())

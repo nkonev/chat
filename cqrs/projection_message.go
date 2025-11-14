@@ -989,7 +989,11 @@ func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegula
 }
 
 func CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage bool) bool {
-	return isParticipant && (chatIsAdmin || chatCanWriteMessage)
+	return isParticipant && (chatIsAdmin || canWriteMessageInternal(chatCanWriteMessage))
+}
+
+func canWriteMessageInternal(chatCanWriteMessage bool) bool {
+	return chatCanWriteMessage
 }
 
 func CanEditMessage(behalfParticipantId int64, messageOwnerId int64, hasEmbed bool, embedTypeSafe string, canWriteMessage bool) bool {
@@ -1005,11 +1009,19 @@ func CanDeleteMessage(behalfParticipantId int64, messageOwnerId int64, canWriteM
 }
 
 func CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
-	return chatIsAdmin || (chatRegularParticipantCanPublishMessage && messageOwnerId == behalfUserId)
+	return chatIsAdmin || (canPublishMessageInternal(chatRegularParticipantCanPublishMessage) && messageOwnerId == behalfUserId)
 }
 
 func CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin bool) bool {
-	return chatIsAdmin || chatRegularParticipantCanPinMessage
+	return chatIsAdmin || canPinMessageInternal(chatRegularParticipantCanPinMessage)
+}
+
+func canPublishMessageInternal(chatRegularParticipantCanPublishMessage bool) bool {
+	return chatRegularParticipantCanPublishMessage
+}
+
+func canPinMessageInternal(chatRegularParticipantCanPinMessage bool) bool {
+	return chatRegularParticipantCanPinMessage
 }
 
 func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, co db.CommonOperations, userId, chatId, messageId int64) (dto.MessageAuthorizationData, error) {
