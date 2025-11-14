@@ -76,11 +76,11 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		Blog:                                ccd.Blog,
 		Avatar:                              ccd.Avatar,
 		AvatarBig:                           ccd.AvatarBig,
-		CanResend:                           ccd.CanResend,
+		CanResend:                           utils.GetNullableBooleanOr(ccd.CanResend, dto.DefaultCanResend),
 		CanReact:                            utils.GetNullableBooleanOr(ccd.CanReact, dto.DefaultCanReact),
-		AvailableToSearch:                   ccd.AvailableToSearch,
-		RegularParticipantCanPublishMessage: ccd.RegularParticipantCanPublishMessage,
-		RegularParticipantCanPinMessage:     ccd.RegularParticipantCanPinMessage,
+		AvailableToSearch:                   utils.GetNullableBooleanOr(ccd.AvailableToSearch, dto.DefaultAvailableToSearch),
+		RegularParticipantCanPublishMessage: utils.GetNullableBooleanOr(ccd.RegularParticipantCanPublishMessage, dto.DefaultRegularParticipantCanPublishMessage),
+		RegularParticipantCanPinMessage:     utils.GetNullableBooleanOr(ccd.RegularParticipantCanPinMessage, dto.DefaultRegularParticipantCanPinMessage),
 		RegularParticipantCanWriteMessage:   utils.GetNullableBooleanOr(ccd.RegularParticipantCanWriteMessage, dto.DefaultRegularParticipantCanWriteMessage),
 	}
 
@@ -174,12 +174,12 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		Blog:                                ccd.Blog,
 		Avatar:                              ccd.Avatar,
 		AvatarBig:                           ccd.AvatarBig,
-		CanResend:                           ccd.CanResend,
-		CanReact:                            ccd.CanReact,
-		AvailableToSearch:                   ccd.AvailableToSearch,
-		RegularParticipantCanPublishMessage: ccd.RegularParticipantCanPublishMessage,
-		RegularParticipantCanPinMessage:     ccd.RegularParticipantCanPinMessage,
-		RegularParticipantCanWriteMessage:   ccd.RegularParticipantCanWriteMessage,
+		CanResend:                           utils.GetNullableBooleanOr(ccd.CanResend, dto.DefaultCanResend),
+		CanReact:                            utils.GetNullableBooleanOr(ccd.CanReact, dto.DefaultCanReact),
+		AvailableToSearch:                   utils.GetNullableBooleanOr(ccd.AvailableToSearch, dto.DefaultAvailableToSearch),
+		RegularParticipantCanPublishMessage: utils.GetNullableBooleanOr(ccd.RegularParticipantCanPublishMessage, dto.DefaultRegularParticipantCanPublishMessage),
+		RegularParticipantCanPinMessage:     utils.GetNullableBooleanOr(ccd.RegularParticipantCanPinMessage, dto.DefaultRegularParticipantCanPinMessage),
+		RegularParticipantCanWriteMessage:   utils.GetNullableBooleanOr(ccd.RegularParticipantCanWriteMessage, dto.DefaultRegularParticipantCanWriteMessage),
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)

@@ -46,7 +46,7 @@ func NewChatOptionResend(v bool) *ChatParamResend {
 }
 
 func (r *ChatParamResend) Apply(d *dto.ChatBaseCreateDto) {
-	d.CanResend = r.v
+	d.CanResend = &r.v
 }
 
 type ChatParamBlog struct {
@@ -131,10 +131,8 @@ func (rc *TestRestClient) EditChat(ctx context.Context, behalfUserId int64, chat
 	}
 
 	req := dto.ChatEditDto{
-		Id:                                chatId,
-		ChatBaseCreateDto:                 ccd,
-		CanReact:                          dto.DefaultCanReact,
-		RegularParticipantCanWriteMessage: dto.DefaultRegularParticipantCanWriteMessage,
+		Id:                chatId,
+		ChatBaseCreateDto: ccd,
 	}
 	err := queryNoResponse[dto.ChatEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat", "chat.Edit", &req, nil)
 	if err != nil {

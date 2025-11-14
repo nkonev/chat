@@ -8,7 +8,11 @@ const NoChatTitle = ""
 const NoSearchString = ""
 const ReservedPublicallyAvailableForSearchChats = "__AVAILABLE_FOR_SEARCH"
 const DefaultCanReact = true
+const DefaultCanResend = false
+const DefaultAvailableToSearch = false
 const DefaultRegularParticipantCanWriteMessage = true
+const DefaultRegularParticipantCanPublishMessage = false
+const DefaultRegularParticipantCanPinMessage = false
 
 type ChatViewDto struct {
 	Id                                  int64      `json:"id"`
@@ -48,23 +52,21 @@ type ChatBaseCreateDto struct {
 	Blog                                bool    `json:"blog"`
 	Avatar                              *string `json:"avatar"`
 	AvatarBig                           *string `json:"avatarBig"`
-	CanResend                           bool    `json:"canResend"`
-	AvailableToSearch                   bool    `json:"availableToSearch"`
-	RegularParticipantCanPublishMessage bool    `json:"regularParticipantCanPublishMessage"`
-	RegularParticipantCanPinMessage     bool    `json:"regularParticipantCanPinMessage"`
+	CanReact                            *bool   `json:"canReact"`
+	RegularParticipantCanWriteMessage   *bool   `json:"regularParticipantCanWriteMessage"`
+	CanResend                           *bool   `json:"canResend"`
+	AvailableToSearch                   *bool   `json:"availableToSearch"`
+	RegularParticipantCanPublishMessage *bool   `json:"regularParticipantCanPublishMessage"`
+	RegularParticipantCanPinMessage     *bool   `json:"regularParticipantCanPinMessage"`
 }
 
 type ChatCreateDto struct {
 	ChatBaseCreateDto
-	CanReact                          *bool `json:"canReact"`
-	RegularParticipantCanWriteMessage *bool `json:"regularParticipantCanWriteMessage"`
 }
 
 type ChatEditDto struct {
 	Id int64 `json:"id"`
 	ChatBaseCreateDto
-	CanReact                          bool `json:"canReact"`
-	RegularParticipantCanWriteMessage bool `json:"regularParticipantCanWriteMessage"`
 }
 
 type ChatDeletedDto struct {
