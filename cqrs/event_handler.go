@@ -173,7 +173,6 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
 			}
 		}
-		return nil
 	} else {
 		m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantDeleted, "user_ids", userIds)
 

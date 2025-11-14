@@ -1733,6 +1733,8 @@ func TestDeleteChat(t *testing.T) {
 		assert.Equal(t, chat1Name, chat1OfUser2.Title)
 		assert.Equal(t, int64(1), chat1OfUser2.UnreadMessages)
 
+		testEventsAccumulator.Clean()
+
 		err = testRestClient.DeleteChat(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in removing chats")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")

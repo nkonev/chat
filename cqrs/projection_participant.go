@@ -296,7 +296,7 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 			}
 
 			if chat == nil {
-				return nil, fmt.Errorf("No chat found", "chat_id", chat)
+				return nil, fmt.Errorf("No chat found, chatId = %v", chatId)
 			}
 
 			return &usersWithCount{
@@ -347,7 +347,7 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 			}
 
 			if chat == nil {
-				return nil, fmt.Errorf("No chat found", "chat_id", chat)
+				return nil, fmt.Errorf("No chat found, chatId = %v", chatId)
 			}
 
 			var theCount int64
