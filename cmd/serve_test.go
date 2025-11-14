@@ -2411,6 +2411,13 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 
 			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeParticipantsReload &&
+					e.UserId == user2 &&
+					e.ChatId == chat1Id
+			},
+
+			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user1 &&
