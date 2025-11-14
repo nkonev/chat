@@ -135,4 +135,6 @@ type ChatAuthorizationData struct {
 	ChatCanResendMessage  bool `db:"chat_can_resend_message"`
 	ChatCanReactOnMessage bool `db:"chat_can_react_on_message"`
 	ChatIsTetATet         bool `db:"chat_is_tet_a_tet"`
+	AvailableToSearch     bool `db:"chat_is_available_to_search"`
+	IsBlog                bool `db:"chat_is_blog"`
 }

@@ -944,3 +944,34 @@ func makeParticipantsWithAdmin(participants []*ParticipantWithAdmin, users map[i
 
 	return res
 }
+
+func CanChangeChatParticipants(isAdmin, isTetATet bool) bool {
+	return isAdmin && !isTetATet
+}
+
+func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatIsBlog bool) bool {
+	if CanEditChat(admin, tetATet) {
+		// ok
+	} else {
+		if isJoining {
+			if !chatIsAvailableToSearch && !chatIsBlog {
+				return false
+			}
+		} else {
+			return false
+		}
+	}
+
+	return true
+}
+
+func CanRemoveParticipant(admin, tetATet, isLeaving, isParticipant bool) bool {
+	if !admin {
+		if isLeaving && CanLeaveChat(admin, tetATet, isParticipant) {
+			// ok
+		} else {
+			return false
+		}
+	}
+	return true
+}

@@ -243,9 +243,19 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 
 	userIds := []int64{event.ParticipantId}
 
+	participantsBefore, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, event.ChatId)
+	if err != nil {
+		return err
+	}
+
 	errp := m.commonProjection.OnParticipantChanged(ctx, event)
 	if errp != nil {
 		return errp
+	}
+
+	participantsAfter, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, event.ChatId)
+	if err != nil {
+		return err
 	}
 
 	m.lgr.DebugContext(ctx, "Sending notification about the participant", "event_type", eventTypeParticipantChanged, "user_ids", userIds)
@@ -274,10 +284,18 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errOuter)
 	}
 
-	m.notifyMessagesReloadCommand(ctx, event.ChatId, userIds, event.AdditionalData.GetCorrelationId())
+	changedUserIds := []int64{}
+	for _, participantId := range userIds {
+		isAdminBefore := participantsBefore[participantId]
+		isAdminAfter := participantsAfter[participantId]
+		if isChatAdminInternal(isAdminBefore) != isChatAdminInternal(isAdminAfter) {
+			changedUserIds = append(changedUserIds, participantId)
+		}
+	}
+	m.notifyMessagesReloadCommand(ctx, event.ChatId, changedUserIds, event.AdditionalData.GetCorrelationId())
 
 	// ParticipantChanged == changing isAdmin, so CanChangeParticipant(), CanDeleteParticipant() are going to yield the different result so we forcibly refresh his ChatParticipantsModal
-	m.notifyParticipantsReloadCommand(ctx, event.ChatId, userIds, event.AdditionalData.GetCorrelationId())
+	m.notifyParticipantsReloadCommand(ctx, event.ChatId, changedUserIds, event.AdditionalData.GetCorrelationId())
 
 	return nil
 }

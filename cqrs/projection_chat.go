@@ -679,10 +679,6 @@ func CanBroadcast(isAdmin bool) bool {
 	return isAdmin
 }
 
-func CanChangeChatParticipants(isAdmin, isTetATet bool) bool {
-	return isAdmin && !isTetATet
-}
-
 func CanReactOnMessage(chatCanReact bool, isParticipant bool) bool {
 	return chatCanReact && isParticipant
 }
@@ -700,6 +696,12 @@ func (m *CommonProjection) GetChatDataForAuthorization(ctx context.Context, co d
 		),
 		chat_info as (
 			select * from chat_common where id = $2
+		),
+		chat_blog as (
+			select b.id is not null as is_blog
+			from chat_common cc
+			left join blog b on cc.id = b.id
+			where cc.id = $2
 		)
 		SELECT 
 			(SELECT exists(SELECT * FROM chat_participant_row) as is_chat_participant)
@@ -708,6 +710,8 @@ func (m *CommonProjection) GetChatDataForAuthorization(ctx context.Context, co d
 			,(select cc.can_resend as chat_can_resend_message from chat_info cc)
 			,(select cc.can_react as chat_can_react_on_message from chat_info cc)
 			,(select cc.tet_a_tet as chat_is_tet_a_tet from chat_info cc)
+			,(select cc.available_to_search as chat_is_available_to_search from chat_info cc)
+			,(select cb.is_blog as chat_is_blog from chat_blog cb)
 	`, userId, chatId)
 	if err != nil {
 		return d, err

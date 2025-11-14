@@ -989,7 +989,11 @@ func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegula
 }
 
 func CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage bool) bool {
-	return isParticipant && (chatIsAdmin || canWriteMessageInternal(chatCanWriteMessage))
+	return isParticipant && (isChatAdminInternal(chatIsAdmin) || canWriteMessageInternal(chatCanWriteMessage))
+}
+
+func isChatAdminInternal(a bool) bool {
+	return a
 }
 
 func canWriteMessageInternal(chatCanWriteMessage bool) bool {
@@ -1009,11 +1013,11 @@ func CanDeleteMessage(behalfParticipantId int64, messageOwnerId int64, canWriteM
 }
 
 func CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin bool, messageOwnerId, behalfUserId int64) bool {
-	return chatIsAdmin || (canPublishMessageInternal(chatRegularParticipantCanPublishMessage) && messageOwnerId == behalfUserId)
+	return isChatAdminInternal(chatIsAdmin) || (canPublishMessageInternal(chatRegularParticipantCanPublishMessage) && messageOwnerId == behalfUserId)
 }
 
 func CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin bool) bool {
-	return chatIsAdmin || canPinMessageInternal(chatRegularParticipantCanPinMessage)
+	return isChatAdminInternal(chatIsAdmin) || canPinMessageInternal(chatRegularParticipantCanPinMessage)
 }
 
 func canPublishMessageInternal(chatRegularParticipantCanPublishMessage bool) bool {

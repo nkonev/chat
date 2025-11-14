@@ -477,31 +477,17 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 }
 
 func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig) error {
-	basic, err := commonProjection.GetChatBasic(ctx, dba, s.ChatId)
+	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
 	}
 
-	if basic == nil {
-		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", s.ChatId))
+	if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, s.IsJoining, adt.AvailableToSearch, adt.IsBlog) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v cannot add into chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
 	if int32(len(s.ParticipantIds)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
 		return fmt.Errorf("Max allowed participants %d, got %d", cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand, s.ParticipantIds)
-	}
-
-	admin, err := commonProjection.IsChatAdmin(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
-	if err != nil {
-		return err
-	}
-	if !admin {
-		if s.IsJoining {
-			if !basic.AvailableToSearch && !basic.IsBlog {
-				return NewUnauthorizedError(fmt.Sprintf("user %v is not allowed to join to chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
-			}
-		} else {
-			return NewUnauthorizedError(fmt.Sprintf("user %v is not admin of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
-		}
 	}
 
 	pa := &ParticipantsAdded{
@@ -546,12 +532,9 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 	if err != nil {
 		return err
 	}
-	if !adt.IsChatAdmin {
-		if s.IsLeaving && CanLeaveChat(adt.IsChatAdmin, adt.ChatIsTetATet, adt.IsParticipant) {
-			// ok
-		} else {
-			return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to delete the chat %v participant %v", s.AdditionalData.BehalfUserId, s.ChatId, s.ParticipantIds))
-		}
+
+	if !CanRemoveParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, s.IsLeaving, adt.IsParticipant) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to delete the chat %v participant %v", s.AdditionalData.BehalfUserId, s.ChatId, s.ParticipantIds))
 	}
 
 	if int32(len(s.ParticipantIds)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
