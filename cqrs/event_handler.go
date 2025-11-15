@@ -273,6 +273,16 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 	ctx, participantAddSpan := m.tr.Start(ctx, fmt.Sprintf("participant.%s", eventTypeParticipantChanged))
 	defer participantAddSpan.End()
 
+	adt, err := m.commonProjection.GetChatDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId)
+	if err != nil {
+		return err
+	}
+
+	if !CanChangeParticipant(event.AdditionalData.BehalfUserId, adt.IsChatAdmin, adt.ChatIsTetATet, event.ParticipantId) {
+		m.lgr.InfoContext(ctx, "Skipping ParticipantChanged because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		return nil
+	}
+
 	userIds := []int64{event.ParticipantId}
 
 	participantsAdminsBefore, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, event.ChatId)

@@ -156,20 +156,7 @@ func (m *CommonProjection) updateViewableParticipants(ctx context.Context, co db
 
 func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *ParticipantChanged) error {
 	return db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
-		if err != nil {
-			return err
-		}
-		if !admin {
-			m.lgr.InfoContext(ctx,
-				"Participant isn't admin so he cannot change admin flag of the other participant",
-				"user_id", event.AdditionalData.BehalfUserId,
-				"chat_id", event.ChatId,
-			)
-			return nil
-		}
-
-		_, err = tx.ExecContext(ctx, "update chat_participant set chat_admin = $1 where user_id = $2 and chat_id = $3", event.NewAdmin, event.ParticipantId, event.ChatId)
+		_, err := tx.ExecContext(ctx, "update chat_participant set chat_admin = $1 where user_id = $2 and chat_id = $3", event.NewAdmin, event.ParticipantId, event.ChatId)
 		return err
 	})
 }
