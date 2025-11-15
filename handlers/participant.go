@@ -354,7 +354,7 @@ func (ch *ParticipantHandler) SearchParticipants(g *gin.Context) {
 	participantsOffset := utils.GetOffset(participantsPage, participantsSize)
 	searchString := g.Query(dto.SearchStringParam)
 
-	participants, count, err := ch.enrichingProjection.GetParticipantsEnriched(g.Request.Context(), []int64{userId}, chatId, participantsSize, participantsOffset, searchString, true, nil)
+	participantsByBehalfs, count, err := ch.enrichingProjection.GetParticipantsEnriched(g.Request.Context(), []int64{userId}, chatId, participantsSize, participantsOffset, searchString, true, nil)
 	if err != nil {
 		if translateParticipantError(g, err) {
 			return
@@ -366,7 +366,7 @@ func (ch *ParticipantHandler) SearchParticipants(g *gin.Context) {
 	}
 
 	g.JSON(http.StatusOK, dto.ParticipantsWithAdminWrapper{
-		Data:  participants[userId],
+		Data:  participantsByBehalfs[userId],
 		Count: count,
 	})
 }

@@ -231,6 +231,7 @@ func (m *CommonProjection) ParticipantsExistence(ctx context.Context, co db.Comm
 }
 
 // output: behalfUserId:[]*dto.UserViewEnrichedDto
+// note: the map is not sorted  by Go's definition
 func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behalfUserIds []int64, chatId int64, size int32, offset int64, searchString string, needCount bool, userIds []int64) (map[int64][]*dto.UserViewEnrichedDto, int64, error) {
 	isSingleBehalf := len(behalfUserIds) == 1
 

@@ -12,6 +12,8 @@ import (
 	"go-cqrs-chat-example/utils"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"maps"
+	"slices"
 )
 
 type EventHandler struct {
@@ -98,14 +100,17 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 
 	// this is an event for ChatParticipantsModal.vue
 	err = m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-		participants, _, errInn := m.enrichingProjection.GetParticipantsEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(userIds)), utils.DefaultOffset, dto.NoSearchString, false, userIds)
+		participantsByBehalfs, _, errInn := m.enrichingProjection.GetParticipantsEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(userIds)), utils.DefaultOffset, dto.NoSearchString, false, userIds)
 		if errInn != nil {
 			return errInn
 		}
 
+		sortedParticipants := slices.Sorted(maps.Keys(participantsByBehalfs))
+
 		// for every participant of chat we send an info about the newly added participants
-		for behalfUserId, hisParticipantsViews := range participants {
-			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+		for _, behalfUserId := range sortedParticipants {
+			hisParticipantsViews := participantsByBehalfs[behalfUserId]
+			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:    eventTypeParticipantAdded,
 				UserId:       behalfUserId,
 				ChatId:       event.ChatId,
@@ -260,13 +265,16 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 	m.lgr.DebugContext(ctx, "Sending notification about the participant", "event_type", eventTypeParticipantChanged, "user_ids", userIds)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-		participants, _, errInn := m.enrichingProjection.GetParticipantsEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(userIds)), utils.DefaultOffset, dto.NoSearchString, false, userIds)
+		participantsByBehalfs, _, errInn := m.enrichingProjection.GetParticipantsEnriched(ctx, participantIdsPortion, event.ChatId, int32(len(userIds)), utils.DefaultOffset, dto.NoSearchString, false, userIds)
 		if errInn != nil {
 			return errInn
 		}
 
-		for behalfUserId, hisParticipantsViews := range participants {
-			errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+		sortedParticipants := slices.Sorted(maps.Keys(participantsByBehalfs))
+
+		for _, behalfUserId := range sortedParticipants {
+			hisParticipantsViews := participantsByBehalfs[behalfUserId]
+			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:    eventTypeParticipantChanged,
 				UserId:       behalfUserId,
 				ChatId:       event.ChatId,
