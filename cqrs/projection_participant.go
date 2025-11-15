@@ -13,7 +13,16 @@ import (
 
 func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		_, err := tx.ExecContext(ctx, `
+		chatExists, err := m.checkChatExists(ctx, tx, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !chatExists {
+			m.lgr.InfoContext(ctx, "Skipping OnParticipantAdded because there is no chat", "chat_id", event.ChatId)
+			return nil
+		}
+
+		_, err = tx.ExecContext(ctx, `
 		with input_data as (
 			select * from unnest(cast ($1 as bigint[]), cast ($2 as boolean[])) as t(user_id, chat_admin)
 		)
@@ -83,7 +92,16 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 
 func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isRemoveAllParticipants bool) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		_, err := tx.ExecContext(ctx, `
+		chatExists, err := m.checkChatExists(ctx, tx, chatId)
+		if err != nil {
+			return err
+		}
+		if !chatExists {
+			m.lgr.InfoContext(ctx, "Skipping OnParticipantRemoved because there is no chat", "chat_id", chatId)
+			return nil
+		}
+
+		_, err = tx.ExecContext(ctx, `
 		delete from chat_participant where chat_id = $2 and user_id = any($1)
 	`, participantIds, chatId)
 		if err != nil {
@@ -156,7 +174,16 @@ func (m *CommonProjection) updateViewableParticipants(ctx context.Context, co db
 
 func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *ParticipantChanged) error {
 	return db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		_, err := tx.ExecContext(ctx, "update chat_participant set chat_admin = $1 where user_id = $2 and chat_id = $3", event.NewAdmin, event.ParticipantId, event.ChatId)
+		chatExists, err := m.checkChatExists(ctx, tx, event.ChatId)
+		if err != nil {
+			return err
+		}
+		if !chatExists {
+			m.lgr.InfoContext(ctx, "Skipping OnParticipantChanged because there is no chat", "chat_id", event.ChatId)
+			return nil
+		}
+
+		_, err = tx.ExecContext(ctx, "update chat_participant set chat_admin = $1 where user_id = $2 and chat_id = $3", event.NewAdmin, event.ParticipantId, event.ChatId)
 		return err
 	})
 }

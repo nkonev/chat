@@ -34,6 +34,8 @@ func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32
 }
 
 func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated) error {
+	// we don't check chat existence for the chat creation
+
 	_, err := m.db.ExecContext(ctx, `
 		insert into chat_common(
 			 id
@@ -94,19 +96,6 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 		}
 		if !chatExists {
 			m.lgr.InfoContext(ctx, "Skipping ChatEdited because there is no chat", "chat_id", event.ChatId)
-			return nil
-		}
-
-		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
-		if err != nil {
-			return err
-		}
-		if !admin {
-			m.lgr.InfoContext(ctx,
-				"Participant isn't admin so he cannot change chat",
-				"user_id", event.AdditionalData.BehalfUserId,
-				"chat_id", event.ChatId,
-			)
 			return nil
 		}
 

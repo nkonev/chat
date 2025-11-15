@@ -26,15 +26,6 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 			return nil
 		}
 
-		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.MessageCommoned.ChatId)
-		if err != nil {
-			return err
-		}
-		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping MessageCreated because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.MessageCommoned.ChatId)
-			return nil
-		}
-
 		var embed pgtype.JSONB
 		if event.MessageCommoned.Embed != nil {
 			err = embed.Set(event.MessageCommoned.Embed)
@@ -71,21 +62,13 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 
 func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.MessageCommoned.ChatId)
-		if err != nil {
-			return err
-		}
-		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.MessageCommoned.ChatId)
-			return nil
-		}
 
-		messageOwnerId, err := m.GetMessageOwner(ctx, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
+		chatExists, err := m.checkChatExists(ctx, tx, event.MessageCommoned.ChatId)
 		if err != nil {
 			return err
 		}
-		if messageOwnerId != event.AdditionalData.BehalfUserId {
-			m.lgr.InfoContext(ctx, "Skipping MessageEdited because participant isn't owner", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.MessageCommoned.ChatId)
+		if !chatExists {
+			m.lgr.InfoContext(ctx, "Skipping MessageCreated because there is no chat", "chat_id", event.MessageCommoned.ChatId)
 			return nil
 		}
 

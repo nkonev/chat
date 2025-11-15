@@ -340,7 +340,26 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 	return nil
 }
 
+func (m *EventHandler) OnChatCreated(ctx context.Context, event *ChatCreated) error {
+	// we don't check authorization for the chat creation
+	err := m.commonProjection.OnChatCreated(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (m *EventHandler) OnChatEdited(ctx context.Context, event *ChatEdited) error {
+	adt, err := m.commonProjection.GetChatDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId)
+	if err != nil {
+		return err
+	}
+
+	if !CanEditChat(adt.IsChatAdmin, adt.ChatIsTetATet) {
+		m.lgr.InfoContext(ctx, "Skipping OnChatEdited because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		return nil
+	}
 
 	chatBasicBefore, err := m.commonProjection.GetChatBasic(ctx, m.commonProjection.db, event.ChatId)
 	if err != nil {
@@ -371,6 +390,18 @@ func (m *EventHandler) OnChatEdited(ctx context.Context, event *ChatEdited) erro
 			return errOuter
 		}
 
+	}
+
+	return nil
+}
+
+func (m *EventHandler) OnChatRemoved(ctx context.Context, event *ChatDeleted) error {
+
+	// we don't check authorization here because the participants already were removed
+
+	err := m.commonProjection.OnChatRemoved(ctx, event)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -409,6 +440,26 @@ func (m *EventHandler) notifyParticipantsReloadCommand(ctx context.Context, chat
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 		}
 	}
+}
+
+func (m *EventHandler) OnChatPinned(ctx context.Context, event *ChatPinned) error {
+	// we don't check authorization here because all the participants can pin chat (their chat_user_view)
+	err := m.commonProjection.OnChatPinned(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, event *ChatNotificationSettingsSetted) error {
+	// we don't check authorization here because all the participants can change their notification setting
+	err := m.commonProjection.OnChatNotificationSettingsSetted(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
@@ -491,7 +542,16 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
 	defer messageSpan.End()
 
-	err := m.commonProjection.OnMessageCreated(ctx, event)
+	adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
+	if err != nil {
+		return err
+	}
+	if !CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage) {
+		m.lgr.InfoContext(ctx, "Skipping OnMessageCreated because there is no authorization to do so", "chat_id", event.MessageCommoned.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		return nil
+	}
+
+	err = m.commonProjection.OnMessageCreated(ctx, event)
 	if err != nil {
 		return err
 	}
@@ -533,7 +593,18 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
 	defer messageSpan.End()
 
-	err := m.commonProjection.OnMessageEdited(ctx, event)
+	adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
+	if err != nil {
+		return err
+	}
+
+	canWriteMessage := CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage)
+
+	if !CanEditMessage(event.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.HasEmbedMessage, adt.EmbedMessageTypeSafe, canWriteMessage) {
+		m.lgr.InfoContext(ctx, "Skipping OnMessageEdited because there is no authorization to do so", "chat_id", event.MessageCommoned.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+	}
+
+	err = m.commonProjection.OnMessageEdited(ctx, event)
 	if err != nil {
 		return err
 	}

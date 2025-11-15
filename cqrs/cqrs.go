@@ -245,14 +245,14 @@ func ConfigureEventProcessor(
 	// When message arrives, Watermill will match it with the correct handler.
 	err = eventProcessor.AddHandlersGroup(
 		cfg.Kafka.ConsumerGroup,
-		cqrs.NewGroupEventHandler(commonProjection.OnChatCreated),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatCreated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatEdited),
-		cqrs.NewGroupEventHandler(commonProjection.OnChatRemoved),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatRemoved),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantAdded),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantRemoved),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantChanged),
-		cqrs.NewGroupEventHandler(commonProjection.OnChatPinned),
-		cqrs.NewGroupEventHandler(commonProjection.OnChatNotificationSettingsSetted),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatPinned),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatNotificationSettingsSetted),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageCreated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageEdited),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatViewRefreshed),
