@@ -397,21 +397,13 @@ func makeEnrichedUsers(users []*dto.UserWithAdmin, behalfUserId int64, behalfIsC
 		enriched := dto.UserViewEnrichedDto{
 			BehalfUserId:  behalfUserId,
 			UserWithAdmin: *u,
-			CanChange:     CanChangeParticipant(behalfUserId, behalfIsChatAdmin, isTetATetChat, u),
-			CanDelete:     CanDeleteParticipant(behalfUserId, behalfIsChatAdmin, isTetATetChat, u),
+			CanChange:     CanChangeParticipant(behalfUserId, behalfIsChatAdmin, isTetATetChat, u.Id),
+			CanDelete:     CanRemoveParticipant(behalfUserId, behalfIsChatAdmin, isTetATetChat, false, true, u.Id),
 		}
 		res = append(res, &enriched)
 	}
 
 	return res
-}
-
-func CanChangeParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat bool, user *dto.UserWithAdmin) bool {
-	return CanEditChat(behalfIsChatAdmin, isTetATetChat) && CanChangeChatParticipants(behalfIsChatAdmin, isTetATetChat) && user.Id != behalfUserId
-}
-
-func CanDeleteParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat bool, user *dto.UserWithAdmin) bool {
-	return CanEditChat(behalfIsChatAdmin, isTetATetChat) && user.Id != behalfUserId
 }
 
 func (m *EnrichingProjection) ParticipantsFilter(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, requestedParticipantIds []int64) ([]dto.FilteredParticipantItemResponse, error) {
@@ -945,8 +937,8 @@ func makeParticipantsWithAdmin(participants []*ParticipantWithAdmin, users map[i
 	return res
 }
 
-func CanChangeChatParticipants(isAdmin, isTetATet bool) bool {
-	return isAdmin && !isTetATet
+func CanChangeParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat bool, userId int64) bool {
+	return CanEditChat(behalfIsChatAdmin, isTetATetChat) && userId != behalfUserId
 }
 
 func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatIsBlog bool) bool {
@@ -965,13 +957,15 @@ func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatI
 	return true
 }
 
-func CanRemoveParticipant(admin, tetATet, isLeaving, isParticipant bool) bool {
-	if !admin {
-		if isLeaving && CanLeaveChat(admin, tetATet, isParticipant) {
+func CanRemoveParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat, isLeaving, isParticipant bool, userId int64) bool {
+	if !behalfIsChatAdmin {
+		if isLeaving && CanLeaveChat(behalfIsChatAdmin, isTetATetChat, isParticipant) {
 			// ok
+			return true
 		} else {
 			return false
 		}
+	} else {
+		return CanEditChat(behalfIsChatAdmin, isTetATetChat) && userId != behalfUserId
 	}
-	return true
 }

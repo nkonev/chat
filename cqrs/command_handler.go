@@ -533,8 +533,10 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 		return err
 	}
 
-	if !CanRemoveParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, s.IsLeaving, adt.IsParticipant) {
-		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to delete the chat %v participant %v", s.AdditionalData.BehalfUserId, s.ChatId, s.ParticipantIds))
+	for _, participantId := range s.ParticipantIds {
+		if !CanRemoveParticipant(s.AdditionalData.BehalfUserId, adt.IsChatAdmin, adt.ChatIsTetATet, s.IsLeaving, adt.IsParticipant, participantId) {
+			return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to delete the chat %v participant %v", s.AdditionalData.BehalfUserId, s.ChatId, s.ParticipantIds))
+		}
 	}
 
 	if int32(len(s.ParticipantIds)) > cfg.Cqrs.Commands.MaxParticipantsPerSingleCommand {
@@ -619,7 +621,7 @@ func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterfa
 		return err
 	}
 
-	if !CanChangeChatParticipants(adt.IsChatAdmin, adt.ChatIsTetATet) {
+	if !CanChangeParticipant(s.AdditionalData.BehalfUserId, adt.IsChatAdmin, adt.ChatIsTetATet, s.ParticipantId) {
 		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to change the chat %v participants", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 

@@ -628,7 +628,7 @@ func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto,
 			}
 		}
 	}
-	SetChatPersonalizedFields(&che, admin, ch.IsParticipant)
+	SetChatPersonalizedFields(&che, behalfUserId, admin, ch.IsParticipant)
 
 	if ch.LastMessageOwnerId != nil && ch.LastMessageContent != nil {
 		u := users[*ch.LastMessageOwnerId]
@@ -641,7 +641,7 @@ func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto,
 	return che
 }
 
-func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, participant bool) {
+func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, behalfUserId int64, admin bool, participant bool) {
 	canEdit := CanEditChat(admin, copied.TetATet)
 	copied.CanEdit = &canEdit
 	canDelete := CanDeleteChat(admin)
@@ -650,7 +650,7 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, admin bool, part
 	copied.CanLeave = &canLeave
 	copied.CanVideoKick = admin
 	copied.CanAudioMute = admin
-	copied.CanChangeChatAdmins = CanChangeChatParticipants(admin, copied.TetATet)
+	copied.CanChangeChatAdmins = CanChangeParticipant(behalfUserId, admin, copied.TetATet, dto.NonExistentUser)
 	copied.CanBroadcast = CanBroadcast(admin)
 
 	// yes, mutate the fields

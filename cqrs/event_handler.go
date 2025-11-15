@@ -242,7 +242,7 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 
 	userIds := []int64{event.ParticipantId}
 
-	participantsBefore, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, event.ChatId)
+	participantsAdminsBefore, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, event.ChatId)
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 		return errp
 	}
 
-	participantsAfter, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, event.ChatId)
+	participantsAdminsAfter, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, event.ChatId)
 	if err != nil {
 		return err
 	}
@@ -285,8 +285,8 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 
 	changedUserIds := []int64{}
 	for _, participantId := range userIds {
-		isAdminBefore := participantsBefore[participantId]
-		isAdminAfter := participantsAfter[participantId]
+		isAdminBefore := participantsAdminsBefore[participantId]
+		isAdminAfter := participantsAdminsAfter[participantId]
 		if isChatAdminInternal(isAdminBefore) != isChatAdminInternal(isAdminAfter) {
 			changedUserIds = append(changedUserIds, participantId)
 		}

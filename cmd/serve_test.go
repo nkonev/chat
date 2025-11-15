@@ -2376,6 +2376,8 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 		assert.Equal(t, int64(2), chat1OfUser2.ParticipantsCount)
 		assert.Equal(t, []int64{2, 1}, chat1OfUser2.ParticipantIds)
 
+		testEventsAccumulator.Clean()
+
 		err = testRestClient.ChangeChatParticipant(ctx, user1, chat1Id, user2, true)
 		require.NoError(t, err, "error in changing chat participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
