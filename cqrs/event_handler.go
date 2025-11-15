@@ -51,12 +51,18 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	defer participantAddSpan.End()
 
 	userIds := event.GetParticipantIds()
-	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventTypeChatCreated, "user_ids", userIds)
 
-	errp := m.commonProjection.OnParticipantAdded(ctx, event)
+	applied, errp := m.commonProjection.OnParticipantAdded(ctx, event)
 	if errp != nil {
 		return errp
 	}
+
+	if !applied {
+		m.lgr.InfoContext(ctx, "The event wasn't applied, exiting", "event", event.Name(), "user_ids", userIds, "chat_id", event.ChatId)
+		return nil
+	}
+
+	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventTypeChatCreated, "user_ids", userIds)
 
 	// we don't need to change GetChatsEnriched to additionally process [behalf]userIds because we've already added users in our projection and the projection return all the users
 	chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId)

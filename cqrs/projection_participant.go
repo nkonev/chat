@@ -11,39 +11,16 @@ import (
 	"go-cqrs-chat-example/utils"
 )
 
-func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		basic, err := m.GetChatBasic(ctx, tx, event.ChatId)
+func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) (bool, error) {
+	applied, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (bool, error) {
+		adt, err := m.GetChatDataForAuthorization(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
-			return err
-		}
-		if basic == nil {
-			m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no chat", "chat_id", event.ChatId)
-			return nil
+			return false, err
 		}
 
-		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
-		if err != nil {
-			return err
-		}
-		if !admin && !event.AreFirstUsers {
-			if event.IsJoining {
-				if !basic.AvailableToSearch && !basic.IsBlog {
-					m.lgr.InfoContext(ctx,
-						"Participant isn't allowed to join to chat",
-						"user_id", event.AdditionalData.BehalfUserId,
-						"chat_id", event.ChatId,
-					)
-					return nil
-				}
-			} else {
-				m.lgr.InfoContext(ctx,
-					"Participant isn't admin so he cannot add a participant",
-					"user_id", event.AdditionalData.BehalfUserId,
-					"chat_id", event.ChatId,
-				)
-				return nil
-			}
+		if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, event.IsJoining, adt.AvailableToSearch, adt.IsBlog, event.AreFirstUsers) {
+			m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+			return false, nil
 		}
 
 		_, err = tx.ExecContext(ctx, `
@@ -55,7 +32,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		on conflict(user_id, chat_id) do nothing
 	`, GetParticipantIds(event.Participants), getParticipantChatAdmins(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// no problems here because
@@ -85,24 +62,24 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			, update_date_time = excluded.update_date_time 
 		`, GetParticipantIds(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		err = m.updateViewableParticipants(ctx, tx, event.ChatId)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// recalc in case an user was added after
 		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, GetParticipantIds(event.Participants), event.ChatId)
 		if err != nil {
-			return err
+			return false, err
 		}
 
-		return nil
+		return true, nil
 	})
 	if errOuter != nil {
-		return errOuter
+		return false, errOuter
 	}
 
 	m.lgr.InfoContext(ctx,
@@ -111,7 +88,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		"chat_id", event.ChatId,
 	)
 
-	return nil
+	return applied, nil
 }
 
 func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isRemoveAllParticipants bool) error {
@@ -942,7 +919,11 @@ func CanChangeParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetC
 	return CanEditChat(behalfIsChatAdmin, isTetATetChat) && userId != behalfUserId
 }
 
-func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatIsBlog bool) bool {
+func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatIsBlog, areFirstUsers bool) bool {
+	if areFirstUsers {
+		return true
+	}
+
 	if CanEditChat(admin, tetATet) {
 		// ok
 	} else {

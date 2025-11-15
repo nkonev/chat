@@ -482,7 +482,7 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 		return err
 	}
 
-	if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, s.IsJoining, adt.AvailableToSearch, adt.IsBlog) {
+	if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, s.IsJoining, adt.AvailableToSearch, adt.IsBlog, false) {
 		return NewUnauthorizedError(fmt.Sprintf("user %v cannot add into chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 
