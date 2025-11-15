@@ -295,11 +295,6 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 		return errp
 	}
 
-	participantsAdminsAfter, err := m.commonProjection.getAreAdminsOfUserIds(ctx, m.db, userIds, event.ChatId)
-	if err != nil {
-		return err
-	}
-
 	m.lgr.DebugContext(ctx, "Sending notification about the participant", "event_type", eventTypeParticipantChanged, "user_ids", userIds)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
@@ -332,7 +327,7 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 	changedUserIds := []int64{}
 	for _, participantId := range userIds {
 		isAdminBefore := participantsAdminsBefore[participantId]
-		isAdminAfter := participantsAdminsAfter[participantId]
+		isAdminAfter := event.NewAdmin
 		if isChatAdminInternal(isAdminBefore) != isChatAdminInternal(isAdminAfter) {
 			changedUserIds = append(changedUserIds, participantId)
 		}
