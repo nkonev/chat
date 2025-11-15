@@ -600,8 +600,16 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 
 	canWriteMessage := CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage)
 
-	if !CanEditMessage(event.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.HasEmbedMessage, adt.EmbedMessageTypeSafe, canWriteMessage) {
-		m.lgr.InfoContext(ctx, "Skipping OnMessageEdited because there is no authorization to do so", "chat_id", event.MessageCommoned.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+	if event.IsEmbedSync {
+		if !CanSyncEmbedMessage(event.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.HasEmbedMessage, canWriteMessage) {
+			m.lgr.InfoContext(ctx, "Skipping OnMessageEdited because there is no authorization to do so (sync)", "chat_id", event.MessageCommoned.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+			return nil
+		}
+	} else {
+		if !CanEditMessage(event.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.HasEmbedMessage, adt.EmbedMessageTypeSafe, canWriteMessage) {
+			m.lgr.InfoContext(ctx, "Skipping OnMessageEdited because there is no authorization to do so (edit)", "chat_id", event.MessageCommoned.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+			return nil
+		}
 	}
 
 	err = m.commonProjection.OnMessageEdited(ctx, event)
@@ -641,7 +649,6 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDeleted) error {
 	eventType := dto.EventTypeMessageDeleted
 
-	// mc.notificator.NotifyAboutDeleteMessage(c.Request().Context(), participantIds, chatId, cd)
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
 	defer messageSpan.End()
 
@@ -685,6 +692,18 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventTypeChatUnreadMessagesChanged))
 	defer messageSpan.End()
+
+	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+		adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId)
+		if err != nil {
+			return err
+		}
+
+		if !CanReadMessage(adt.IsParticipant) {
+			m.lgr.InfoContext(ctx, "Skipping OnUnreadMessageReaded because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+			return nil
+		}
+	}
 
 	err := m.commonProjection.OnUnreadMessageReaded(ctx, event, func(updatedChatsPortion []dto.ChatUserViewBasic) {
 		if event.ReadMessagesAction != ReadMessagesActionAllChats {

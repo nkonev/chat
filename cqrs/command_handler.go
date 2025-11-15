@@ -764,6 +764,8 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 }
 
 func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, commonProjection *CommonProjection, dba *db.DB) error {
+	// seems it's not need to immediately respond errot in case is no participant, so we skip authorization check here
+	// the authorization is in event_handler
 	if s.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
 		cp := &MessageReaded{
 			AdditionalData:     s.AdditionalData,
@@ -964,6 +966,7 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 			Id:     copyCommand.MessageId,
 			ChatId: copyCommand.ChatId,
 		},
+		IsEmbedSync:    true,
 		AdditionalData: copyCommand.AdditionalData,
 	}
 

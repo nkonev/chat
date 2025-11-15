@@ -193,6 +193,7 @@ type MessageCreated struct {
 type MessageEdited struct {
 	MessageCommoned MessageCommoned `json:"messageCommoned"`
 	AdditionalData  *AdditionalData `json:"additionalData"`
+	IsEmbedSync     bool            `json:"isEmbedSync"`
 }
 
 type MessageEmbedded struct {

@@ -470,20 +470,16 @@ func (m *CommonProjection) setHasNoUnreadsInAllChats(ctx context.Context, co db.
 	return nil
 }
 
+func CanReadMessage(isParticipant bool) bool {
+	return isParticipant
+}
+
 func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded, allChatsReadedConsumer func([]dto.ChatUserViewBasic)) error {
 	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
 		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 			if event.ReadMessagesAction == ReadMessagesActionOneMessage {
-				participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
-				if err != nil {
-					return err
-				}
-				if !participant {
-					m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
-					return nil
-				}
 
-				err = m.setUnreadMessages(ctx, tx, []int64{event.AdditionalData.BehalfUserId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
+				err := m.setUnreadMessages(ctx, tx, []int64{event.AdditionalData.BehalfUserId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
 				if err != nil {
 					return err
 				}
@@ -495,16 +491,8 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 
 				return nil
 			} else if event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
-				participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
-				if err != nil {
-					return err
-				}
-				if !participant {
-					m.lgr.InfoContext(ctx, "Skipping MessageReaded because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
-					return nil
-				}
 
-				err = m.fastForwardLastRead(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
+				err := m.fastForwardLastRead(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 				if err != nil {
 					return err
 				}
@@ -1013,6 +1001,7 @@ func canPinMessageInternal(chatRegularParticipantCanPinMessage bool) bool {
 
 func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, co db.CommonOperations, userId, chatId, messageId int64) (dto.MessageAuthorizationData, error) {
 	d := dto.MessageAuthorizationData{}
+	// it's ok if message is not found - sql handles it
 	err := sqlscan.Get(ctx, co, &d, `
 		with
 		chat_participant_row as (
