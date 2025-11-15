@@ -16,6 +16,10 @@ import (
 	"slices"
 )
 
+// performs Authorization,
+// sending before events,
+// mutations via delegating to projection
+// sending after events
 type EventHandler struct {
 	commonProjection             *CommonProjection
 	enrichingProjection          *EnrichingProjection
@@ -52,14 +56,19 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 
 	userIds := event.GetParticipantIds()
 
-	applied, errp := m.commonProjection.OnParticipantAdded(ctx, event)
-	if errp != nil {
-		return errp
+	adt, err := m.commonProjection.GetChatDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId)
+	if err != nil {
+		return err
 	}
 
-	if !applied {
-		m.lgr.InfoContext(ctx, "The event wasn't applied, exiting", "event", event.Name(), "user_ids", userIds, "chat_id", event.ChatId)
+	if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, event.IsJoining, adt.AvailableToSearch, adt.IsBlog, event.IsChatCreating) {
+		m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
 		return nil
+	}
+
+	errp := m.commonProjection.OnParticipantAdded(ctx, event)
+	if errp != nil {
+		return errp
 	}
 
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventTypeChatCreated, "user_ids", userIds)
@@ -140,10 +149,23 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	ctx, participantSpan := m.tr.Start(ctx, fmt.Sprintf("participant.%s", eventTypeParticipantDeleted))
 	defer participantSpan.End()
 
+	adt, err := m.commonProjection.GetChatDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId)
+	if err != nil {
+		return err
+	}
+
+	isChatRemoving := event.IsChatRemoving
+
+	for _, participantId := range event.ParticipantIds {
+		if !CanRemoveParticipant(event.AdditionalData.BehalfUserId, adt.IsChatAdmin, adt.ChatIsTetATet, event.IsLeaving, adt.IsParticipant, participantId, isChatRemoving) {
+			m.lgr.InfoContext(ctx, "Skipping ParticipantRemoved because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+			return nil
+		}
+	}
+
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
 		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, false)
 	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting { // delete chat
-		isChatRemoving := len(event.AllParticipantIdsExcepting) == 0
 		return m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, event.AllParticipantIdsExcepting, func(participantIdsPortion []int64) error {
 			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving)
 		})

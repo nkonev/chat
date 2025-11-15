@@ -11,19 +11,9 @@ import (
 	"go-cqrs-chat-example/utils"
 )
 
-func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) (bool, error) {
-	applied, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (bool, error) {
-		adt, err := m.GetChatDataForAuthorization(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
-		if err != nil {
-			return false, err
-		}
-
-		if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, event.IsJoining, adt.AvailableToSearch, adt.IsBlog, event.AreFirstUsers) {
-			m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
-			return false, nil
-		}
-
-		_, err = tx.ExecContext(ctx, `
+func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) error {
+	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		_, err := tx.ExecContext(ctx, `
 		with input_data as (
 			select * from unnest(cast ($1 as bigint[]), cast ($2 as boolean[])) as t(user_id, chat_admin)
 		)
@@ -32,7 +22,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		on conflict(user_id, chat_id) do nothing
 	`, GetParticipantIds(event.Participants), getParticipantChatAdmins(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		// no problems here because
@@ -62,24 +52,24 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			, update_date_time = excluded.update_date_time 
 		`, GetParticipantIds(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		err = m.updateViewableParticipants(ctx, tx, event.ChatId)
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		// recalc in case an user was added after
 		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, GetParticipantIds(event.Participants), event.ChatId)
 		if err != nil {
-			return false, err
+			return err
 		}
 
-		return true, nil
+		return nil
 	})
 	if errOuter != nil {
-		return false, errOuter
+		return errOuter
 	}
 
 	m.lgr.InfoContext(ctx,
@@ -88,25 +78,12 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		"chat_id", event.ChatId,
 	)
 
-	return applied, nil
+	return nil
 }
 
 func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isRemoveAllParticipants bool) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		admin, err := m.IsChatAdmin(ctx, tx, behalfUserId, chatId)
-		if err != nil {
-			return err
-		}
-		if !isLeaving && !admin {
-			m.lgr.InfoContext(ctx,
-				"Participant isn't admin so he cannot remove a participant",
-				"user_id", behalfUserId,
-				"chat_id", chatId,
-			)
-			return nil
-		}
-
-		_, err = tx.ExecContext(ctx, `
+		_, err := tx.ExecContext(ctx, `
 		delete from chat_participant where chat_id = $2 and user_id = any($1)
 	`, participantIds, chatId)
 		if err != nil {
@@ -376,7 +353,7 @@ func makeEnrichedUsers(users []*dto.UserWithAdmin, behalfUserId int64, behalfIsC
 			BehalfUserId:  behalfUserId,
 			UserWithAdmin: *u,
 			CanChange:     CanChangeParticipant(behalfUserId, behalfIsChatAdmin, isTetATetChat, u.Id),
-			CanDelete:     CanRemoveParticipant(behalfUserId, behalfIsChatAdmin, isTetATetChat, false, true, u.Id),
+			CanDelete:     CanRemoveParticipant(behalfUserId, behalfIsChatAdmin, isTetATetChat, false, true, u.Id, false),
 		}
 		res = append(res, &enriched)
 	}
@@ -919,8 +896,8 @@ func CanChangeParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetC
 	return CanEditChat(behalfIsChatAdmin, isTetATetChat) && userId != behalfUserId
 }
 
-func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatIsBlog, areFirstUsers bool) bool {
-	if areFirstUsers {
+func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatIsBlog, isChatCreating bool) bool {
+	if isChatCreating {
 		return true
 	}
 
@@ -939,7 +916,11 @@ func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatI
 	return true
 }
 
-func CanRemoveParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat, isLeaving, isParticipant bool, userId int64) bool {
+func CanRemoveParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat, isLeaving, isParticipant bool, userId int64, isChatDeleting bool) bool {
+	if isChatDeleting {
+		return true
+	}
+
 	if !behalfIsChatAdmin {
 		if isLeaving && CanLeaveChat(behalfIsChatAdmin, isTetATetChat, isParticipant) {
 			// ok

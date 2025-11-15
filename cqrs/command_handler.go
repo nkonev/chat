@@ -325,7 +325,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		AdditionalData: copyCommand.AdditionalData,
 		ChatId:         chatId,
 		Participants:   make([]ParticipantWithAdmin, 0),
-		AreFirstUsers:  true,
+		IsChatCreating: true,
 	}
 	for _, participantId := range copyCommand.ParticipantIds {
 		pa.Participants = append(pa.Participants, ParticipantWithAdmin{
@@ -459,6 +459,7 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 		GetParticipantsType:        GetParticipantsTypeAllInChatExcepting,
 		AllParticipantIdsExcepting: []int64{},
 		ChatId:                     s.ChatId,
+		IsChatRemoving:             true,
 	}
 	errInner := eventBus.Publish(ctx, pa)
 	if errInner != nil {
@@ -534,7 +535,7 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 	}
 
 	for _, participantId := range s.ParticipantIds {
-		if !CanRemoveParticipant(s.AdditionalData.BehalfUserId, adt.IsChatAdmin, adt.ChatIsTetATet, s.IsLeaving, adt.IsParticipant, participantId) {
+		if !CanRemoveParticipant(s.AdditionalData.BehalfUserId, adt.IsChatAdmin, adt.ChatIsTetATet, s.IsLeaving, adt.IsParticipant, participantId, false) {
 			return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to delete the chat %v participant %v", s.AdditionalData.BehalfUserId, s.ChatId, s.ParticipantIds))
 		}
 	}

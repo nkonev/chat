@@ -62,7 +62,7 @@ type ParticipantsAdded struct {
 	AdditionalData *AdditionalData        `json:"additionalData"`
 	Participants   []ParticipantWithAdmin `json:"participants"`
 	ChatId         int64                  `json:"chatId"`
-	AreFirstUsers  bool                   `json:"areFirstUsers"`
+	IsChatCreating bool                   `json:"isChatCreating"`
 	IsJoining      bool                   `json:"isJoining"`
 }
 
@@ -93,6 +93,7 @@ type ParticipantDeleted struct {
 	AllParticipantIdsExcepting []int64             `json:"allParticipantIdsExcepting"`
 	ChatId                     int64               `json:"chatId"`
 	IsLeaving                  bool                `json:"isLeaving"`
+	IsChatRemoving             bool                `json:"isChatRemoving"`
 }
 
 type ParticipantChanged struct {
