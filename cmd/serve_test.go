@@ -2806,6 +2806,7 @@ func TestBlog(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -2831,20 +2832,29 @@ func TestBlog(t *testing.T) {
 		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
 		require.NoError(t, err, "error in creating chat")
 		assert.True(t, chat1Id > 0)
-
-		// await before chat editing
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
-		// actually not needed
-		// dummy old behaviour. just check for backward compatibility
-		// actually just marking message as blog is enough
-		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1Name, client.NewChatOptionBlog(true))
-		require.NoError(t, err)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		const message1Text = "new message 1"
 		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
 		require.NoError(t, err, "error in creating message")
+		// await before chat editing
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// probably not needed
+		// it's old behaviour. just check for backward compatibility
+		// actually just marking message as blog should be enough
+		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1Name, client.NewChatOptionBlog(true))
+		require.NoError(t, err)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeMessagesReload &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id
+			},
+		}))
 
 		const message2Text = "new message 2"
 		message2Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text)
@@ -2865,6 +2875,38 @@ func TestBlog(t *testing.T) {
 		assert.Equal(t, 1, len(comments))
 		assert.Equal(t, message2Id, comments[0].Id)
 		assert.Equal(t, message2Text, comments[0].Content)
+
+		testEventsAccumulator.Clean()
+
+		err = testRestClient.MakeMessageBlogPost(ctx, user1, chat1Id, message2Id)
+		require.NoError(t, err, "error in making message blog post")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeMessageEdited &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					e.MessageNotification.Id == message1Id &&
+					e.MessageNotification.Content == message1Text &&
+					e.MessageNotification.Owner.Id == user1 &&
+					e.MessageNotification.Owner.Login == user1Login &&
+					e.MessageNotification.BlogPost == false
+			},
+
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeMessageEdited &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					e.MessageNotification.Id == message2Id &&
+					e.MessageNotification.Content == message2Text &&
+					e.MessageNotification.Owner.Id == user1 &&
+					e.MessageNotification.Owner.Login == user1Login &&
+					e.MessageNotification.BlogPost == true
+			},
+		}))
 
 		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1Name, client.NewChatOptionBlog(false))
 		require.NoError(t, err, "error in unmaking message blog post")
