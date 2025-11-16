@@ -774,6 +774,24 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 	return nil
 }
 
+func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *MessageBlogPostMade) error {
+	adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId)
+	if err != nil {
+		return err
+	}
+
+	if !CanMakeMessageBlogPost(adt.IsChatAdmin, adt.ChatIsTetATet, adt.IsMessageBlogPost, adt.IsBlog, true) {
+		m.lgr.InfoContext(ctx, "Skipping OnMessageBlogPostMade because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		return nil
+	}
+
+	err = m.commonProjection.OnMessageBlogPostMade(ctx, event)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) error {
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.reaction"))
 	defer messageSpan.End()

@@ -118,6 +118,10 @@ func getUserLogin(g *gin.Context) (string, error) {
 	return string(decodedStringBytes), nil
 }
 
+func getUserRoles(g *gin.Context) []string {
+	return g.Request.Header.Values(utils.HeaderUserRole)
+}
+
 func getCorrelationId(g *gin.Context) *string {
 	ch := g.Request.Header.Get(headerCorrelationId)
 	if len(ch) > 0 {

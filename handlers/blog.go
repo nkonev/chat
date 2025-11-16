@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"github.com/gin-gonic/gin"
+	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -16,6 +17,7 @@ type BlogHandler struct {
 	dbWrapper           *db.DB
 	commonProjection    *cqrs.CommonProjection
 	enrichingProjection *cqrs.EnrichingProjection
+	cfg                 *config.AppConfig
 }
 
 func NewBlogHandler(
@@ -24,6 +26,7 @@ func NewBlogHandler(
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	enrichingProjection *cqrs.EnrichingProjection,
+	cfg *config.AppConfig,
 ) *BlogHandler {
 	return &BlogHandler{
 		lgr:                 lgr,
@@ -31,6 +34,7 @@ func NewBlogHandler(
 		dbWrapper:           dbWrapper,
 		commonProjection:    commonProjection,
 		enrichingProjection: enrichingProjection,
+		cfg:                 cfg,
 	}
 }
 
@@ -102,5 +106,8 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 }
 
 func (ch *BlogHandler) CanCreateBlog(g *gin.Context) {
-	g.JSON(http.StatusOK, dto.CanCreateBlogDto{}) // TODO implement
+	userRoles := getUserRoles(g)
+
+	can := cqrs.IsBloggingAllowed(ch.cfg, userRoles)
+	g.JSON(http.StatusOK, &utils.H{"canCreateBlog": can})
 }

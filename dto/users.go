@@ -11,6 +11,8 @@ const HereUsers = -3
 const AllUsersLogin = "all"
 const HereUsersLogin = "here"
 
+const ROLE_ADMIN = "ROLE_ADMIN"
+
 type User struct {
 	Id               int64           `json:"id"`
 	Login            string          `json:"login"`

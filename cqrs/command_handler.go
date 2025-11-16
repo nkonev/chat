@@ -824,7 +824,19 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 	}
 }
 
-func (s *MakeMessageBlogPost) Handle(ctx context.Context, eventBus EventBusInterface) error {
+func (s *MakeMessageBlogPost) Handle(ctx context.Context, cfg *config.AppConfig, userRoles []string, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+
+	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
+	if err != nil {
+		return err
+	}
+
+	bloggingAllowed := IsBloggingAllowed(cfg, userRoles)
+
+	if !CanMakeMessageBlogPost(adt.IsChatAdmin, adt.ChatIsTetATet, adt.IsMessageBlogPost, adt.IsBlog, bloggingAllowed) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to make the message blog post in the chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+	}
+
 	ev := MessageBlogPostMade{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,

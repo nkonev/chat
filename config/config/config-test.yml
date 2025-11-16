@@ -96,6 +96,9 @@ chat:
     canResend: true
     canReact: true
 
+blog:
+  onlyAdminCanCreateBlog: false
+
 rabbitmq:
   url: "amqp://chat:chatPazZw0rd@127.0.0.1:5672"
   checkAreEventsProcessedInterval: 2s

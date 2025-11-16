@@ -158,6 +158,10 @@ type ChatConfig struct {
 	TetATet TetATetConfig
 }
 
+type BlogConfig struct {
+	OnlyAdminCanCreateBlog bool
+}
+
 type TetATetConfig struct {
 	CanResend bool
 	CanReact  bool
@@ -182,6 +186,7 @@ type AppConfig struct {
 	Aaa         AaaConfig
 	Message     MessageConfig
 	Chat        ChatConfig
+	Blog        BlogConfig
 	FrontendUrl string
 	RabbitMQ    RabbitMQConfig
 }

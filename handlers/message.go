@@ -706,6 +706,8 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 		return
 	}
 
+	userRoles := getUserRoles(g)
+
 	cid := g.Param(dto.ChatIdParam)
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
@@ -730,7 +732,7 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 		BlogPost:       true,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.eventBus)
+	err = mr.Handle(g.Request.Context(), mc.cfg, userRoles, mc.eventBus, mc.dbWrapper, mc.commonProjection)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return

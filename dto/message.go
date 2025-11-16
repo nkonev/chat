@@ -110,6 +110,8 @@ type MessageViewEnrichedDto struct {
 	CanPublish   bool `json:"canPublish"`
 	CanPin       bool `json:"canPin"`
 
+	CanMakeBlogPost bool `json:"canMakeBlogPost"`
+
 	UserId int64 `json:"-"` // behalf user id
 }
 
@@ -269,8 +271,11 @@ type MessageReadResponse struct {
 type MessageAuthorizationData struct {
 	IsParticipant        bool   `db:"is_chat_participant"`
 	IsChatAdmin          bool   `db:"is_chat_admin"`
+	IsBlog               bool   `db:"chat_is_blog"`
+	ChatIsTetATet        bool   `db:"chat_is_tet_a_tet"`
 	ChatCanWriteMessage  bool   `db:"chat_can_write_message"`
 	IsMessageFound       bool   `db:"is_message_found"`
+	IsMessageBlogPost    bool   `db:"is_message_blog_post"`
 	MessageOwnerId       int64  `db:"message_owner_id"`
 	HasEmbedMessage      bool   `db:"message_has_embed"`
 	EmbedMessageTypeSafe string `db:"message_embed_type"`

@@ -61,6 +61,10 @@ func (m *CommonProjection) removeBlog(ctx context.Context, tx *db.Tx, chatId int
 	return nil
 }
 
+func CanMakeMessageBlogPost(isChatAdmin, tetATet, messageIsBlogPost, chatIsBlog, bloggingIsAllowed bool) bool {
+	return bloggingIsAllowed && CanEditChat(isChatAdmin, tetATet) && !messageIsBlogPost && chatIsBlog
+}
+
 func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *MessageBlogPostMade) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)

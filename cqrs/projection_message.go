@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"github.com/jackc/pgtype"
+	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
+	"slices"
 	"time"
 )
 
@@ -752,9 +754,13 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		notAparticipant := false
 
+		usersMap := utils.ToMap(users)
+
 		messagesEnriched := make([]dto.MessageViewEnrichedDto, 0, len(messages))
 		for _, mm := range messages {
-			me, err := enrichMessage(mm, chatId, utils.ToMap(users), chatsByUserIdByChatId, reactions, mm.BehalfUserId, areAdmins, !notAparticipant)
+			bloggingAllowed := IsBloggingAllowed(m.cfg, getUserRoles(usersMap, mm.BehalfUserId))
+
+			me, err := enrichMessage(mm, chatId, usersMap, chatsByUserIdByChatId, reactions, mm.BehalfUserId, areAdmins, !notAparticipant, bloggingAllowed)
 			if err != nil {
 				return nil, err
 			}
@@ -771,6 +777,23 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 	}
 
 	return res.items, res.notAparticipant, nil
+}
+
+func getUserRoles(usersMap map[int64]*dto.User, behalfUserId int64) []string {
+	user := usersMap[behalfUserId]
+	if user == nil || user.AdditionalData == nil {
+		return []string{}
+	}
+
+	return user.AdditionalData.Roles
+}
+
+func IsBloggingAllowed(cfg *config.AppConfig, userRoles []string) bool {
+	if !cfg.Blog.OnlyAdminCanCreateBlog {
+		return true
+	}
+
+	return slices.Contains(userRoles, dto.ROLE_ADMIN)
 }
 
 func getReactionsCommon(ctx context.Context, co db.CommonOperations, chatId int64, messageIds []int64, reaction *string, maxDisplayableUsers int) ([]dto.ReactionDto, error) {
@@ -918,7 +941,7 @@ func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, messageRe
 	}
 }
 
-func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, chatsByUserIdByChatId map[int64]map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool, isParticipant bool) (*dto.MessageViewEnrichedDto, error) {
+func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, chatsByUserIdByChatId map[int64]map[int64]*dto.BasicChatDtoExtended, reactions map[int64][]dto.ReactionDto, behalfUserId int64, areAdmins map[int64]bool, isParticipant bool, bloggingIsAllowed bool) (*dto.MessageViewEnrichedDto, error) {
 	me := dto.MessageViewEnrichedDto{
 		Id:             m.Id,
 		ChatId:         chatId,
@@ -944,12 +967,12 @@ func enrichMessage(m dto.MessageDto, chatId int64, users map[int64]*dto.User, ch
 		return nil, fmt.Errorf("Logical error during enriching messages not found chat by chatId = %v, userId = %v", chatId, behalfUserId)
 	}
 
-	setMessagePersonalizedFields(&me, chat.RegularParticipantCanPublishMessage, chat.RegularParticipantCanPinMessage, chat.RegularParticipantCanWriteMessage, areAdmins[behalfUserId], behalfUserId, isParticipant)
+	setMessagePersonalizedFields(&me, chat.TetATet, chat.IsBlog, chat.RegularParticipantCanPublishMessage, chat.RegularParticipantCanPinMessage, chat.RegularParticipantCanWriteMessage, areAdmins[behalfUserId], behalfUserId, isParticipant, bloggingIsAllowed)
 
 	return &me, nil
 }
 
-func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64, isParticipant bool) {
+func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatTetATet, chatIsBlog, chatRegularParticipantCanPublishMessage, chatRegularParticipantCanPinMessage, chatCanWriteMessage, chatIsAdmin bool, participantId int64, isParticipant bool, bloggingIsAllowed bool) {
 	canWriteMessage := CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage)
 
 	copied.CanEdit = CanEditMessage(participantId, copied.OwnerId, copied.EmbedMessage != nil, copied.GetEmbedTypeSafe(), canWriteMessage)
@@ -957,6 +980,8 @@ func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatRegula
 	copied.CanDelete = CanDeleteMessage(participantId, copied.OwnerId, canWriteMessage)
 	copied.CanPublish = CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, copied.OwnerId, participantId)
 	copied.CanPin = CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin)
+
+	copied.CanMakeBlogPost = CanMakeMessageBlogPost(chatIsAdmin, chatTetATet, copied.BlogPost, chatIsBlog, bloggingIsAllowed)
 }
 
 func CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage bool) bool {
@@ -1012,15 +1037,24 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 		),
 		message_info as (
 			select * from message m where chat_id = $2 and id = $3
+		),
+		chat_blog as (
+			select b.id is not null as is_blog
+			from chat_common cc
+			left join blog b on cc.id = b.id
+			where cc.id = $2
 		)
 		SELECT 
 			(SELECT exists(SELECT * FROM chat_participant_row) as is_chat_participant)
 			,(SELECT exists(SELECT * FROM chat_participant_row WHERE chat_admin) as is_chat_admin)
 			,(select cc.regular_participant_can_write_message as chat_can_write_message from chat_info cc)
+			,(select cc.tet_a_tet as chat_is_tet_a_tet from chat_info cc)
 			,(select exists(select * from message_info mm) as is_message_found)
 			,(select((select exists(select * from message_info mm)) and (select (mm.embed is not null) from message_info mm))) as message_has_embed
 			,(select coalesce((select mm.owner_id from message_info mm), $4) as message_owner_id)
 			,(select coalesce((select mm.embed ->> 'embedMessageType' from message_info mm), $5) as message_embed_type)
+			,(select coalesce((select mm.blog_post from message_info mm), false) as is_message_blog_post)
+			,(select cb.is_blog as chat_is_blog from chat_blog cb)
 	`, userId, chatId, messageId, dto.NoOwner, dto.EmbedMessageTypeNone)
 	if err != nil {
 		return d, err
