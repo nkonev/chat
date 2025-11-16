@@ -164,7 +164,7 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	}
 
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
-		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, false)
+		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving)
 	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting { // delete chat
 		return m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, event.AllParticipantIdsExcepting, func(participantIdsPortion []int64) error {
 			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving)
