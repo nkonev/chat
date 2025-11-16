@@ -173,6 +173,9 @@ type RabbitMQConfig struct {
 	CheckAreEventsProcessedInterval time.Duration // for tests
 	MaxWaitForEvents                time.Duration // for tests
 	DumpTestAccumulator             bool          // for tests
+
+	Dump      bool
+	PrettyLog bool
 }
 
 type AppConfig struct {

@@ -103,3 +103,5 @@ blog:
 
 rabbitmq:
   url: "amqp://videoChat:videoChatPazZw0rd@127.0.0.1:36672"
+  prettyLog: true
+  dump: true

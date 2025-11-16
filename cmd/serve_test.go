@@ -3202,7 +3202,7 @@ func TestMessageFuzzySearch(t *testing.T) {
 	})
 }
 
-func TestEventSendingOnUserChange(t *testing.T) {
+func TestEventSendingOnUserProfileChange(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,

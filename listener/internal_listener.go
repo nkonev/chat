@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/streadway/amqp"
+	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/rabbitmq"
@@ -18,6 +19,7 @@ type InternalEventsListener func(*amqp.Delivery) error
 
 func CreateInternalEventsListener(
 	lgr *logger.LoggerWrapper,
+	cfg *config.AppConfig,
 	typeRegistry *type_registry.TypeRegistryInstance,
 	messageService *services.MessageService,
 ) InternalEventsListener {
@@ -29,9 +31,19 @@ func CreateInternalEventsListener(
 		defer span.End()
 
 		bytesData := msg.Body
-		strData := string(bytesData)
 		aType := msg.Type
-		lgr.DebugContext(ctx, "Received", "data", strData, "type", aType)
+
+		listenerName := "internal"
+
+		if cfg.RabbitMQ.Dump {
+			strData := string(bytesData)
+
+			if cfg.RabbitMQ.PrettyLog && !cfg.Logger.Json {
+				fmt.Printf("[rabbitmq listener] Received message: listener=%s, trace_id=%s, headers=%v, type=%v, body: %v\n", listenerName, logger.GetTraceId(ctx), msg.Headers, aType, strData)
+			} else {
+				lgr.InfoContext(ctx, fmt.Sprintf("[rabbitmq listener] Received message: listener=%s, trace_id=%s, headers=%v, type=%v, body: %v\n", listenerName, logger.GetTraceId(ctx), msg.Headers, aType, strData))
+			}
+		}
 
 		if !typeRegistry.HasType(aType) {
 			lgr.ErrorContext(ctx, "Unexpected type in rabbit internal_listener", "type", aType)

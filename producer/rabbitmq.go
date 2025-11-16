@@ -3,8 +3,10 @@ package producer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/beliyav/go-amqp-reconnect/rabbitmq"
 	"github.com/streadway/amqp"
+	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/logger"
 	myRabbitmq "go-cqrs-chat-example/rabbitmq"
 	"go-cqrs-chat-example/type_registry"
@@ -43,6 +45,21 @@ func (rp *RabbitOutputEventsPublisher) Publish(ctx context.Context, correlationI
 		Headers:      headers,
 	}
 
+	publisherName := "output"
+
+	if rp.cfg.RabbitMQ.Dump {
+		strData := string(bytea)
+		var correlationIdStr string
+		if correlationId != nil {
+			correlationIdStr = *correlationId
+		}
+		if rp.cfg.RabbitMQ.PrettyLog && !rp.cfg.Logger.Json {
+			fmt.Printf("[rabbitmq publisher] Sending message: publisher=%s, trace_id=%s, headers=%v, type=%v, correlationId=%v, body: %v\n", publisherName, logger.GetTraceId(ctx), msg.Headers, aType, correlationIdStr, strData)
+		} else {
+			rp.lgr.InfoContext(ctx, fmt.Sprintf("[rabbitmq publisher] Sending message: publisher=%s, trace_id=%s, headers=%v, type=%v, correlationId=%v, body: %v\n", publisherName, logger.GetTraceId(ctx), msg.Headers, aType, correlationIdStr, strData))
+		}
+	}
+
 	if err := rp.channel.Publish(EventsFanoutExchange, "", false, false, msg); err != nil {
 		rp.lgr.ErrorContext(ctx, "Error during publishing dto", "err", err)
 		return err
@@ -55,10 +72,11 @@ type RabbitOutputEventsPublisher struct {
 	channel      *rabbitmq.Channel
 	lgr          *logger.LoggerWrapper
 	typeRegistry *type_registry.TypeRegistryInstance
-	enabled      bool // events are disabled during fast-forwarding
+	enabled      bool
+	cfg          *config.AppConfig
 }
 
-func NewRabbitOutputEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, typeRegistry *type_registry.TypeRegistryInstance) (*RabbitOutputEventsPublisher, error) {
+func NewRabbitOutputEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, typeRegistry *type_registry.TypeRegistryInstance, cfg *config.AppConfig) (*RabbitOutputEventsPublisher, error) {
 	cha, err := myRabbitmq.CreateRabbitMqChannel(lgr, connection)
 	if err != nil {
 		return nil, err
@@ -67,6 +85,8 @@ func NewRabbitOutputEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbi
 		channel:      cha,
 		lgr:          lgr,
 		typeRegistry: typeRegistry,
+		enabled:      false, // events are disabled during fast-forwarding
+		cfg:          cfg,
 	}, nil
 }
 
@@ -94,6 +114,17 @@ func (rp *RabbitInternalEventsPublisher) Publish(ctx context.Context, aDto inter
 		Headers:      headers,
 	}
 
+	publisherName := "internal"
+
+	if rp.cfg.RabbitMQ.Dump {
+		strData := string(bytea)
+		if rp.cfg.RabbitMQ.PrettyLog && !rp.cfg.Logger.Json {
+			fmt.Printf("[rabbitmq publisher] Sending message: publisher=%s, trace_id=%s, headers=%v, type=%v, body: %v\n", publisherName, logger.GetTraceId(ctx), msg.Headers, aType, strData)
+		} else {
+			rp.lgr.InfoContext(ctx, fmt.Sprintf("[rabbitmq publisher] Sending message: publisher=%s, trace_id=%s, headers=%v, type=%v, body: %v\n", publisherName, logger.GetTraceId(ctx), msg.Headers, aType, strData))
+		}
+	}
+
 	if err := rp.channel.Publish(ChatInternalExchange, "", false, false, msg); err != nil {
 		rp.lgr.ErrorContext(ctx, "Error during publishing dto", "err", err)
 		return err
@@ -106,9 +137,10 @@ type RabbitInternalEventsPublisher struct {
 	channel      *rabbitmq.Channel
 	lgr          *logger.LoggerWrapper
 	typeRegistry *type_registry.TypeRegistryInstance
+	cfg          *config.AppConfig
 }
 
-func NewRabbitInternalEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, typeRegistry *type_registry.TypeRegistryInstance) (*RabbitInternalEventsPublisher, error) {
+func NewRabbitInternalEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, typeRegistry *type_registry.TypeRegistryInstance, cfg *config.AppConfig) (*RabbitInternalEventsPublisher, error) {
 	cha, err := myRabbitmq.CreateRabbitMqChannel(lgr, connection)
 	if err != nil {
 		return nil, err
@@ -117,6 +149,7 @@ func NewRabbitInternalEventsPublisher(lgr *logger.LoggerWrapper, connection *rab
 		channel:      cha,
 		lgr:          lgr,
 		typeRegistry: typeRegistry,
+		cfg:          cfg,
 	}, nil
 }
 
@@ -140,6 +173,17 @@ func (rp *RabbitTestInputEventsPublisher) Publish(ctx context.Context, aDto inte
 		Headers:      headers,
 	}
 
+	publisherName := "test"
+
+	if rp.cfg.RabbitMQ.Dump {
+		strData := string(bytea)
+		if rp.cfg.RabbitMQ.PrettyLog && !rp.cfg.Logger.Json {
+			fmt.Printf("[rabbitmq publisher] Sending message: publisher=%s, trace_id=%s, headers=%v, type=%v, body: %v\n", publisherName, logger.GetTraceId(ctx), msg.Headers, aType, strData)
+		} else {
+			rp.lgr.InfoContext(ctx, fmt.Sprintf("[rabbitmq publisher] Sending message: publisher=%s, trace_id=%s, headers=%v, type=%v, body: %v\n", publisherName, logger.GetTraceId(ctx), msg.Headers, aType, strData))
+		}
+	}
+
 	if err := rp.channel.Publish(AaaEventsExchange, "", false, false, msg); err != nil {
 		rp.lgr.ErrorContext(ctx, "Error during publishing dto", "err", err)
 		return err
@@ -152,9 +196,10 @@ type RabbitTestInputEventsPublisher struct {
 	channel      *rabbitmq.Channel
 	lgr          *logger.LoggerWrapper
 	typeRegistry *type_registry.TypeRegistryInstance
+	cfg          *config.AppConfig
 }
 
-func NewRabbitTestInputEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, typeRegistry *type_registry.TypeRegistryInstance) (*RabbitTestInputEventsPublisher, error) {
+func NewRabbitTestInputEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, typeRegistry *type_registry.TypeRegistryInstance, cfg *config.AppConfig) (*RabbitTestInputEventsPublisher, error) {
 	cha, err := myRabbitmq.CreateRabbitMqChannel(lgr, connection)
 	if err != nil {
 		return nil, err
@@ -163,5 +208,6 @@ func NewRabbitTestInputEventsPublisher(lgr *logger.LoggerWrapper, connection *ra
 		channel:      cha,
 		lgr:          lgr,
 		typeRegistry: typeRegistry,
+		cfg:          cfg,
 	}, nil
 }

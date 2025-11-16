@@ -104,3 +104,5 @@ rabbitmq:
   checkAreEventsProcessedInterval: 2s
   maxWaitForEvents: 1m
   dumpTestAccumulator: true
+  prettyLog: true
+  dump: true
