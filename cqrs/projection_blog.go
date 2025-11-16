@@ -90,7 +90,7 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 		}
 
 		// unset previous
-		_, errInner = tx.ExecContext(ctx, "update message set blog_post = false where chat_id = $1 and id = (select id from message where chat_id = $1 and blog_post = true)", event.ChatId)
+		_, errInner = tx.ExecContext(ctx, "update message set blog_post = false where chat_id = $1 and id in (select id from message where chat_id = $1 and blog_post = true)", event.ChatId)
 		if errInner != nil {
 			return errInner
 		}
