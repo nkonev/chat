@@ -553,15 +553,6 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 
 func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
-		if err != nil {
-			return err
-		}
-		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping MessageReactionFlipped because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
-			return nil
-		}
-
 		messageExists, errInner := m.checkMessageExists(ctx, tx, event.ChatId, event.MessageId)
 		if errInner != nil {
 			return errInner
@@ -572,13 +563,13 @@ func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *
 			return nil
 		}
 
-		var exists bool
-		errInner = sqlscan.Get(ctx, tx, &exists, "SELECT EXISTS(SELECT 1 FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4)", event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction)
+		var reactionExists bool
+		errInner = sqlscan.Get(ctx, tx, &reactionExists, "SELECT EXISTS(SELECT 1 FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4)", event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction)
 		if errInner != nil {
 			return errInner
 		}
 
-		if !exists {
+		if !reactionExists {
 			_, errInner = tx.ExecContext(ctx, `
 			insert into message_reaction(chat_id, message_id, user_id, reaction, create_date_time)
 			values ($1, $2, $3, $4, $5)

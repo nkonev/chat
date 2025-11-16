@@ -858,7 +858,17 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.reaction"))
 	defer messageSpan.End()
 
-	err := m.commonProjection.OnMessageReactionFlipped(ctx, event)
+	adt, err := m.commonProjection.GetChatDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId)
+	if err != nil {
+		return err
+	}
+
+	if !CanReactOnMessage(adt.ChatCanReactOnMessage, adt.IsParticipant) {
+		m.lgr.InfoContext(ctx, "Skipping OnMessageReactionFlipped because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		return nil
+	}
+
+	err = m.commonProjection.OnMessageReactionFlipped(ctx, event)
 	if err != nil {
 		return err
 	}
