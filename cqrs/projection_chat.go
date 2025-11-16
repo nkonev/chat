@@ -173,6 +173,14 @@ func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted
 			return errInner
 		}
 
+		_, errInner = m.db.ExecContext(ctx, `
+			delete from message
+			where chat_id = $1
+		`, event.ChatId)
+		if errInner != nil {
+			return errInner
+		}
+
 		if blog {
 			err := m.removeBlog(ctx, tx, event.ChatId)
 			if err != nil {

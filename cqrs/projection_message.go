@@ -131,23 +131,6 @@ func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx conte
 
 func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageDeleted) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
-		if err != nil {
-			return err
-		}
-		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping MessageDeleted because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
-			return nil
-		}
-
-		messageOwnerId, err := m.GetMessageOwner(ctx, event.ChatId, event.MessageId)
-		if err != nil {
-			return err
-		}
-		if messageOwnerId != event.AdditionalData.BehalfUserId {
-			m.lgr.InfoContext(ctx, "Skipping MessageDeleted because participant isn't owner", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
-			return nil
-		}
 
 		messageBlogPost, err := m.isMessageBlogPost(ctx, tx, event.ChatId, event.MessageId)
 		if err != nil {

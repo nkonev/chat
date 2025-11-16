@@ -653,7 +653,16 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
 	defer messageSpan.End()
 
-	err := m.commonProjection.OnMessageRemoved(ctx, event)
+	adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId)
+	if err != nil {
+		return err
+	}
+	if !CanDeleteMessage(event.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.ChatCanWriteMessage) {
+		m.lgr.InfoContext(ctx, "Skipping OnMessageRemoved because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		return nil
+	}
+
+	err = m.commonProjection.OnMessageRemoved(ctx, event)
 	if err != nil {
 		return err
 	}
