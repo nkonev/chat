@@ -62,24 +62,15 @@ func (m *CommonProjection) removeBlog(ctx context.Context, tx *db.Tx, chatId int
 }
 
 func CanMakeMessageBlogPost(isChatAdmin, tetATet, messageIsBlogPost, chatIsBlog, bloggingIsAllowed bool) bool {
-	return bloggingIsAllowed && CanEditChat(isChatAdmin, tetATet) && !messageIsBlogPost && chatIsBlog
+	return bloggingIsAllowed && CanEditChat(isChatAdmin, tetATet) && !messageIsBlogPost && isBlogInternal(chatIsBlog)
+}
+
+func isBlogInternal(chatIsBlog bool) bool {
+	return chatIsBlog
 }
 
 func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *MessageBlogPostMade) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		admin, err := m.IsChatAdmin(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
-		if err != nil {
-			return err
-		}
-		if !admin {
-			m.lgr.InfoContext(ctx,
-				"Participant isn't admin so he cannon make message blog post",
-				"user_id", event.AdditionalData.BehalfUserId,
-				"chat_id", event.ChatId,
-			)
-			return nil
-		}
-
 		chatExists, errInner := m.checkChatExists(ctx, tx, event.ChatId)
 		if errInner != nil {
 			return errInner
@@ -135,6 +126,19 @@ func (m *CommonProjection) isMessageBlogPost(ctx context.Context, co db.CommonOp
 		return false, err
 	}
 	return blog, nil
+}
+
+func (m *CommonProjection) GetCurrentBlogPostMessage(ctx context.Context, co db.CommonOperations, chatId int64) (*int64, error) {
+	var id int64
+	err := sqlscan.Get(ctx, co, &id, "select id from message where chat_id = $1 and blog_post = true order by id desc limit 1", chatId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// there were no rows, but otherwise no error occurred
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &id, nil
 }
 
 func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, offset int64, reverseOrder bool) ([]dto.BlogViewEnrichedDto, error) {

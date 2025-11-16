@@ -653,7 +653,7 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, behalfUserId int
 }
 
 func CanEditChat(isAdmin, tetATet bool) bool {
-	return isAdmin && !tetATet
+	return isChatAdminInternal(isAdmin) && !tetATet
 }
 
 func CanDeleteChat(isAdmin bool) bool {

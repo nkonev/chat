@@ -379,7 +379,8 @@ func (m *EventHandler) OnChatEdited(ctx context.Context, event *ChatEdited) erro
 	// if any of message-related fields were changed we need to reload messages on user's side
 	if canPublishMessageInternal(chatBasicBefore.RegularParticipantCanPublishMessage) != canPublishMessageInternal(chatBasicAfter.RegularParticipantCanPublishMessage) ||
 		canPinMessageInternal(chatBasicBefore.RegularParticipantCanPinMessage) != canPinMessageInternal(chatBasicAfter.RegularParticipantCanPinMessage) ||
-		canWriteMessageInternal(chatBasicBefore.RegularParticipantCanWriteMessage) != canWriteMessageInternal(chatBasicAfter.RegularParticipantCanWriteMessage) {
+		canWriteMessageInternal(chatBasicBefore.RegularParticipantCanWriteMessage) != canWriteMessageInternal(chatBasicAfter.RegularParticipantCanWriteMessage) ||
+		isBlogInternal(chatBasicBefore.IsBlog) != isBlogInternal(chatBasicAfter.IsBlog) {
 
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 			m.notifyMessagesReloadCommand(ctx, event.ChatId, participantIdsPortion, event.AdditionalData.GetCorrelationId())
@@ -785,9 +786,70 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 		return nil
 	}
 
+	currentBlogPost, err := m.commonProjection.GetCurrentBlogPostMessage(ctx, m.db, event.ChatId)
+	if err != nil {
+		return err
+	}
+
 	err = m.commonProjection.OnMessageBlogPostMade(ctx, event)
 	if err != nil {
 		return err
+	}
+
+	eventType := dto.EventTypeMessageEdited
+
+	if currentBlogPost != nil { // here, after OnMessageBlogPostMade() ex. blog post message is no more blog post
+		m.lgr.DebugContext(ctx, "Sending notification about the message is no more blog post to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
+
+		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+			messageViews, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, currentBlogPost)
+			if errInn != nil {
+				return errInn
+			}
+
+			for _, messageView := range messageViews {
+				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+					EventType:           eventType,
+					UserId:              messageView.UserId,
+					ChatId:              event.ChatId,
+					MessageNotification: &messageView,
+				})
+				if errInn != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				}
+			}
+
+			return nil
+		})
+		if errOuter != nil {
+			return errOuter
+		}
+	}
+
+	m.lgr.DebugContext(ctx, "Sending notification about the message become blog post to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
+
+	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+		messageViews, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId)
+		if errInn != nil {
+			return errInn
+		}
+
+		for _, messageView := range messageViews {
+			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+				EventType:           eventType,
+				UserId:              messageView.UserId,
+				ChatId:              event.ChatId,
+				MessageNotification: &messageView,
+			})
+			if errInn != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+			}
+		}
+
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
 	}
 	return nil
 }
