@@ -13,6 +13,8 @@ const EmbedMessageTypeReply = "reply"
 const EmbedMessageTypeResend = "resend"
 const EmbedMessageTypeNone = ""
 
+const FileItemUuidMessageNotFoundId = 0
+
 type MessageDto struct {
 	Id             int64
 	OwnerId        int64
@@ -279,4 +281,8 @@ type MessageAuthorizationData struct {
 	MessageOwnerId       int64  `db:"message_owner_id"`
 	HasEmbedMessage      bool   `db:"message_has_embed"`
 	EmbedMessageTypeSafe string `db:"message_embed_type"`
+}
+
+type MessageId struct {
+	MessageId int64 `json:"messageId"`
 }

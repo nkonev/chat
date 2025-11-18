@@ -850,6 +850,39 @@ func (mc *MessageHandler) SearchForUsersToMention(g *gin.Context) {
 	g.JSON(http.StatusOK, res)
 }
 
+func (mc *MessageHandler) FindMessageByFileItemUuid(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	fileItemUuid := g.Param("fileItemUuid")
+
+	res, err := mc.commonProjection.FindMessageByFileItemUuid(g.Request.Context(), chatId, userId, fileItemUuid)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error getting messages", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, res)
+}
+
 // returns should exit
 func translateMessageError(g *gin.Context, err error) bool {
 	if err == nil {

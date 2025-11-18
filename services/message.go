@@ -157,7 +157,18 @@ func (p *MessageService) TypeMessage(ctx context.Context, chatId, userId int64, 
 		ChatId:        chatId,
 	}
 
-	err := p.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, p.dbWrapper, chatId, []int64{userId}, func(participantIds []int64) error {
+	participant, err := p.commonProjection.IsParticipant(ctx, p.dbWrapper, userId, chatId)
+	if err != nil {
+		p.lgr.ErrorContext(ctx, "Error during checking is participant", "err", err)
+		return
+	}
+
+	if !participant {
+		p.lgr.InfoContext(ctx, "The user isn't participant", "user_id", userId, "chat_id", chatId)
+		return
+	}
+
+	err = p.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, p.dbWrapper, chatId, []int64{userId}, func(participantIds []int64) error {
 		for _, participantId := range participantIds {
 			err := p.rabbitmqOutputEventPublisher.Publish(ctx, nil, dto.GlobalUserEvent{
 				UserId:                 participantId,

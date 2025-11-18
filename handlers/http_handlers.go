@@ -82,6 +82,7 @@ func CreateHttpRouter(
 	ginRouter.POST("/api/chat/:id/message/filter", messageHandler.MessagesFilter)
 	ginRouter.PUT("/api/chat/public/preview-without-html", messageHandler.MessagePreview)
 	ginRouter.GET("/api/chat/:id/mention/suggest", messageHandler.SearchForUsersToMention)
+	ginRouter.GET("/api/chat/:id/message/find-by-file-item-uuid/:fileItemUuid", messageHandler.FindMessageByFileItemUuid)
 
 	ginRouter.PUT("/api/chat/:id/typing", messageHandler.TypeMessage)
 	ginRouter.PUT("/api/chat/:id/broadcast", messageHandler.BroadcastMessage)

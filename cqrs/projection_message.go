@@ -1394,6 +1394,30 @@ func (m *CommonProjection) IsMessageExists(ctx context.Context, co db.CommonOper
 	return exists, nil
 }
 
+func (m *CommonProjection) FindMessageByFileItemUuid(ctx context.Context, chatId, userId int64, fileItemUuid string) (*dto.MessageId, error) {
+	participant, err := m.IsParticipant(ctx, m.db, userId, chatId)
+	if err != nil {
+		return nil, err
+	}
+	if !participant {
+		return nil, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", userId, chatId))
+	}
+
+	var messageId int64
+	err = sqlscan.Get(ctx, m.db, &messageId, `
+		select id from message where chat_id = $1 AND file_item_uuid = $2 or content ilike '%' || $2 || '%' order by id limit 1	
+	`, chatId, fileItemUuid)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// there were no rows, but otherwise no error occurred
+			return &dto.MessageId{dto.FileItemUuidMessageNotFoundId}, nil
+		}
+		return nil, err
+	}
+
+	return &dto.MessageId{messageId}, nil
+}
+
 func (m *EnrichingProjection) MessageFilter(ctx context.Context, co db.CommonOperations, behalfUserId, chatId int64, searchString string, messageId int64) (bool, error) {
 	participant, err := m.cp.IsParticipant(ctx, co, behalfUserId, chatId)
 	if err != nil {
