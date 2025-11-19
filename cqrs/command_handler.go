@@ -754,22 +754,21 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 	// seems it's not need to immediately respond errot in case is no participant, so we skip authorization check here
 	// the authorization is in event_handler
 	if s.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+		participant, err := commonProjection.IsParticipant(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
+		if err != nil {
+			return err
+		}
+
+		if !participant {
+			return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+		}
+
 		cp := &MessageReaded{
 			AdditionalData:     s.AdditionalData,
 			ReadMessagesAction: ReadMessagesActionAllMessagesInOneChat,
 			ChatId:             s.ChatId,
 		}
-		err := eventBus.Publish(ctx, cp)
-		if err != nil {
-			return err
-		}
-		return nil
-	} else if s.ReadMessagesAction == ReadMessagesActionAllChats {
-		cp := &MessageReaded{
-			AdditionalData:     s.AdditionalData,
-			ReadMessagesAction: ReadMessagesActionAllChats,
-		}
-		err := eventBus.Publish(ctx, cp)
+		err = eventBus.Publish(ctx, cp)
 		if err != nil {
 			return err
 		}
@@ -804,6 +803,16 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 			if err != nil {
 				return err
 			}
+		}
+		return nil
+	} else if s.ReadMessagesAction == ReadMessagesActionAllChats {
+		cp := &MessageReaded{
+			AdditionalData:     s.AdditionalData,
+			ReadMessagesAction: ReadMessagesActionAllChats,
+		}
+		err := eventBus.Publish(ctx, cp)
+		if err != nil {
+			return err
 		}
 		return nil
 	} else {
