@@ -419,7 +419,7 @@ func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, part
 	return err
 }
 
-func (m *CommonProjection) increaseUnreads(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64, increaseOn int) error {
+func (m *CommonProjection) increaseUnreadsAndSetHasUnreads(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64, increaseOn int) error {
 	_, err := co.ExecContext(ctx, `
 		UPDATE chat_user_view 
 		SET unread_messages = unread_messages + $3

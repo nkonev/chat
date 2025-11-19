@@ -296,7 +296,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 			// not owners
 			if len(participantIdsWithoutMessageOwner) > 0 && increaseOn > 0 {
-				err := m.increaseUnreads(ctx, tx, participantIdsWithoutMessageOwner, chatId, increaseOn)
+				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, participantIdsWithoutMessageOwner, chatId, increaseOn)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
@@ -312,6 +312,12 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 				err = m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, additionalData.CreatedAt)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
+				}
+
+				// update red dot
+				err = m.updateHasUnreads(ctx, tx, []int64{*ownerIdP})
+				if err != nil {
+					return err
 				}
 			}
 

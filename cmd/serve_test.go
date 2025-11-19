@@ -415,6 +415,90 @@ func TestUnreads(t *testing.T) {
 	})
 }
 
+func TestUnreadsInitFromEmptyChatOfBothUsers(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		const message1Text = "new message 1"
+
+		_, err = testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user1HasUnreadMessages1, err := testRestClient.GetHasUnreadMessages(ctx, user1)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user1HasUnreadMessages1)
+
+		user2HasUnreadMessages1, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user2HasUnreadMessages1)
+
+		const message2Text = "new message 2"
+
+		_, err = testRestClient.CreateMessage(ctx, user2, chat1Id, message2Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user1HasUnreadMessages2, err := testRestClient.GetHasUnreadMessages(ctx, user1)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user1HasUnreadMessages2)
+
+		const message3Text = "new message 3"
+
+		_, err = testRestClient.CreateMessage(ctx, user1, chat1Id, message3Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user1HasUnreadMessages3, err := testRestClient.GetHasUnreadMessages(ctx, user1)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user1HasUnreadMessages3)
+	})
+}
+
 func TestReadAllChats(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
