@@ -919,7 +919,13 @@ func TestCreateTetATetChat(t *testing.T) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
 		mockAaaClient.EXPECT().SearchGetUsers(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*dto.User{&mockUser2}, 1, nil)
-		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{{
+			Id:     user1,
+			Online: true,
+		}, {
+			Id:     user2,
+			Online: true,
+		}}, nil)
 
 		ctx := context.Background()
 
@@ -934,6 +940,7 @@ func TestCreateTetATetChat(t *testing.T) {
 		chat1OfUser1 := user1Chats[0]
 		assert.Equal(t, user2Login, chat1OfUser1.Title)
 		assert.Equal(t, avatar2, *chat1OfUser1.Avatar)
+		assert.Nil(t, chat1OfUser1.LastSeenDateTime)
 
 		assert.Equal(t, []int64{2, 1}, chat1OfUser1.ParticipantIds)
 		assert.Equal(t, user2Login, chat1OfUser1.Participants[0].Login)
