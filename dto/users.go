@@ -51,6 +51,11 @@ type AdditionalData struct {
 	Roles     []string `json:"roles"`
 }
 
+type UserOnline struct {
+	Id     int64 `json:"userId"`
+	Online bool  `json:"online"`
+}
+
 type ParticipantAddDto struct {
 	ParticipantIds []int64 `json:"addParticipantIds"`
 }

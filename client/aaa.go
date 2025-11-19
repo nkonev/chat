@@ -19,7 +19,8 @@ type aaaRestClient struct {
 
 type AaaRestClient interface {
 	GetUsers(ctx context.Context, userIds []int64) ([]*dto.User, error)
-	SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int64, error)
+	SearchGetUsers(ctx context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int64, error)
+	GetOnlines(ctx context.Context, userIds []int64) ([]*dto.UserOnline, error)
 }
 
 func NewAAARestClient(cfg *config.AppConfig, lgr *logger.LoggerWrapper) AaaRestClient {
@@ -66,4 +67,20 @@ func (rc *aaaRestClient) SearchGetUsers(ctx context.Context, searchString string
 		return nil, 0, err
 	}
 	return respDto.Users, respDto.Count, nil
+}
+
+func (rc *aaaRestClient) GetOnlines(ctx context.Context, userIds []int64) ([]*dto.UserOnline, error) {
+	if len(userIds) == 0 {
+		return []*dto.UserOnline{}, nil
+	}
+
+	queryParams := url.Values{}
+	for _, u := range userIds {
+		queryParams.Add("userId", utils.ToString(u))
+	}
+	resp, err := query[any, []*dto.UserOnline](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, rc.cfg.Aaa.Url.GetUserOnlines, "user.GetOnlines", nil, &queryParams)
+	if err != nil {
+		return []*dto.UserOnline{}, err
+	}
+	return resp, nil
 }

@@ -86,6 +86,11 @@ type ChatViewEnrichedDto struct {
 	CanChangeChatAdmins bool    `json:"canChangeChatAdmins"`
 	IsResultFromSearch  bool    `json:"isResultFromSearch"` // is result os "search publically available to join"
 	CanWriteMessage     bool    `json:"canWriteMessage"`
+
+	LastSeenDateTime *time.Time      `json:"lastSeenDateTime"`
+	ShortInfo        *string         `json:"shortInfo"`
+	LoginColor       *string         `json:"loginColor"`
+	AdditionalData   *AdditionalData `json:"additionalData"`
 }
 
 type GetChatsResponseDto struct {

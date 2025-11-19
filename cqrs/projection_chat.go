@@ -470,8 +470,8 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 			return nil, err
 		}
 
-		userIds := getUserIdsFromChats(chats) // max num of users should fit aaa's limitation
-		users, err := m.aaaRestClient.GetUsers(ctx, userIds)
+		participantIds, participantOfTetAtetId := getUserIdsFromChats(chats) // max num of users should fit aaa's limitation
+		users, err := m.aaaRestClient.GetUsers(ctx, participantIds)
 		if err != nil {
 			m.lgr.WarnContext(ctx, "unable to get users")
 		}
@@ -494,6 +494,11 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 			}
 		}
 
+		tetATetOnlines, err := m.getParticipantsOnlineForTetATetMap(ctx, participantOfTetAtetId)
+		if err != nil {
+			m.lgr.WarnContext(ctx, "Something bad during getting tetATetOnlines", "err", err)
+		}
+
 		chatsEnriched := make([]dto.ChatViewEnrichedDto, 0, len(chats))
 		for _, ch := range chats {
 			var admin bool
@@ -503,7 +508,7 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 				admin = areAdminsOfChatIds[ch.Id]
 			}
 
-			che := m.enrichChat(ch.BehalfUserId, ch, usersMap, admin)
+			che := m.enrichChat(ch.BehalfUserId, ch, usersMap, admin, tetATetOnlines)
 			chatsEnriched = append(chatsEnriched, che)
 		}
 
@@ -516,6 +521,26 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 		return nil, nil, errOuter
 	}
 	return d.resultChats, d.intermediateUsers, nil
+}
+
+func (m *EnrichingProjection) getParticipantsOnlineForTetATetMap(ctx context.Context, userIds []int64) (map[int64]bool, error) {
+	ret := map[int64]bool{}
+
+	if len(userIds) == 0 {
+		return ret, nil
+	}
+
+	onlines, err := m.aaaRestClient.GetOnlines(ctx, userIds) // get online for opposite user
+	if err != nil {
+		m.lgr.WarnContext(ctx, "Unable to get online for", "user_ids", userIds, "err", err)
+		// nothing
+		return ret, nil
+	}
+
+	for _, onl := range onlines {
+		ret[onl.Id] = onl.Online
+	}
+	return ret, err
 }
 
 func (m *EnrichingProjection) GetChat(ctx context.Context, userId, chatId int64) (res *dto.ChatViewEnrichedDto, shouldJoin bool, err error) {
@@ -572,12 +597,17 @@ func (m *EnrichingProjection) searchForUsers(ctx context.Context, searchString s
 	return additionalFoundUserIds
 }
 
-func getUserIdsFromChats(chats []dto.ChatViewDto) []int64 {
+func getUserIdsFromChats(chats []dto.ChatViewDto) ([]int64, []int64) {
 	m := map[int64]struct{}{}
+	mt := map[int64]struct{}{}
 
 	for _, ch := range chats {
 		for _, p := range ch.ParticipantIds {
 			m[p] = struct{}{}
+
+			if ch.TetATet {
+				mt[p] = struct{}{}
+			}
 		}
 
 		if ch.LastMessageOwnerId != nil {
@@ -586,11 +616,17 @@ func getUserIdsFromChats(chats []dto.ChatViewDto) []int64 {
 	}
 
 	r := []int64{}
+	rt := []int64{}
 
 	for k, _ := range m {
 		r = append(r, k)
 	}
-	return r
+
+	for k, _ := range mt {
+		rt = append(rt, k)
+	}
+
+	return r, rt
 }
 
 func getChatIdsFromChats(chats []dto.ChatViewDto) []int64 {
@@ -608,7 +644,7 @@ func getChatIdsFromChats(chats []dto.ChatViewDto) []int64 {
 	return r
 }
 
-func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.User, admin bool) dto.ChatViewEnrichedDto {
+func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.User, admin bool, tetATetOnlines map[int64]bool) dto.ChatViewEnrichedDto {
 	che := dto.ChatViewEnrichedDto{
 		ChatViewDto:  ch,
 		Participants: makeParticipants(ch.ParticipantIds, users),
@@ -621,7 +657,21 @@ func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto,
 			if oppositeUser != nil {
 				che.Title = oppositeUser.Login
 				che.Avatar = oppositeUser.Avatar
-				// TODO set last seen
+
+				che.ShortInfo = oppositeUser.ShortInfo
+				che.LoginColor = oppositeUser.LoginColor
+				che.AdditionalData = oppositeUser.AdditionalData
+
+				if oppositeUserId != behalfUserId {
+					che.LastSeenDateTime = oppositeUser.LastSeenDateTime
+
+					onl, ok := tetATetOnlines[oppositeUser.Id]
+					if ok {
+						if onl { // if the opposite user is online we don't need to show last login
+							che.LastSeenDateTime = nil
+						}
+					}
+				}
 			}
 		}
 	}

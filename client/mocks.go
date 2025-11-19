@@ -39,6 +39,74 @@ func (_m *MockAaaRestClient) EXPECT() *MockAaaRestClient_Expecter {
 	return &MockAaaRestClient_Expecter{mock: &_m.Mock}
 }
 
+// GetOnlines provides a mock function for the type MockAaaRestClient
+func (_mock *MockAaaRestClient) GetOnlines(ctx context.Context, userIds []int64) ([]*dto.UserOnline, error) {
+	ret := _mock.Called(ctx, userIds)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOnlines")
+	}
+
+	var r0 []*dto.UserOnline
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []int64) ([]*dto.UserOnline, error)); ok {
+		return returnFunc(ctx, userIds)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []int64) []*dto.UserOnline); ok {
+		r0 = returnFunc(ctx, userIds)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*dto.UserOnline)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []int64) error); ok {
+		r1 = returnFunc(ctx, userIds)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAaaRestClient_GetOnlines_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOnlines'
+type MockAaaRestClient_GetOnlines_Call struct {
+	*mock.Call
+}
+
+// GetOnlines is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userIds []int64
+func (_e *MockAaaRestClient_Expecter) GetOnlines(ctx interface{}, userIds interface{}) *MockAaaRestClient_GetOnlines_Call {
+	return &MockAaaRestClient_GetOnlines_Call{Call: _e.mock.On("GetOnlines", ctx, userIds)}
+}
+
+func (_c *MockAaaRestClient_GetOnlines_Call) Run(run func(ctx context.Context, userIds []int64)) *MockAaaRestClient_GetOnlines_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []int64
+		if args[1] != nil {
+			arg1 = args[1].([]int64)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAaaRestClient_GetOnlines_Call) Return(userOnlines []*dto.UserOnline, err error) *MockAaaRestClient_GetOnlines_Call {
+	_c.Call.Return(userOnlines, err)
+	return _c
+}
+
+func (_c *MockAaaRestClient_GetOnlines_Call) RunAndReturn(run func(ctx context.Context, userIds []int64) ([]*dto.UserOnline, error)) *MockAaaRestClient_GetOnlines_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetUsers provides a mock function for the type MockAaaRestClient
 func (_mock *MockAaaRestClient) GetUsers(ctx context.Context, userIds []int64) ([]*dto.User, error) {
 	ret := _mock.Called(ctx, userIds)
@@ -108,8 +176,8 @@ func (_c *MockAaaRestClient_GetUsers_Call) RunAndReturn(run func(ctx context.Con
 }
 
 // SearchGetUsers provides a mock function for the type MockAaaRestClient
-func (_mock *MockAaaRestClient) SearchGetUsers(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int64, error) {
-	ret := _mock.Called(c, searchString, including, ids, page, size)
+func (_mock *MockAaaRestClient) SearchGetUsers(ctx context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int64, error) {
+	ret := _mock.Called(ctx, searchString, including, ids, page, size)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SearchGetUsers")
@@ -119,22 +187,22 @@ func (_mock *MockAaaRestClient) SearchGetUsers(c context.Context, searchString s
 	var r1 int64
 	var r2 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32) ([]*dto.User, int64, error)); ok {
-		return returnFunc(c, searchString, including, ids, page, size)
+		return returnFunc(ctx, searchString, including, ids, page, size)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, []int64, int64, int32) []*dto.User); ok {
-		r0 = returnFunc(c, searchString, including, ids, page, size)
+		r0 = returnFunc(ctx, searchString, including, ids, page, size)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*dto.User)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string, bool, []int64, int64, int32) int64); ok {
-		r1 = returnFunc(c, searchString, including, ids, page, size)
+		r1 = returnFunc(ctx, searchString, including, ids, page, size)
 	} else {
 		r1 = ret.Get(1).(int64)
 	}
 	if returnFunc, ok := ret.Get(2).(func(context.Context, string, bool, []int64, int64, int32) error); ok {
-		r2 = returnFunc(c, searchString, including, ids, page, size)
+		r2 = returnFunc(ctx, searchString, including, ids, page, size)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -147,17 +215,17 @@ type MockAaaRestClient_SearchGetUsers_Call struct {
 }
 
 // SearchGetUsers is a helper method to define mock.On call
-//   - c context.Context
+//   - ctx context.Context
 //   - searchString string
 //   - including bool
 //   - ids []int64
 //   - page int64
 //   - size int32
-func (_e *MockAaaRestClient_Expecter) SearchGetUsers(c interface{}, searchString interface{}, including interface{}, ids interface{}, page interface{}, size interface{}) *MockAaaRestClient_SearchGetUsers_Call {
-	return &MockAaaRestClient_SearchGetUsers_Call{Call: _e.mock.On("SearchGetUsers", c, searchString, including, ids, page, size)}
+func (_e *MockAaaRestClient_Expecter) SearchGetUsers(ctx interface{}, searchString interface{}, including interface{}, ids interface{}, page interface{}, size interface{}) *MockAaaRestClient_SearchGetUsers_Call {
+	return &MockAaaRestClient_SearchGetUsers_Call{Call: _e.mock.On("SearchGetUsers", ctx, searchString, including, ids, page, size)}
 }
 
-func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32)) *MockAaaRestClient_SearchGetUsers_Call {
+func (_c *MockAaaRestClient_SearchGetUsers_Call) Run(run func(ctx context.Context, searchString string, including bool, ids []int64, page int64, size int32)) *MockAaaRestClient_SearchGetUsers_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -200,7 +268,7 @@ func (_c *MockAaaRestClient_SearchGetUsers_Call) Return(users []*dto.User, n int
 	return _c
 }
 
-func (_c *MockAaaRestClient_SearchGetUsers_Call) RunAndReturn(run func(c context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int64, error)) *MockAaaRestClient_SearchGetUsers_Call {
+func (_c *MockAaaRestClient_SearchGetUsers_Call) RunAndReturn(run func(ctx context.Context, searchString string, including bool, ids []int64, page int64, size int32) ([]*dto.User, int64, error)) *MockAaaRestClient_SearchGetUsers_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -233,8 +301,8 @@ func (_m *MockChatCreateOption) EXPECT() *MockChatCreateOption_Expecter {
 }
 
 // Apply provides a mock function for the type MockChatCreateOption
-func (_mock *MockChatCreateOption) Apply(chatCreateDto *dto.ChatCreateDto) {
-	_mock.Called(chatCreateDto)
+func (_mock *MockChatCreateOption) Apply(createDto *dto.ChatBaseCreateDto) {
+	_mock.Called(createDto)
 	return
 }
 
@@ -244,16 +312,16 @@ type MockChatCreateOption_Apply_Call struct {
 }
 
 // Apply is a helper method to define mock.On call
-//   - chatCreateDto *dto.ChatCreateDto
-func (_e *MockChatCreateOption_Expecter) Apply(chatCreateDto interface{}) *MockChatCreateOption_Apply_Call {
-	return &MockChatCreateOption_Apply_Call{Call: _e.mock.On("Apply", chatCreateDto)}
+//   - createDto *dto.ChatBaseCreateDto
+func (_e *MockChatCreateOption_Expecter) Apply(createDto interface{}) *MockChatCreateOption_Apply_Call {
+	return &MockChatCreateOption_Apply_Call{Call: _e.mock.On("Apply", createDto)}
 }
 
-func (_c *MockChatCreateOption_Apply_Call) Run(run func(chatCreateDto *dto.ChatCreateDto)) *MockChatCreateOption_Apply_Call {
+func (_c *MockChatCreateOption_Apply_Call) Run(run func(createDto *dto.ChatBaseCreateDto)) *MockChatCreateOption_Apply_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 *dto.ChatCreateDto
+		var arg0 *dto.ChatBaseCreateDto
 		if args[0] != nil {
-			arg0 = args[0].(*dto.ChatCreateDto)
+			arg0 = args[0].(*dto.ChatBaseCreateDto)
 		}
 		run(
 			arg0,
@@ -267,7 +335,7 @@ func (_c *MockChatCreateOption_Apply_Call) Return() *MockChatCreateOption_Apply_
 	return _c
 }
 
-func (_c *MockChatCreateOption_Apply_Call) RunAndReturn(run func(chatCreateDto *dto.ChatCreateDto)) *MockChatCreateOption_Apply_Call {
+func (_c *MockChatCreateOption_Apply_Call) RunAndReturn(run func(createDto *dto.ChatBaseCreateDto)) *MockChatCreateOption_Apply_Call {
 	_c.Run(run)
 	return _c
 }

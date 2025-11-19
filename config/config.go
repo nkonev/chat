@@ -132,9 +132,10 @@ type AaaConfig struct {
 }
 
 type AaaUrlConfig struct {
-	Base        string
-	GetUsers    string
-	SearchUsers string
+	Base           string
+	GetUsers       string
+	GetUserOnlines string
+	SearchUsers    string
 }
 
 func (lc *LoggerConfig) GetLevel() slog.Leveler {
