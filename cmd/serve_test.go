@@ -893,6 +893,7 @@ func TestCreateTetATetChat(t *testing.T) {
 		const user2 int64 = 2
 		const user1Login = "admin1"
 		const user2Login = "admin2"
+		var user2Short = "admin2 short info"
 
 		avatar2 := "http://example.com/avatar-admin2.jpg"
 
@@ -910,7 +911,7 @@ func TestCreateTetATetChat(t *testing.T) {
 			Id:               user2,
 			Login:            user2Login,
 			Avatar:           &avatar2,
-			ShortInfo:        nil,
+			ShortInfo:        &user2Short,
 			LoginColor:       nil,
 			LastSeenDateTime: nil,
 			AdditionalData:   nil,
@@ -941,6 +942,7 @@ func TestCreateTetATetChat(t *testing.T) {
 		assert.Equal(t, user2Login, chat1OfUser1.Title)
 		assert.Equal(t, avatar2, *chat1OfUser1.Avatar)
 		assert.Nil(t, chat1OfUser1.LastSeenDateTime)
+		assert.Equal(t, user2Short, *chat1OfUser1.ShortInfo)
 
 		assert.Equal(t, []int64{2, 1}, chat1OfUser1.ParticipantIds)
 		assert.Equal(t, user2Login, chat1OfUser1.Participants[0].Login)
