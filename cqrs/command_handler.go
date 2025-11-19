@@ -374,19 +374,6 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		}
 	}
 
-	cb, err := commonProjection.GetChatBasic(ctx, dba, copyCommand.ChatId)
-	if err != nil {
-		return err
-	}
-
-	if cb == nil {
-		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", copyCommand.ChatId))
-	}
-
-	if cb.TetATet {
-		return NewValidationError("Error during validation: tet-a-tet chat cannot be changed")
-	}
-
 	cc := &ChatEdited{
 		AdditionalData:                      copyCommand.AdditionalData,
 		ChatId:                              copyCommand.ChatId,
