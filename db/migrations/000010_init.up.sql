@@ -97,8 +97,12 @@ create unlogged table technical(
 create unlogged table blog(
     id int primary key,
     owner_id bigint,
+    message_id bigint,
     title varchar(256) not null,
+    image_url text,
     post text,
     preview varchar(512),
-    create_date_time timestamp not null
+    create_date_time timestamp not null,
+    file_item_uuid varchar(36),
+    fts_all_content tsvector generated always as (to_tsvector('russian', strip_tags(coalesce(title, '')) || ' ' || strip_tags(coalesce(post, '')))) stored
 );

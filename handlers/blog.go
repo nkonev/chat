@@ -43,15 +43,15 @@ func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
 	size := utils.FixSizeString(g.Query(dto.SizeParam))
 	offset := utils.GetOffset(page, size)
 	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), true)
+	searchString := g.Query(dto.SearchStringParam)
 
-	blogs, err := ch.enrichingProjection.GetBlogsEnriched(g.Request.Context(), size, offset, reverse)
+	blogs, err := ch.enrichingProjection.GetBlogsEnriched(g.Request.Context(), size, offset, reverse, searchString)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blogs", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
-	// TODO wrap with BlogPostsDTO
 	g.JSON(http.StatusOK, blogs)
 }
 

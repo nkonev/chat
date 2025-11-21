@@ -5,46 +5,98 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
+	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/georgysavva/scany/v2/sqlscan"
 )
 
 func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId int64, createdTime time.Time) error {
+	var blogInpData = struct {
+		ChatId      int64   `db:"chat_id"`
+		MessageId   *int64  `db:"message_id"`
+		ChatAvatar  *string `db:"chat_avatar"`
+		MessageText *string `db:"message_text"`
+	}{}
+
+	err := sqlscan.Get(ctx, tx, &blogInpData, `
+	with blog_message as (
+		select m.* from message m where m.chat_id = $1 and m.blog_post = true order by create_date_time desc limit 1
+	)
+	select 
+		cc.id as chat_id,
+		m.id as message_id,
+		coalesce(cc.avatar_big, cc.avatar) as chat_avatar,
+		m.content as message_text
+	from chat_common cc
+	left join blog_message m on cc.id = m.chat_id
+	where cc.id = $1
+	`, chatId)
+	if err != nil {
+		return err
+	}
+
+	imageUrl := getBlogPostImage(ctx, m.lgr, blogInpData.MessageText, blogInpData.ChatAvatar, blogInpData.ChatId, blogInpData.MessageId)
+
 	_, errInner := tx.ExecContext(ctx, `
 				with blog_message as (
 					select m.* from message m where m.chat_id = $1 and m.blog_post = true limit 1
 				),
 				input_data as (
 					select 
-						 cast ($1 as bigint) as chat_id
+						 c.id as chat_id
 						,m.owner_id
+						,m.id as message_id
 						,c.title
-						,m.content
-						,left(strip_tags(m.content), $2) as content_preview
+						,m.content as post
+						,left(strip_tags(m.content), $2) as post_preview
+						,m.file_item_uuid
 						,cast ($3 as timestamp) as create_date_time
+						,cast ($4 as text) as image_url
 					from chat_common c 
 					left join blog_message m on c.id = m.chat_id
 					where c.id = $1
 				)
-				insert into blog(id, owner_id, title, post, preview, create_date_time)
+				insert into blog(
+					id, 
+					owner_id,
+					message_id,
+					title, 
+					image_url,
+					post, 
+					preview,
+					file_item_uuid,
+					create_date_time
+				)
 				select 
 				     idt.chat_id
 					,idt.owner_id
+					,idt.message_id
 					,idt.title
-					,idt.content
-					,idt.content_preview
+					,idt.image_url
+					,idt.post
+					,idt.post_preview
+					,idt.file_item_uuid
 					,idt.create_date_time
 				from input_data idt
 				on conflict(id) do update set 
-					owner_id = excluded.owner_id
+					  owner_id = excluded.owner_id
+					, message_id = excluded.message_id
 					, title = excluded.title
+					, image_url = excluded.image_url
 					, post = excluded.post
 					, preview = excluded.preview
-			`, chatId, m.cfg.Cqrs.Projections.BlogView.MaxTextPreviewSize, createdTime)
+					, file_item_uuid = excluded.file_item_uuid
+					, create_date_time = excluded.create_date_time
+			`, chatId, m.cfg.Cqrs.Projections.BlogView.MaxTextPreviewSize, createdTime, imageUrl)
 	if errInner != nil {
 		return errInner
 	}
@@ -141,8 +193,10 @@ func (m *CommonProjection) GetCurrentBlogPostMessage(ctx context.Context, co db.
 	return &id, nil
 }
 
-func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, offset int64, reverseOrder bool) ([]dto.BlogViewEnrichedDto, error) {
-	blogs, err := m.cp.GetBlogs(ctx, size, offset, reverseOrder)
+func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, offset int64, reverseOrder bool, searchString string) (*dto.BlogPostsDTO, error) {
+	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
+
+	blogs, count, err := m.cp.GetBlogs(ctx, size, offset, reverseOrder, searchString)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting blogs", "err", err)
 		return nil, err
@@ -153,11 +207,22 @@ func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, 
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
-	blogsEnriched := enrichBlogs(blogs, utils.ToMap(users))
-	return blogsEnriched, nil
+	blogsEnriched := m.enrichBlogs(ctx, blogs, utils.ToMap(users))
+
+	pagesCount := count / int64(size)
+	if count%int64(size) > 0 {
+		pagesCount++
+	}
+
+	return &dto.BlogPostsDTO{
+		Header:     dto.BlogHeader{AboutPostId: nil, AboutPostTitle: nil}, // TODO
+		Items:      blogsEnriched,
+		Count:      count,
+		PagesCount: pagesCount,
+	}, nil
 }
 
-func getUserIdsFromBlogs(chats []dto.BlogViewDto) []int64 {
+func getUserIdsFromBlogs(chats []BlogListViewDto) []int64 {
 	m := map[int64]struct{}{}
 
 	for _, ch := range chats {
@@ -174,49 +239,112 @@ func getUserIdsFromBlogs(chats []dto.BlogViewDto) []int64 {
 	return r
 }
 
-func enrichBlogs(blogs []dto.BlogViewDto, users map[int64]*dto.User) []dto.BlogViewEnrichedDto {
-	res := make([]dto.BlogViewEnrichedDto, 0, len(blogs))
+func (m *EnrichingProjection) enrichBlogs(ctx context.Context, blogs []BlogListViewDto, users map[int64]*dto.User) []*dto.BlogPostPreviewDto {
+	res := make([]*dto.BlogPostPreviewDto, 0, len(blogs))
 	for _, ch := range blogs {
 		var u *dto.User
 		if ch.OwnerId != nil {
 			u = users[*ch.OwnerId]
 		}
-		che := dto.BlogViewEnrichedDto{
-			BlogViewDto: ch,
-			Owner:       u,
+		che := dto.BlogPostPreviewDto{
+			Id:             ch.Id,
+			Title:          ch.Title,
+			CreateDateTime: ch.CreateDateTime,
+			OwnerId:        ch.OwnerId,
+			Owner:          u,
+			MessageId:      ch.MessageId,
+			Text:           ch.Post,
+			Preview:        ch.Preview,
+			ImageUrl:       ch.Image,
 		}
-		res = append(res, che)
+
+		res = append(res, &che)
 	}
 	return res
 }
 
-func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int64, reverseOrder bool) ([]dto.BlogViewDto, error) {
-	ma := []dto.BlogViewDto{}
+type BlogListViewDto struct {
+	Id             int64     `db:"id"`
+	OwnerId        *int64    `db:"owner_id"`
+	MessageId      *int64    `db:"message_id"`
+	Title          string    `db:"title"`
+	Post           *string   `db:"post"`
+	Preview        *string   `db:"preview"`
+	CreateDateTime time.Time `db:"create_date_time"`
+	Image          *string   `db:"image_url"`
+}
+
+func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int64, reverseOrder bool, searchString string) ([]BlogListViewDto, int64, error) {
+	queryArgs := []any{size, offset}
 
 	order := "asc"
 	if reverseOrder {
 		order = "desc"
 	}
 
-	err := sqlscan.Select(ctx, m.db, &ma, fmt.Sprintf(`
-		select 
-		    b.id,
-			b.owner_id,
-		    b.title,
-		    b.preview,
-		    b.create_date_time
-		from blog b
-		order by b.create_date_time %s
-		limit $1 offset $2
-	`, order), size, offset)
-	if err != nil {
-		return ma, err
+	searchClause := ""
+	if len(searchString) > 0 {
+		searchClause = " and ("
+
+		queryArgs = append(queryArgs, searchString)
+		searchClause += fmt.Sprintf(`and exists( 
+			select 1 from (select * from (select unnest(tsvector_to_array(b.fts_all_content))) t(av)) inq 
+			where
+				   ( inq.av %% to_tsquery('russian', $%d)::text )
+			    or ( cyrillic_transliterate(inq.av) %% cyrillic_transliterate(to_tsquery('russian', $%d)::text) ) 
+		) `, len(queryArgs), len(queryArgs))
+
+		searchClause += " ) "
 	}
-	return ma, nil
+
+	type postsWithCount struct {
+		blogListViewDto []BlogListViewDto
+		count           int64
+	}
+
+	pwc, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*postsWithCount, error) {
+		ma := []BlogListViewDto{}
+
+		errInner := sqlscan.Select(ctx, tx, &ma, fmt.Sprintf(`
+			select 
+				b.id,
+				b.owner_id,
+				b.message_id,
+				b.title,
+				b.post,
+				b.image_url,
+				b.preview,
+				b.create_date_time
+			from blog b
+			where true %s
+			order by b.create_date_time %s
+			limit $1 offset $2
+		`, searchClause, order), queryArgs...)
+		if errInner != nil {
+			return nil, errInner
+		}
+
+		var count int64
+		errInner = sqlscan.Get(ctx, tx, &count, "select count(*) from blog")
+		if errInner != nil {
+			return nil, errInner
+		}
+
+		return &postsWithCount{
+			blogListViewDto: ma,
+			count:           count,
+		}, nil
+	})
+
+	if errOuter != nil {
+		return nil, 0, errOuter
+	}
+
+	return pwc.blogListViewDto, pwc.count, nil
 }
 
-func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64) (*dto.BlogEnrichedDto, error) {
-	blog, err := m.cp.GetBlog(ctx, blogId)
+func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64) (*dto.WrappedBlogPostResponse, error) {
+	blog, chatBasic, err := m.cp.GetBlog(ctx, blogId)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting blog", "err", err)
 		return nil, err
@@ -231,11 +359,15 @@ func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64)
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
-	blogEnriched := enrichBlog(blog, utils.ToMap(users))
-	return blogEnriched, nil
+	blogEnriched := enrichBlog(ctx, m.lgr, m.cfg, blog, utils.ToMap(users))
+	return &dto.WrappedBlogPostResponse{
+		Header:          dto.BlogHeader{AboutPostId: nil, AboutPostTitle: nil}, // TODO
+		Post:            *blogEnriched,
+		CanWriteMessage: chatBasic.RegularParticipantCanWriteMessage,
+	}, nil
 }
 
-func getUserIdsFromBlog(blog *dto.BlogDto) []int64 {
+func getUserIdsFromBlog(blog *BlogPostViewDto) []int64 {
 	ret := []int64{}
 	if blog == nil {
 		return ret
@@ -247,7 +379,13 @@ func getUserIdsFromBlog(blog *dto.BlogDto) []int64 {
 	return ret
 }
 
-func enrichBlog(blog *dto.BlogDto, users map[int64]*dto.User) *dto.BlogEnrichedDto {
+func enrichBlog(
+	ctx context.Context,
+	lgr *logger.LoggerWrapper,
+	cfg *config.AppConfig,
+	blog *BlogPostViewDto,
+	users map[int64]*dto.User,
+) *dto.BlogPostResponse {
 	if blog == nil {
 		return nil
 	}
@@ -258,34 +396,88 @@ func enrichBlog(blog *dto.BlogDto, users map[int64]*dto.User) *dto.BlogEnrichedD
 		u = users[*ownerIdP]
 	}
 
-	return &dto.BlogEnrichedDto{
-		BlogDto: *blog,
-		Owner:   u,
+	var postP *string
+
+	if blog.Post != nil && blog.MessageId != nil {
+		post := PatchStorageUrlToPublic(ctx, lgr, cfg, *blog.Post, blog.Id, *blog.MessageId)
+		postP = &post
+	}
+
+	return &dto.BlogPostResponse{
+		ChatId:         blog.Id,
+		Title:          blog.Title,
+		OwnerId:        blog.OwnerId,
+		Owner:          u,
+		MessageId:      blog.MessageId,
+		Text:           postP,
+		CreateDateTime: blog.CreateDateTime,
+		Reactions:      nil, // TODO
+		Preview:        blog.Preview,
+		FileItemUuid:   blog.FileItemUuid,
 	}
 }
 
-func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*dto.BlogDto, error) {
-	var res *dto.BlogDto
-	err := sqlscan.Get(ctx, m.db, &res, `
+type BlogPostViewDto struct {
+	Id             int64     `db:"id"`
+	OwnerId        *int64    `db:"owner_id"`
+	MessageId      *int64    `db:"message_id"`
+	Title          string    `db:"title"`
+	Post           *string   `db:"post"`
+	Preview        *string   `db:"preview"`
+	CreateDateTime time.Time `db:"create_date_time"`
+	FileItemUuid   *string   `db:"file_item_uuid"`
+}
+
+func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*BlogPostViewDto, *dto.ChatBasic, error) {
+	type getBlogResponse struct {
+		blogDto   BlogPostViewDto
+		chatBasic dto.ChatBasic
+	}
+
+	respOuter, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*getBlogResponse, error) {
+		var bld BlogPostViewDto
+		err := sqlscan.Get(ctx, tx, &bld, `
 		select 
 		    b.id,
 			b.owner_id,
+			b.message_id,
 		    b.title,
 		    b.post,
+		    b.preview,
+		    b.file_item_uuid,
 		    b.create_date_time
 		from blog b
 		where b.id = $1
 		order by b.create_date_time desc 
 	`, blogId)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			// there were no rows, but otherwise no error occurred
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				// there were no rows, but otherwise no error occurred
+				return nil, nil
+			}
+			return nil, err
+		}
+
+		cb, err := m.GetChatBasic(ctx, tx, blogId)
+		if err != nil {
+			return nil, err
+		}
+
+		if cb == nil {
 			return nil, nil
 		}
-		return nil, err
+
+		return &getBlogResponse{
+			blogDto:   bld,
+			chatBasic: *cb,
+		}, nil
+	})
+
+	if errOuter != nil {
+		return nil, nil, errOuter
 	}
 
-	return res, nil
+	return &respOuter.blogDto, &respOuter.chatBasic, nil
 }
 
 func (m *CommonProjection) getBlogPostMessageId(ctx context.Context, co db.CommonOperations, blogId int64) (int64, error) {
@@ -378,6 +570,9 @@ func (m *CommonProjection) GetComments(ctx context.Context, blogId int64, size i
 		if err != nil {
 			return []dto.CommentViewDto{}, err
 		}
+
+		// TODO enrich comments with PatchStorageUrlToPublic()
+
 		comments, err := m.getComments(ctx, tx, blogId, postMessageId, size, offset, reverseOrder)
 		if err != nil {
 			return []dto.CommentViewDto{}, err
@@ -388,4 +583,147 @@ func (m *CommonProjection) GetComments(ctx context.Context, blogId int64, size i
 		return []dto.CommentViewDto{}, errOuter
 	}
 	return res, nil
+}
+
+func PatchStorageUrlToPublic(
+	ctx context.Context,
+	lgr *logger.LoggerWrapper,
+	cfg *config.AppConfig,
+	text string,
+	overrideChatId,
+	overrideMessageId int64,
+) string {
+	// Load the HTML document
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(text))
+	if err != nil {
+		lgr.WarnContext(ctx, "Unable to read html", "err", err)
+		return ""
+	}
+
+	wlArr := []string{"", cfg.FrontendUrl} // if our own server (storage)
+
+	doc.Find("img").Each(func(i int, s *goquery.Selection) {
+		maybeImage := s.First()
+		if maybeImage != nil {
+			original, originalExists := maybeImage.Attr("data-original")
+			if originalExists { // we have 2 tags - preview (small, tag attr) and original (data-original attr)
+				if utils.ContainsUrl(ctx, lgr, wlArr, original) { // original
+					newurl, err := makeUrlPublic(original, "", overrideChatId, overrideMessageId)
+					if err != nil {
+						lgr.WarnContext(ctx, "Unable to change url", "err", err)
+						return
+					}
+					maybeImage.SetAttr("data-original", newurl)
+				}
+
+				src, srcExists := maybeImage.Attr("src") // preview
+				if srcExists && utils.ContainsUrl(ctx, lgr, wlArr, src) {
+					newurl, err := makeUrlPublic(src, utils.UrlStorageEmbedPreview, overrideChatId, overrideMessageId)
+					if err != nil {
+						lgr.WarnContext(ctx, "Unable to change url", "err", err)
+						return
+					}
+					maybeImage.SetAttr("src", newurl)
+				}
+			}
+		}
+	})
+
+	ret, err := doc.Find("html").Find("body").Html()
+	if err != nil {
+		lgr.WarnContext(ctx, "Unable to write html", "err", err)
+		return ""
+	}
+	return ret
+}
+
+func getBlogPostImage(ctx context.Context, lgr *logger.LoggerWrapper, messageText, chatAvatar *string, chatId int64, messageId *int64) *string {
+	if !(messageText == nil || messageId == nil) {
+		mbImage := tryGetFirstImage(ctx, lgr, *messageText)
+		if mbImage != nil {
+			fileParam, err := getFileParam(*mbImage)
+			if err != nil {
+				lgr.WarnContext(ctx, "Unable to get file key", "err", err)
+				return nil
+			}
+			if len(fileParam) > 0 {
+				dumbUrl := url.URL{}
+				query := dumbUrl.Query()
+				query.Set(utils.FileParam, utils.SetImagePreviewExtension(fileParam))
+				dumbUrl.RawQuery = query.Encode()
+
+				publicPreviewUrl, err := makeUrlPublic(dumbUrl.String(), utils.UrlStorageEmbedPreview, chatId, *messageId)
+				if err != nil {
+					lgr.WarnContext(ctx, "Unable to to change url", "err", err)
+					return nil
+				}
+				return &publicPreviewUrl
+			}
+		}
+	}
+
+	return chatAvatar
+}
+
+func tryGetFirstImage(ctx context.Context, lgr *logger.LoggerWrapper, text string) *string {
+	// Load the HTML document
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(text))
+	if err != nil {
+		lgr.WarnContext(ctx, "Unable to get image", "err", err)
+		return nil
+	}
+
+	maybeImage := doc.Find("img").First()
+	if maybeImage != nil {
+		src, exists := maybeImage.Attr("src")
+		if exists {
+			return &src
+		}
+	}
+	maybeVideo := doc.Find("video").First()
+	if maybeVideo != nil {
+		src, exists := maybeVideo.Attr("poster")
+		if exists {
+			return &src
+		}
+	}
+
+	return nil
+}
+
+func getFileParam(src string) (string, error) {
+	parsed, err := url.Parse(src)
+	if err != nil {
+		return "", err
+	}
+	fileParam := parsed.Query().Get(utils.FileParam)
+	return fileParam, nil
+}
+
+const OverrideMessageId = "overrideMessageId"
+const OverrideChatId = "overrideChatId"
+
+// see also storage/services/files.go :: makeUrlPublic
+func makeUrlPublic(src string, additionalSegment string, overrideChatId, overrideMessageId int64) (string, error) {
+	if strings.HasPrefix(src, "/images/covers/") { // don't touch built-in default urls (used for video-by-link, audio)
+		return src, nil
+	}
+
+	// we add time in order not to cache the video itself
+	parsed, err := url.Parse(src)
+	if err != nil {
+		return "", err
+	}
+
+	parsed.Path = utils.UrlStoragePublicGetFile + additionalSegment
+
+	query := parsed.Query()
+
+	query.Set(OverrideMessageId, utils.ToString(overrideMessageId))
+	query.Set(OverrideChatId, utils.ToString(overrideChatId))
+
+	parsed.RawQuery = query.Encode()
+
+	newurl := parsed.String()
+	return newurl, nil
 }

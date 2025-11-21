@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/config"
@@ -15,9 +14,7 @@ import (
 	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
-	"net/url"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -769,58 +766,6 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 	return res.items, res.notAparticipant, nil
 }
 
-// in order to be able to see video in Chrome after minio link's ttl expiration
-func patchStorageUrlToPreventCachingVideo(ctx context.Context, lgr *logger.LoggerWrapper, cfg *config.AppConfig, text string) string {
-	// Load the HTML document
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(text))
-	if err != nil {
-		lgr.WarnContext(ctx, "Unable to read html", "err", err)
-		return ""
-	}
-
-	wlArr := []string{"", cfg.FrontendUrl} // if our own server (storage)
-
-	doc.Find("video").Each(func(i int, s *goquery.Selection) {
-		maybeVideo := s.First()
-		if maybeVideo != nil {
-			src, srcExists := maybeVideo.Attr("src")
-			if srcExists && utils.ContainsUrl(ctx, lgr, wlArr, src) {
-				newurl, err := addTimeToUrl(src)
-				if err != nil {
-					lgr.WarnContext(ctx, "Unable to change url", "err", err)
-					return
-				}
-				maybeVideo.SetAttr("src", newurl)
-			}
-		}
-	})
-
-	ret, err := doc.Find("html").Find("body").Html()
-	if err != nil {
-		lgr.WarnContext(ctx, "Unable to write html", "err", err)
-		return ""
-	}
-	return ret
-}
-
-func addTimeToUrl(src string) (string, error) {
-	parsed, err := url.Parse(src)
-	if err != nil {
-		return "", err
-	}
-
-	query := parsed.Query()
-	addTimeToUrlValues(&query)
-	parsed.RawQuery = query.Encode()
-
-	newurl := parsed.String()
-	return newurl, nil
-}
-
-func addTimeToUrlValues(query *url.Values) {
-	query.Set("time", utils.ToString(time.Now().UTC().Unix()))
-}
-
 func getUserRoles(usersMap map[int64]*dto.User, behalfUserId int64) []string {
 	user := usersMap[behalfUserId]
 	if user == nil || user.AdditionalData == nil {
@@ -996,10 +941,11 @@ func enrichMessage(
 	bloggingIsAllowed bool,
 ) (*dto.MessageViewEnrichedDto, error) {
 	me := dto.MessageViewEnrichedDto{
-		Id:             m.Id,
-		ChatId:         chatId,
-		OwnerId:        m.OwnerId,
-		Content:        patchStorageUrlToPreventCachingVideo(ctx, lgr, cfg, m.Content),
+		Id:      m.Id,
+		ChatId:  chatId,
+		OwnerId: m.OwnerId,
+		// no need to patchStorageUrlToPreventCachingVideo because there is no video html tags
+		Content:        m.Content,
 		BlogPost:       m.BlogPost,
 		UpdateDateTime: m.UpdateDateTime,
 		CreateDateTime: m.CreateDateTime,
@@ -1157,7 +1103,7 @@ func setEmbed(
 			embeddedUser := users[typed.OwnerId]
 			dstRet.EmbedMessage = &dto.EmbedMessageResponse{
 				Id:        typed.MessageId,
-				Text:      patchStorageUrlToPreventCachingVideo(ctx, lgr, cfg, typed.MessageContent),
+				Text:      typed.MessageContent,
 				EmbedType: string(typed.GetType()),
 				Owner:     embeddedUser,
 			}
@@ -1177,7 +1123,7 @@ func setEmbed(
 				Id:            typed.MessageId,
 				ChatId:        &typed.ChatId,
 				ChatName:      embedChatName,
-				Text:          patchStorageUrlToPreventCachingVideo(ctx, lgr, cfg, typed.MessageContent),
+				Text:          typed.MessageContent,
 				EmbedType:     string(typed.GetType()),
 				Owner:         embeddedUser,
 				IsParticipant: isParticipant,

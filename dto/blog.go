@@ -3,30 +3,43 @@ package dto
 import "time"
 
 // list view
-type BlogViewDto struct {
-	Id             int64     `json:"id" db:"id"`
-	OwnerId        *int64    `json:"ownerId" db:"owner_id"`
-	Title          string    `json:"title" db:"title"`
-	Preview        *string   `json:"preview" db:"preview"`
-	CreateDateTime time.Time `json:"createDateTime" db:"create_date_time"`
+type BlogPostsDTO struct {
+	Header     BlogHeader            `json:"header"`
+	Items      []*BlogPostPreviewDto `json:"items"`
+	Count      int64                 `json:"count"`
+	PagesCount int64                 `json:"pagesCount"`
 }
 
-type BlogViewEnrichedDto struct {
-	BlogViewDto
-	Owner *User `json:"owner"`
+type BlogPostPreviewDto struct {
+	Id             int64     `json:"id"` // chatId
+	Title          string    `json:"title"`
+	CreateDateTime time.Time `json:"createDateTime"`
+	OwnerId        *int64    `json:"ownerId"`
+	Owner          *User     `json:"owner"`
+	MessageId      *int64    `json:"messageId"`
+	Text           *string   `json:"-"`
+	Preview        *string   `json:"preview"`
+	ImageUrl       *string   `json:"imageUrl"`
 }
 
-type BlogDto struct {
-	Id             int64     `json:"id" db:"id"`
-	OwnerId        *int64    `json:"ownerId" db:"owner_id"`
-	Title          string    `json:"title" db:"title"`
-	Post           *string   `json:"post" db:"post"`
-	CreateDateTime time.Time `json:"createDateTime" db:"create_date_time"`
+// post view
+type WrappedBlogPostResponse struct {
+	Header          BlogHeader       `json:"header"`
+	Post            BlogPostResponse `json:"post"`
+	CanWriteMessage bool             `json:"canWriteMessage"`
 }
 
-type BlogEnrichedDto struct {
-	BlogDto
-	Owner *User `json:"owner"`
+type BlogPostResponse struct {
+	ChatId         int64      `json:"chatId"`
+	Title          string     `json:"title"`
+	OwnerId        *int64     `json:"ownerId"`
+	Owner          *User      `json:"owner"`
+	MessageId      *int64     `json:"messageId"`
+	Text           *string    `json:"text"`
+	CreateDateTime time.Time  `json:"createDateTime"`
+	Reactions      []Reaction `json:"reactions"`
+	Preview        *string    `json:"preview"`
+	FileItemUuid   *string    `json:"fileItemUuid"`
 }
 
 type CommentViewDto struct {
@@ -44,4 +57,9 @@ type CommentViewEnrichedDto struct {
 
 type CanCreateBlogDto struct {
 	CanCreateBlog bool `json:"canCreateBlog"`
+}
+
+type BlogHeader struct {
+	AboutPostId    *int64  `json:"aboutPostId"`
+	AboutPostTitle *string `json:"aboutPostTitle"`
 }

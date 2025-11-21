@@ -271,8 +271,8 @@ func (rc *TestRestClient) PutUserChatNotificationSettings(ctx context.Context, b
 	return queryNoResponse[dto.PutChatNotificationSettingsDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/notification", "chat.PutUserChatNotificationSettings", &req, nil)
 }
 
-func (rc *TestRestClient) SearchBlogs(ctx context.Context) ([]dto.BlogViewDto, error) {
-	return query[any, []dto.BlogViewDto](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/blog/search", "blog.Search", nil, nil)
+func (rc *TestRestClient) SearchBlogs(ctx context.Context) (dto.BlogPostsDTO, error) {
+	return query[any, dto.BlogPostsDTO](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/blog", "blog.Search", nil, nil)
 }
 
 type MessageCreateOption interface {

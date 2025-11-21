@@ -2958,8 +2958,9 @@ func TestBlog(t *testing.T) {
 		require.NoError(t, err, "error in making message blog post")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		blogs, err := testRestClient.SearchBlogs(ctx)
+		blogsW, err := testRestClient.SearchBlogs(ctx)
 		require.NoError(t, err, "error in searching blog posts")
+		blogs := blogsW.Items
 		assert.Equal(t, 1, len(blogs))
 		assert.Equal(t, chat1Id, blogs[0].Id)
 		assert.Equal(t, chat1Name, blogs[0].Title)
@@ -3005,8 +3006,9 @@ func TestBlog(t *testing.T) {
 		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1Name, client.NewChatOptionBlog(false))
 		require.NoError(t, err, "error in unmaking message blog post")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-		blogsNew, err := testRestClient.SearchBlogs(ctx)
+		blogsNewW, err := testRestClient.SearchBlogs(ctx)
 		require.NoError(t, err, "error in searching blog posts")
+		blogsNew := blogsNewW.Items
 		assert.Equal(t, 0, len(blogsNew))
 	})
 }

@@ -252,3 +252,31 @@ func ArrayToSet(arr []int64) map[int64]bool {
 	}
 	return ownerIds
 }
+
+const FileParam = "file"
+const UrlStoragePublicGetFile = "/api/storage/public/download"
+const UrlStorageEmbedPreview = "/embed/preview"
+
+func SetImagePreviewExtension(key string) string {
+	return SetExtension(key, "jpg")
+}
+
+func SetExtension(fileName string, newExtension string) string {
+	idx := strings.LastIndex(fileName, ".")
+	if idx > 0 {
+		firstPart := fileName[0:idx]
+		return firstPart + "." + newExtension
+	} else {
+		return fileName
+	}
+}
+
+func RemoveExtension(fileName string) string {
+	idx := strings.LastIndex(fileName, ".")
+	if idx > 0 {
+		firstPart := fileName[0:idx]
+		return firstPart
+	} else {
+		return fileName
+	}
+}
