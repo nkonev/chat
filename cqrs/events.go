@@ -43,6 +43,7 @@ type ChatEdited struct {
 	ChatId                              int64           `json:"chatId"`
 	Title                               string          `json:"title"`
 	Blog                                bool            `json:"blog"`
+	BlogAbout                           bool            `json:"blogAbout"`
 	Avatar                              *string         `json:"avatar"`
 	AvatarBig                           *string         `json:"avatarBig"`
 	CanResend                           bool            `json:"canResend"`

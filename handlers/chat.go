@@ -172,6 +172,7 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		Title:                               ccd.Title,
 		ParticipantIdsToAdd:                 ccd.ParticipantIds,
 		Blog:                                ccd.Blog,
+		BlogAbout:                           ccd.BlogAbout,
 		Avatar:                              ccd.Avatar,
 		AvatarBig:                           ccd.AvatarBig,
 		CanResend:                           utils.GetNullableBooleanOr(ccd.CanResend, dto.DefaultCanResend),

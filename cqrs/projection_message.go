@@ -104,7 +104,7 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 		}
 
 		if messageBlogPost {
-			err = m.refreshBlog(ctx, tx, event.MessageCommoned.ChatId, event.AdditionalData.CreatedAt)
+			_, err = m.refreshBlog(ctx, tx, event.MessageCommoned.ChatId, event.AdditionalData.CreatedAt, nil)
 			if err != nil {
 				return err
 			}
@@ -146,7 +146,7 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 		}
 
 		if messageBlogPost {
-			err = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt)
+			_, err = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt, nil)
 			if err != nil {
 				return err
 			}

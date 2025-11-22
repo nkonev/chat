@@ -438,7 +438,7 @@ func (rc *TestRestClient) MakeMessageBlogPost(ctx context.Context, behalfUserId 
 }
 
 func (rc *TestRestClient) SearchBlogComments(ctx context.Context, blogId int64) (dto.CommentsWrapper, error) {
-	return query[any, dto.CommentsWrapper](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/blog/"+utils.ToString(blogId)+"/comment/search", "blog.SearchComments", nil, nil)
+	return query[any, dto.CommentsWrapper](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/blog/"+utils.ToString(blogId)+"/comment", "blog.SearchComments", nil, nil)
 }
 
 // You must await after this command, because it takes a time to apply "ParticipantAdd" event

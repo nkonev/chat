@@ -110,6 +110,7 @@ type ChatEdit struct {
 	Title                               string
 	ParticipantIdsToAdd                 []int64
 	Blog                                bool // desired state
+	BlogAbout                           bool // desired state
 	Avatar                              *string
 	AvatarBig                           *string
 	CanResend                           bool
@@ -379,6 +380,7 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		ChatId:                              copyCommand.ChatId,
 		Title:                               copyCommand.Title,
 		Blog:                                copyCommand.Blog,
+		BlogAbout:                           copyCommand.BlogAbout,
 		Avatar:                              copyCommand.Avatar,
 		AvatarBig:                           copyCommand.AvatarBig,
 		CanResend:                           copyCommand.CanResend,

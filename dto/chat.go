@@ -26,6 +26,7 @@ type ChatViewDto struct {
 	ParticipantsCount                   int64      `json:"participantsCount"`
 	ParticipantIds                      []int64    `json:"participantIds"` // ids of last N participants
 	Blog                                bool       `json:"blog"`
+	BlogAbout                           bool       `json:"blogAbout"`
 	UpdateDateTime                      *time.Time `json:"lastUpdateDateTime"` // for sake compatibility
 	TetATet                             bool       `json:"tetATet"`
 	Avatar                              *string    `json:"avatar"`
@@ -50,6 +51,7 @@ type ChatBaseCreateDto struct {
 	Title                               string  `json:"name"`
 	ParticipantIds                      []int64 `json:"participantIds"`
 	Blog                                bool    `json:"blog"`
+	BlogAbout                           bool    `json:"blogAbout"`
 	Avatar                              *string `json:"avatar"`
 	AvatarBig                           *string `json:"avatarBig"`
 	CanReact                            *bool   `json:"canReact"`

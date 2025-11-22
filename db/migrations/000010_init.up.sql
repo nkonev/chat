@@ -96,6 +96,7 @@ create unlogged table technical(
 
 create unlogged table blog(
     id int primary key,
+    blog_about boolean not null,
     owner_id bigint,
     message_id bigint,
     title varchar(256) not null,

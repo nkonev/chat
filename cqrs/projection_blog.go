@@ -20,12 +20,13 @@ import (
 	"github.com/georgysavva/scany/v2/sqlscan"
 )
 
-func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId int64, createdTime time.Time) error {
+func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId int64, createdTime time.Time, blogAboutP *bool) (*int64, error) {
 	var blogInpData = struct {
 		ChatId      int64   `db:"chat_id"`
 		MessageId   *int64  `db:"message_id"`
 		ChatAvatar  *string `db:"chat_avatar"`
 		MessageText *string `db:"message_text"`
+		BlogAbout   bool    `db:"blog_about"`
 	}{}
 
 	err := sqlscan.Get(ctx, tx, &blogInpData, `
@@ -36,13 +37,38 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 		cc.id as chat_id,
 		m.id as message_id,
 		coalesce(cc.avatar_big, cc.avatar) as chat_avatar,
-		m.content as message_text
+		m.content as message_text,
+		coalesce(b.blog_about, false) as blog_about
 	from chat_common cc
 	left join blog_message m on cc.id = m.chat_id
+	left join blog b on cc.id = b.id
 	where cc.id = $1
 	`, chatId)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	var previousBlogAbout *int64
+
+	var blogAboutVar = blogInpData.BlogAbout
+	if blogAboutP != nil {
+		blogAboutVar = *blogAboutP
+
+		if blogAboutVar {
+			err = sqlscan.Get(ctx, tx, &previousBlogAbout, "select id from blog where blog_about limit 1")
+			if errors.Is(err, sql.ErrNoRows) {
+				// ok
+			} else if err != nil {
+				return nil, err
+			}
+
+			if previousBlogAbout != nil {
+				_, err = tx.ExecContext(ctx, "update blog set blog_about = false where blog_about = true")
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 
 	imageUrl := getBlogPostImage(ctx, m.lgr, blogInpData.MessageText, blogInpData.ChatAvatar, blogInpData.ChatId, blogInpData.MessageId)
@@ -68,6 +94,7 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 				)
 				insert into blog(
 					id, 
+					blog_about,
 					owner_id,
 					message_id,
 					title, 
@@ -79,6 +106,7 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 				)
 				select 
 				     idt.chat_id
+					,cast($5 as boolean)
 					,idt.owner_id
 					,idt.message_id
 					,idt.title
@@ -88,8 +116,9 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 					,idt.file_item_uuid
 					,idt.create_date_time
 				from input_data idt
-				on conflict(id) do update set 
-					  owner_id = excluded.owner_id
+				on conflict(id) do update set
+					  blog_about = excluded.blog_about
+					, owner_id = excluded.owner_id
 					, message_id = excluded.message_id
 					, title = excluded.title
 					, image_url = excluded.image_url
@@ -97,11 +126,11 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 					, preview = excluded.preview
 					, file_item_uuid = excluded.file_item_uuid
 					, create_date_time = excluded.create_date_time
-			`, chatId, m.cfg.Cqrs.Projections.BlogView.MaxTextPreviewSize, createdTime, imageUrl)
+			`, chatId, m.cfg.Cqrs.Projections.BlogView.MaxTextPreviewSize, createdTime, imageUrl, blogAboutVar)
 	if errInner != nil {
-		return errInner
+		return nil, errInner
 	}
-	return nil
+	return previousBlogAbout, nil
 }
 
 func (m *CommonProjection) removeBlog(ctx context.Context, tx *db.Tx, chatId int64) error {
@@ -153,7 +182,7 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 			return errInner
 		}
 
-		errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt)
+		_, errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt, nil)
 		if errInner != nil {
 			return errInner
 		}
@@ -194,10 +223,35 @@ func (m *CommonProjection) GetCurrentBlogPostMessage(ctx context.Context, co db.
 	return &id, nil
 }
 
+type blogAbout struct {
+	Id    int64  `db:"id"`
+	Title string `db:"title"`
+}
+
+func (m *CommonProjection) gebBlogAbout(ctx context.Context, co db.CommonOperations) (*blogAbout, error) {
+	b := blogAbout{}
+
+	errInner := sqlscan.Get(ctx, co, &b, `
+		SELECT 
+			ch.id,
+			ch.title
+		FROM blog ch 
+		WHERE 
+			ch.blog_about IS TRUE
+		ORDER BY id LIMIT 1
+	`)
+	if errors.Is(errInner, sql.ErrNoRows) {
+		return nil, nil
+	} else if errInner != nil {
+		return nil, errInner
+	}
+	return &b, nil
+}
+
 func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, offset int64, reverseOrder bool, searchString string) (*dto.BlogPostsDTO, error) {
 	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
 
-	blogs, count, err := m.cp.GetBlogs(ctx, size, offset, reverseOrder, searchString)
+	blogs, count, b, err := m.cp.GetBlogs(ctx, size, offset, reverseOrder, searchString)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting blogs", "err", err)
 		return nil, err
@@ -215,8 +269,14 @@ func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, 
 		pagesCount++
 	}
 
+	bh := dto.BlogHeader{}
+	if b != nil {
+		bh.AboutPostId = &b.Id
+		bh.AboutPostTitle = &b.Title
+	}
+
 	return &dto.BlogPostsDTO{
-		Header:     dto.BlogHeader{AboutPostId: nil, AboutPostTitle: nil}, // TODO
+		Header:     bh,
 		Items:      blogsEnriched,
 		Count:      count,
 		PagesCount: pagesCount,
@@ -288,7 +348,7 @@ type BlogListViewDto struct {
 	Image          *string   `db:"image_url"`
 }
 
-func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int64, reverseOrder bool, searchString string) ([]BlogListViewDto, int64, error) {
+func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int64, reverseOrder bool, searchString string) ([]BlogListViewDto, int64, *blogAbout, error) {
 	queryArgs := []any{size, offset}
 
 	order := "asc"
@@ -301,7 +361,7 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 		searchClause = " and ("
 
 		queryArgs = append(queryArgs, searchString)
-		searchClause += fmt.Sprintf(`and exists( 
+		searchClause += fmt.Sprintf(`exists( 
 			select 1 from (select * from (select unnest(tsvector_to_array(b.fts_all_content))) t(av)) inq 
 			where
 				   ( inq.av %% to_tsquery('russian', $%d)::text )
@@ -314,6 +374,7 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 	type postsWithCount struct {
 		blogListViewDto []BlogListViewDto
 		count           int64
+		blogAbout       *blogAbout
 	}
 
 	pwc, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*postsWithCount, error) {
@@ -344,21 +405,27 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 			return nil, errInner
 		}
 
+		b, errInner := m.gebBlogAbout(ctx, tx)
+		if errInner != nil {
+			return nil, errInner
+		}
+
 		return &postsWithCount{
 			blogListViewDto: ma,
 			count:           count,
+			blogAbout:       b,
 		}, nil
 	})
 
 	if errOuter != nil {
-		return nil, 0, errOuter
+		return nil, 0, nil, errOuter
 	}
 
-	return pwc.blogListViewDto, pwc.count, nil
+	return pwc.blogListViewDto, pwc.count, pwc.blogAbout, nil
 }
 
 func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64) (*dto.WrappedBlogPostResponse, error) {
-	blog, chatBasic, err := m.cp.GetBlog(ctx, blogId)
+	blog, chatBasic, b, err := m.cp.GetBlog(ctx, blogId)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting blog", "err", err)
 		return nil, err
@@ -374,8 +441,15 @@ func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64)
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
 	blogEnriched := enrichBlog(ctx, m.lgr, m.cfg, blog, utils.ToMap(users))
+
+	bh := dto.BlogHeader{}
+	if b != nil {
+		bh.AboutPostId = &b.Id
+		bh.AboutPostTitle = &b.Title
+	}
+
 	return &dto.WrappedBlogPostResponse{
-		Header:          dto.BlogHeader{AboutPostId: nil, AboutPostTitle: nil}, // TODO
+		Header:          bh,
 		Post:            *blogEnriched,
 		CanWriteMessage: chatBasic.RegularParticipantCanWriteMessage,
 	}, nil
@@ -442,10 +516,11 @@ type BlogPostViewDto struct {
 	FileItemUuid   *string   `db:"file_item_uuid"`
 }
 
-func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*BlogPostViewDto, *dto.ChatBasic, error) {
+func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*BlogPostViewDto, *dto.ChatBasic, *blogAbout, error) {
 	type getBlogResponse struct {
 		blogDto   BlogPostViewDto
 		chatBasic dto.ChatBasic
+		blogAbout *blogAbout
 	}
 
 	respOuter, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*getBlogResponse, error) {
@@ -481,28 +556,34 @@ func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*BlogPost
 			return nil, nil
 		}
 
+		b, errInner := m.gebBlogAbout(ctx, tx)
+		if errInner != nil {
+			return nil, errInner
+		}
+
 		return &getBlogResponse{
 			blogDto:   bld,
 			chatBasic: *cb,
+			blogAbout: b,
 		}, nil
 	})
 
 	if errOuter != nil {
-		return nil, nil, errOuter
+		return nil, nil, nil, errOuter
 	}
 
-	return &respOuter.blogDto, &respOuter.chatBasic, nil
+	return &respOuter.blogDto, &respOuter.chatBasic, respOuter.blogAbout, nil
 }
 
-func (m *CommonProjection) getBlogPostMessageId(ctx context.Context, co db.CommonOperations, blogId int64) (int64, error) {
-	var messageId int64
+func (m *CommonProjection) getBlogPostMessageId(ctx context.Context, co db.CommonOperations, blogId int64) (*int64, error) {
+	var messageId *int64
 	err := sqlscan.Get(ctx, co, &messageId, "select message_id from blog where id = $1", blogId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// there were no rows, but otherwise no error occurred
-			return dto.NoId, nil
+			return nil, nil
 		}
-		return 0, err
+		return nil, err
 	}
 	return messageId, nil
 }
@@ -577,12 +658,12 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 
 	cwd, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*commentsWithData, error) {
 		postMessageId, errInn := m.cp.getBlogPostMessageId(ctx, tx, blogId)
-		if postMessageId == dto.NoId {
+		if postMessageId == nil {
 			return &commentsWithData{
 				comments:                make([]dto.CommentViewDto, 0),
 				chatsBehalfUserByChatId: make(map[int64]*dto.BasicChatDtoExtended),
 				usersSet:                make(map[int64]bool),
-				postMessageId:           postMessageId,
+				postMessageId:           dto.NoId,
 			}, nil
 		}
 
@@ -591,7 +672,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 			return nil, errInn
 		}
 
-		comments, errInn := m.cp.getComments(ctx, tx, blogId, postMessageId, size, offset, reverseOrder)
+		comments, errInn := m.cp.getComments(ctx, tx, blogId, *postMessageId, size, offset, reverseOrder)
 		if errInn != nil {
 			m.lgr.ErrorContext(ctx, "Error getting blog comments", "err", errInn)
 			return nil, errInn
@@ -626,7 +707,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 			comments:                comments,
 			chatsBehalfUserByChatId: chatsBehalfUserByChatId,
 			usersSet:                usersSet,
-			postMessageId:           postMessageId,
+			postMessageId:           *postMessageId,
 			count:                   count,
 		}, nil
 	})

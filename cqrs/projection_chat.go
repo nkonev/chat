@@ -88,7 +88,8 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 	return nil
 }
 
-func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) error {
+func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) (*int64, error) {
+	var previousBlogAbout *int64
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		chatExists, err := m.checkChatExists(ctx, tx, event.ChatId)
 		if err != nil {
@@ -134,13 +135,13 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 			}
 		} else if !blog && event.Blog {
 			// add blog
-			errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt)
+			previousBlogAbout, errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt, &event.BlogAbout)
 			if errInner != nil {
 				return errInner
 			}
 		} else if blog && event.Blog {
 			// update blog
-			errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt)
+			previousBlogAbout, errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt, &event.BlogAbout)
 			if errInner != nil {
 				return errInner
 			}
@@ -150,10 +151,10 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 	})
 
 	if errOuter != nil {
-		return errOuter
+		return nil, errOuter
 	}
 
-	return nil
+	return previousBlogAbout, nil
 }
 
 func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted) error {
@@ -785,6 +786,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		ParticipantsCount                   int64            `db:"participants_count"`
 		ParticipantIds                      pgtype.Int8Array `db:"participant_ids"` // ids of last N participants
 		Blog                                bool             `db:"blog"`
+		BlogAbout                           bool             `db:"blog_about"`
 		UpdateDateTime                      *time.Time       `db:"update_date_time"`
 		TetATet                             bool             `db:"tet_a_tet"`
 		Avatar                              *string          `db:"avatar"`
@@ -893,6 +895,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		    cc.participants_count,
 		    cc.participant_ids,
 		    b.id is not null as blog,
+		    coalesce(b.blog_about, false) as blog_about,
 		    ch.update_date_time,
 		    cc.tet_a_tet,
 			cc.avatar,
@@ -931,6 +934,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			LastMessageContent:                  de.LastMessageContent,
 			ParticipantsCount:                   de.ParticipantsCount,
 			Blog:                                de.Blog,
+			BlogAbout:                           de.BlogAbout,
 			UpdateDateTime:                      de.UpdateDateTime,
 			TetATet:                             de.TetATet,
 			Avatar:                              de.Avatar,

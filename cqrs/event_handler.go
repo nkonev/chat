@@ -366,9 +366,35 @@ func (m *EventHandler) OnChatEdited(ctx context.Context, event *ChatEdited) erro
 		return err
 	}
 
-	err = m.commonProjection.OnChatEdited(ctx, event)
+	previousBlogAbout, err := m.commonProjection.OnChatEdited(ctx, event)
 	if err != nil {
 		return err
+	}
+
+	if previousBlogAbout != nil {
+		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, []int64{}, func(participantIdsPortion []int64) error {
+			chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, participantIdsPortion, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, previousBlogAbout)
+			if err != nil {
+				return err
+			}
+			eventType := dto.EventTypeChatEdited
+
+			for _, cv := range chatViews {
+				err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+					UserId:           cv.BehalfUserId,
+					EventType:        eventType,
+					ChatNotification: &cv,
+				})
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
+			}
+
+			return nil
+		})
+		if errOuter != nil {
+			return errOuter
+		}
 	}
 
 	chatBasicAfter, err := m.commonProjection.GetChatBasic(ctx, m.commonProjection.db, event.ChatId)

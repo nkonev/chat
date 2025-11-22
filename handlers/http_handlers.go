@@ -89,7 +89,7 @@ func CreateHttpRouter(
 
 	ginRouter.GET("/api/blog", blogHandler.SearchBlogs)
 	ginRouter.GET("/api/blog/:id", blogHandler.GetBlog)
-	ginRouter.GET("/api/blog/:id/comment/search", blogHandler.SearchComments)
+	ginRouter.GET("/api/blog/:id/comment", blogHandler.SearchComments)
 	ginRouter.GET("/api/chat/can-create-blog", blogHandler.CanCreateBlog)
 
 	ginRouter.GET("/internal/access", chatHandler.CheckAccess)
