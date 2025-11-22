@@ -55,7 +55,7 @@ type CommentViewDto struct {
 type CommentViewEnrichedDto struct {
 	Id             int64                 `json:"id"`
 	OwnerId        int64                 `json:"ownerId"`
-	Content        string                `json:"content"`
+	Content        string                `json:"text"`
 	EmbedMessage   *EmbedMessageResponse `json:"embedMessage"`
 	FileItemUuid   *string               `json:"fileItemUuid"`
 	CreateDateTime time.Time             `json:"createDateTime"`

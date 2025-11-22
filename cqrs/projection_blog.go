@@ -613,6 +613,7 @@ func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperatio
 		    owner_id,
 		    content,
 		    embed,
+		    file_item_uuid,
 		    create_date_time,
 		    update_date_time
 		from message 
