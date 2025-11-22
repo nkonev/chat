@@ -207,7 +207,7 @@ func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, 
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
-	blogsEnriched := m.enrichBlogs(ctx, blogs, utils.ToMap(users))
+	blogsEnriched := enrichBlogs(ctx, m.lgr, m.cfg, blogs, utils.ToMap(users))
 
 	pagesCount := count / int64(size)
 	if count%int64(size) > 0 {
@@ -239,13 +239,26 @@ func getUserIdsFromBlogs(chats []BlogListViewDto) []int64 {
 	return r
 }
 
-func (m *EnrichingProjection) enrichBlogs(ctx context.Context, blogs []BlogListViewDto, users map[int64]*dto.User) []*dto.BlogPostPreviewDto {
+func enrichBlogs(
+	ctx context.Context,
+	lgr *logger.LoggerWrapper,
+	cfg *config.AppConfig,
+	blogs []BlogListViewDto,
+	users map[int64]*dto.User,
+) []*dto.BlogPostPreviewDto {
 	res := make([]*dto.BlogPostPreviewDto, 0, len(blogs))
 	for _, ch := range blogs {
 		var u *dto.User
 		if ch.OwnerId != nil {
 			u = users[*ch.OwnerId]
 		}
+
+		var postP *string
+		if ch.Post != nil && ch.MessageId != nil {
+			post := PatchStorageUrlToPublic(ctx, lgr, cfg, *ch.Post, ch.Id, *ch.MessageId)
+			postP = &post
+		}
+
 		che := dto.BlogPostPreviewDto{
 			Id:             ch.Id,
 			Title:          ch.Title,
@@ -253,7 +266,7 @@ func (m *EnrichingProjection) enrichBlogs(ctx context.Context, blogs []BlogListV
 			OwnerId:        ch.OwnerId,
 			Owner:          u,
 			MessageId:      ch.MessageId,
-			Text:           ch.Post,
+			Text:           postP,
 			Preview:        ch.Preview,
 			ImageUrl:       ch.Image,
 		}
@@ -555,6 +568,7 @@ func getUserIdsFromComments(comments []dto.CommentViewDto) []int64 {
 func enrichComments(comments []dto.CommentViewDto, users map[int64]*dto.User) []dto.CommentViewEnrichedDto {
 	res := make([]dto.CommentViewEnrichedDto, 0, len(comments))
 	for _, m := range comments {
+		// TODO enrich comments + embeds with PatchStorageUrlToPublic()
 		me := dto.CommentViewEnrichedDto{
 			CommentViewDto: m,
 			Owner:          users[m.OwnerId],
@@ -571,7 +585,7 @@ func (m *CommonProjection) GetComments(ctx context.Context, blogId int64, size i
 			return []dto.CommentViewDto{}, err
 		}
 
-		// TODO enrich comments with PatchStorageUrlToPublic()
+		// TODO add reactions
 
 		comments, err := m.getComments(ctx, tx, blogId, postMessageId, size, offset, reverseOrder)
 		if err != nil {
