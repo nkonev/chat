@@ -28,6 +28,7 @@ type ChatCreated struct {
 	Title                               string          `json:"title"`
 	TetATet                             bool            `json:"tetATet"`
 	Blog                                bool            `json:"blog"`
+	BlogAbout                           bool            `json:"blogAbout"`
 	Avatar                              *string         `json:"avatar"`
 	AvatarBig                           *string         `json:"avatarBig"`
 	CanResend                           bool            `json:"canResend"`

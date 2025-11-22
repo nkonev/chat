@@ -94,6 +94,7 @@ type ChatCreate struct {
 	ParticipantIds                      []int64
 	TetATet                             bool
 	Blog                                bool
+	BlogAbout                           bool
 	Avatar                              *string
 	AvatarBig                           *string
 	CanResend                           bool
@@ -308,6 +309,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		Title:                               copyCommand.Title,
 		TetATet:                             copyCommand.TetATet,
 		Blog:                                copyCommand.Blog,
+		BlogAbout:                           copyCommand.BlogAbout,
 		Avatar:                              copyCommand.Avatar,
 		AvatarBig:                           copyCommand.AvatarBig,
 		CanResend:                           copyCommand.CanResend,
@@ -676,21 +678,46 @@ func (s *ChatNotificationSettingsSet) Handle(ctx context.Context, eventBus Event
 	return eventBus.Publish(ctx, cp)
 }
 
-func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy) (int64, error) {
+func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy, userRoles []string) (int64, error) {
 	var copyCommand *MessageCreate
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
 		return 0, err
 	}
 
-	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId, dto.NoId)
+	type authDto struct {
+		adt             dto.MessageAuthorizationData
+		chatHasMessages bool
+	}
+
+	ad, err := db.TransactWithResult(ctx, dba, func(tx *db.Tx) (*authDto, error) {
+		adt, errInn := commonProjection.GetMessageDataForAuthorization(ctx, tx, copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId, dto.NoId)
+		if errInn != nil {
+			return nil, errInn
+		}
+
+		has, errInn := commonProjection.ChatHasMessages(ctx, tx, copyCommand.ChatId)
+		if errInn != nil {
+			return nil, errInn
+		}
+
+		return &authDto{
+			adt:             adt,
+			chatHasMessages: has,
+		}, nil
+	})
 	if err != nil {
 		return 0, err
 	}
 
+	adt := ad.adt
+
 	if !CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage) {
 		return 0, NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to write the message in chat %v", sp.AdditionalData.BehalfUserId, sp.ChatId))
 	}
+
+	bloggingAllowed := IsBloggingAllowed(cfg, userRoles)
+	canMakeMessageBlogPost := CanMakeMessageBlogPost(adt.IsChatAdmin, adt.ChatIsTetATet, adt.IsMessageBlogPost, adt.IsBlog, bloggingAllowed)
 
 	trimmedAndSanitized, err := sanitizer.TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
 	if err != nil {
@@ -732,6 +759,20 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 	err = eventBus.Publish(ctx, mc)
 	if err != nil {
 		return 0, err
+	}
+
+	if adt.IsBlog && canMakeMessageBlogPost && !ad.chatHasMessages {
+		ev := MessageBlogPostMade{
+			AdditionalData: copyCommand.AdditionalData,
+			ChatId:         copyCommand.ChatId,
+			MessageId:      messageId,
+			BlogPost:       true,
+		}
+
+		err = eventBus.Publish(ctx, &ev)
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	ui := &ChatViewRefreshed{

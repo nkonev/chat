@@ -1026,6 +1026,15 @@ func canPinMessageInternal(chatRegularParticipantCanPinMessage bool) bool {
 	return chatRegularParticipantCanPinMessage
 }
 
+func (m *CommonProjection) ChatHasMessages(ctx context.Context, co db.CommonOperations, chatId int64) (bool, error) {
+	var has bool
+	err := sqlscan.Get(ctx, co, &has, "select exists(select * from message m where chat_id = $1 limit 1)", chatId)
+	if err != nil {
+		return false, err
+	}
+	return has, nil
+}
+
 func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, co db.CommonOperations, userId, chatId, messageId int64) (dto.MessageAuthorizationData, error) {
 	d := dto.MessageAuthorizationData{}
 	// it's ok if message is not found - sql handles it

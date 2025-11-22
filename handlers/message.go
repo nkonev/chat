@@ -97,7 +97,9 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		}
 	}
 
-	mid, err := cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, mc.cfg, mc.lgr, mc.policy)
+	userRoles := getUserRoles(g)
+
+	mid, err := cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, mc.cfg, mc.lgr, mc.policy, userRoles)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return

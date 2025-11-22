@@ -36,7 +36,8 @@ func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32
 func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated) error {
 	// we don't check chat existence for the chat creation
 
-	_, err := m.db.ExecContext(ctx, `
+	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		_, errInner := tx.ExecContext(ctx, `
 		insert into chat_common(
 			 id
 			,title
@@ -76,9 +77,25 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 			,regular_participant_can_pin_message = excluded.regular_participant_can_pin_message
 			,regular_participant_can_write_message = excluded.regular_participant_can_write_message
 	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.TetATet, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage)
-	if err != nil {
-		return err
+		if errInner != nil {
+			return errInner
+		}
+
+		if event.Blog {
+			// add blog
+			_, errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt, &event.BlogAbout)
+			if errInner != nil {
+				return errInner
+			}
+		}
+
+		return nil
+	})
+	
+	if errOuter != nil {
+		return errOuter
 	}
+
 	m.lgr.InfoContext(ctx,
 		"Common chat created",
 		"chat_id", event.ChatId,

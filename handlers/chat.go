@@ -74,6 +74,7 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		ParticipantIds:                      ccd.ParticipantIds,
 		TetATet:                             false,
 		Blog:                                ccd.Blog,
+		BlogAbout:                           ccd.BlogAbout,
 		Avatar:                              ccd.Avatar,
 		AvatarBig:                           ccd.AvatarBig,
 		CanResend:                           utils.GetNullableBooleanOr(ccd.CanResend, dto.DefaultCanResend),
