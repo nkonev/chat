@@ -705,7 +705,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 		var usersSet = map[int64]bool{}
 		var chatsPreSet = map[int64]bool{}
 		for _, message := range messages {
-			err = populateSets(&message, usersSet, chatsPreSet, chatId, reactions)
+			err = populateSets(message.Id, message.OwnerId, message.Embed, usersSet, chatsPreSet, chatId, reactions)
 			if err != nil {
 				return nil, err
 			}
@@ -892,13 +892,13 @@ func (m *CommonProjection) GetReaction(ctx context.Context, co db.CommonOperatio
 	return r, nil
 }
 
-func populateSets(message *dto.MessageDto, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, reactions map[int64][]dto.ReactionDto) error {
-	usersSet[message.OwnerId] = true
+func populateSets(messageId, messageOwnerId int64, embed dto.Embeddable, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, reactions map[int64][]dto.ReactionDto) error {
+	usersSet[messageOwnerId] = true
 
 	chatsPreSet[currentChatId] = true
 
-	if message.Embed != nil {
-		switch typed := message.Embed.(type) {
+	if embed != nil {
+		switch typed := embed.(type) {
 		case *dto.EmbedReply:
 			var embeddedMessageReplyOwnerId = typed.OwnerId
 			usersSet[embeddedMessageReplyOwnerId] = true
@@ -912,7 +912,7 @@ func populateSets(message *dto.MessageDto, usersSet map[int64]bool, chatsPreSet 
 		}
 	}
 
-	takeOnAccountReactions(message.Id, usersSet, reactions)
+	takeOnAccountReactions(messageId, usersSet, reactions)
 
 	return nil
 }
@@ -953,15 +953,18 @@ func enrichMessage(
 		UserId:         behalfUserId,
 		FileItemUuid:   m.FileItemUuid,
 	}
-	err := setEmbed(ctx, lgr, cfg, m, &me, users, chatsByUserIdByChatId, behalfUserId)
+
+	chatsBehalfUser := chatsByUserIdByChatId[behalfUserId]
+	embed, err := makeEmbed(m.Embed, users, chatsBehalfUser)
 	if err != nil {
 		return nil, err
 	}
+	me.EmbedMessage = embed
 
 	rl := reactions[m.Id]
 	setReactions(&me, users, rl)
 
-	chat := chatsByUserIdByChatId[behalfUserId][chatId]
+	chat := chatsBehalfUser[chatId]
 	if chat == nil {
 		return nil, fmt.Errorf("Logical error during enriching messages not found chat by chatId = %v, userId = %v", chatId, behalfUserId)
 	}
@@ -1088,30 +1091,27 @@ func getDeletedUser(id int64) *dto.User {
 	return &dto.User{Login: fmt.Sprintf("deleted_user_%v", id), Id: id}
 }
 
-func setEmbed(
-	ctx context.Context, lgr *logger.LoggerWrapper, cfg *config.AppConfig,
-	srcDbMessage dto.MessageDto,
-	dstRet *dto.MessageViewEnrichedDto,
+func makeEmbed(
+	srcEmbed dto.Embeddable,
 	users map[int64]*dto.User,
-	chatsByUserIdByChatId map[int64]map[int64]*dto.BasicChatDtoExtended,
-	behalfUserId int64,
-) error {
-	if srcDbMessage.Embed != nil {
-
-		switch typed := srcDbMessage.Embed.(type) {
+	chatsBehalfUserByChatId map[int64]*dto.BasicChatDtoExtended,
+) (*dto.EmbedMessageResponse, error) {
+	if srcEmbed != nil {
+		switch typed := srcEmbed.(type) {
 		case *dto.EmbedReply:
 			embeddedUser := users[typed.OwnerId]
-			dstRet.EmbedMessage = &dto.EmbedMessageResponse{
+			return &dto.EmbedMessageResponse{
 				Id:        typed.MessageId,
 				Text:      typed.MessageContent,
 				EmbedType: string(typed.GetType()),
 				Owner:     embeddedUser,
-			}
+			}, nil
 		case *dto.EmbedResend:
 			embeddedUser := users[typed.OwnerId]
-			basicEmbeddedChat := chatsByUserIdByChatId[behalfUserId][typed.ChatId]
 			var embedChatName *string = nil
 			var isParticipant bool
+
+			basicEmbeddedChat := chatsBehalfUserByChatId[typed.ChatId]
 			if basicEmbeddedChat != nil { // basicEmbeddedChat can be deleted
 				if !basicEmbeddedChat.TetATet {
 					embedChatName = &basicEmbeddedChat.Title
@@ -1119,7 +1119,7 @@ func setEmbed(
 				isParticipant = basicEmbeddedChat.BehalfUserIsParticipant
 			}
 
-			dstRet.EmbedMessage = &dto.EmbedMessageResponse{
+			return &dto.EmbedMessageResponse{
 				Id:            typed.MessageId,
 				ChatId:        &typed.ChatId,
 				ChatName:      embedChatName,
@@ -1127,13 +1127,13 @@ func setEmbed(
 				EmbedType:     string(typed.GetType()),
 				Owner:         embeddedUser,
 				IsParticipant: isParticipant,
-			}
+			}, nil
 		default:
-			return fmt.Errorf("Unknown type in setEmbed: %T", typed)
+			return nil, fmt.Errorf("Unknown type in setEmbed: %T", typed)
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageDto, error) {

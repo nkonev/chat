@@ -101,7 +101,6 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 		return
 	}
 
-	// TODO wrap with a dto
 	g.JSON(http.StatusOK, comments)
 }
 

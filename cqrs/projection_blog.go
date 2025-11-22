@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -495,11 +496,11 @@ func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*BlogPost
 
 func (m *CommonProjection) getBlogPostMessageId(ctx context.Context, co db.CommonOperations, blogId int64) (int64, error) {
 	var messageId int64
-	err := sqlscan.Get(ctx, co, &messageId, "select id from message where chat_id = $1 and blog_post = true order by id desc limit 1", blogId)
+	err := sqlscan.Get(ctx, co, &messageId, "select message_id from blog where id = $1", blogId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// there were no rows, but otherwise no error occurred
-			return 0, nil
+			return dto.NoId, nil
 		}
 		return 0, err
 	}
@@ -507,7 +508,18 @@ func (m *CommonProjection) getBlogPostMessageId(ctx context.Context, co db.Commo
 }
 
 func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperations, blogId, postMessageId int64, size int32, offset int64, reverseOrder bool) ([]dto.CommentViewDto, error) {
-	ma := []dto.CommentViewDto{}
+	type commentViewDto struct {
+		Id             int64        `db:"id"`
+		OwnerId        int64        `db:"owner_id"`
+		Content        string       `db:"content"`
+		Embed          pgtype.JSONB `db:"embed"`
+		FileItemUuid   *string      `db:"file_item_uuid"`
+		CreateDateTime time.Time    `db:"create_date_time"`
+		UpdateDateTime *time.Time   `db:"update_date_time"` // for sake compatibility
+	}
+
+	mar := []dto.CommentViewDto{}
+	ma := []commentViewDto{}
 
 	order := "asc"
 	if reverseOrder {
@@ -518,7 +530,8 @@ func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperatio
 		select 
 		    id, 
 		    owner_id,
-		    content, 
+		    content,
+		    embed,
 		    create_date_time,
 		    update_date_time
 		from message 
@@ -528,75 +541,143 @@ func (m *CommonProjection) getComments(ctx context.Context, co db.CommonOperatio
 	`, order), blogId, postMessageId, size, offset)
 
 	if err != nil {
-		return ma, err
+		return mar, err
 	}
 
-	return ma, nil
+	for i, mm := range ma {
+		mc := dto.CommentViewDto{
+			Id:             mm.Id,
+			OwnerId:        mm.OwnerId,
+			Content:        mm.Content,
+			CreateDateTime: mm.CreateDateTime,
+			UpdateDateTime: mm.UpdateDateTime,
+			FileItemUuid:   mm.FileItemUuid,
+		}
+
+		embeddable, err := makeEmbedddable(mm.Embed)
+		if err != nil {
+			return mar, fmt.Errorf("error during mapping on index %d: %w", i, err)
+		}
+		mc.Embed = embeddable
+
+		mar = append(mar, mc)
+	}
+
+	return mar, nil
 }
 
-func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId int64, size int32, offset int64, reverseOrder bool) ([]dto.CommentViewEnrichedDto, error) {
-	comments, err := m.cp.GetComments(ctx, blogId, size, offset, reverseOrder)
-	if err != nil {
-		m.lgr.ErrorContext(ctx, "Error getting blog comments", "err", err)
-		return nil, err
+func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId int64, size int32, offset int64, reverseOrder bool) (*dto.CommentsWrapper, error) {
+	type commentsWithData struct {
+		comments                []dto.CommentViewDto
+		chatsBehalfUserByChatId map[int64]*dto.BasicChatDtoExtended
+		usersSet                map[int64]bool
+		postMessageId           int64
+		count                   int64
 	}
 
-	userIds := getUserIdsFromComments(comments)
-	users, err := m.aaaRestClient.GetUsers(ctx, userIds)
+	cwd, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*commentsWithData, error) {
+		postMessageId, errInn := m.cp.getBlogPostMessageId(ctx, tx, blogId)
+		if postMessageId == dto.NoId {
+			return &commentsWithData{
+				comments:                make([]dto.CommentViewDto, 0),
+				chatsBehalfUserByChatId: make(map[int64]*dto.BasicChatDtoExtended),
+				usersSet:                make(map[int64]bool),
+				postMessageId:           postMessageId,
+			}, nil
+		}
+
+		if errInn != nil {
+			m.lgr.ErrorContext(ctx, "Error getting blog post message id", "err", errInn)
+			return nil, errInn
+		}
+
+		comments, errInn := m.cp.getComments(ctx, tx, blogId, postMessageId, size, offset, reverseOrder)
+		if errInn != nil {
+			m.lgr.ErrorContext(ctx, "Error getting blog comments", "err", errInn)
+			return nil, errInn
+		}
+
+		var usersSet = map[int64]bool{}
+		var chatsPreSet = map[int64]bool{}
+		for _, co := range comments {
+			errInn = populateSets(co.Id, co.OwnerId, co.Embed, usersSet, chatsPreSet, blogId, map[int64][]dto.ReactionDto{}) // TODO reactions
+			if errInn != nil {
+				return nil, errInn
+			}
+		}
+
+		behalfUserId := int64(dto.NonExistentUser)
+		chatsByUserByChatId, errInn := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapSetToSlice(chatsPreSet), []int64{behalfUserId})
+		if errInn != nil {
+			m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", errInn)
+			return nil, errInn
+		}
+
+		chatsBehalfUserByChatId := chatsByUserByChatId[behalfUserId]
+
+		var count int64
+		errInn = sqlscan.Get(ctx, tx, &count, "SELECT count(*) FROM message m WHERE m.chat_id = $1 AND m.id > $2", blogId, postMessageId)
+		if errInn != nil {
+			m.lgr.ErrorContext(ctx, "Error getting comment count", "err", errInn)
+			return nil, errInn
+		}
+
+		return &commentsWithData{
+			comments:                comments,
+			chatsBehalfUserByChatId: chatsBehalfUserByChatId,
+			usersSet:                usersSet,
+			postMessageId:           postMessageId,
+			count:                   count,
+		}, nil
+	})
+	if errOuter != nil {
+		return nil, errOuter
+	}
+
+	res := make([]dto.CommentViewEnrichedDto, 0, len(cwd.comments))
+
+	users, err := m.aaaRestClient.GetUsers(ctx, utils.MapSetToSlice(cwd.usersSet))
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
-	commentsEnriched := enrichComments(comments, utils.ToMap(users))
-	return commentsEnriched, nil
-}
+	usersMap := utils.ToMap(users)
 
-func getUserIdsFromComments(comments []dto.CommentViewDto) []int64 {
-	m := map[int64]struct{}{}
-
-	for _, msg := range comments {
-		m[msg.OwnerId] = struct{}{}
-	}
-
-	r := []int64{}
-
-	for k, _ := range m {
-		r = append(r, k)
-	}
-	return r
-}
-
-func enrichComments(comments []dto.CommentViewDto, users map[int64]*dto.User) []dto.CommentViewEnrichedDto {
-	res := make([]dto.CommentViewEnrichedDto, 0, len(comments))
-	for _, m := range comments {
-		// TODO enrich comments + embeds with PatchStorageUrlToPublic()
+	for _, co := range cwd.comments {
 		me := dto.CommentViewEnrichedDto{
-			CommentViewDto: m,
-			Owner:          users[m.OwnerId],
+			Id:             co.Id,
+			OwnerId:        co.OwnerId,
+			Content:        PatchStorageUrlToPublic(ctx, m.lgr, m.cfg, co.Content, blogId, cwd.postMessageId),
+			FileItemUuid:   co.FileItemUuid,
+			CreateDateTime: co.CreateDateTime,
+			UpdateDateTime: co.UpdateDateTime,
+			Owner:          usersMap[co.OwnerId],
 		}
+
+		embed, err := makeEmbed(co.Embed, usersMap, cwd.chatsBehalfUserByChatId)
+		if err != nil {
+			return nil, err
+		}
+
+		if embed != nil {
+			embed.Text = PatchStorageUrlToPublic(ctx, m.lgr, m.cfg, embed.Text, blogId, cwd.postMessageId)
+			me.EmbedMessage = embed
+		}
+
 		res = append(res, me)
 	}
-	return res
-}
 
-func (m *CommonProjection) GetComments(ctx context.Context, blogId int64, size int32, offset int64, reverseOrder bool) ([]dto.CommentViewDto, error) {
-	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) ([]dto.CommentViewDto, error) {
-		postMessageId, err := m.getBlogPostMessageId(ctx, tx, blogId)
-		if err != nil {
-			return []dto.CommentViewDto{}, err
-		}
+	count := cwd.count
 
-		// TODO add reactions
-
-		comments, err := m.getComments(ctx, tx, blogId, postMessageId, size, offset, reverseOrder)
-		if err != nil {
-			return []dto.CommentViewDto{}, err
-		}
-		return comments, nil
-	})
-	if errOuter != nil {
-		return []dto.CommentViewDto{}, errOuter
+	pagesCount := count / int64(size)
+	if count%int64(size) > 0 {
+		pagesCount++
 	}
-	return res, nil
+
+	return &dto.CommentsWrapper{
+		Items:      res,
+		Count:      count,
+		PagesCount: pagesCount,
+	}, nil
 }
 
 func PatchStorageUrlToPublic(

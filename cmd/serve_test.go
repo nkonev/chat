@@ -2965,8 +2965,9 @@ func TestBlog(t *testing.T) {
 		assert.Equal(t, chat1Id, blogs[0].Id)
 		assert.Equal(t, chat1Name, blogs[0].Title)
 
-		comments, err := testRestClient.SearchBlogComments(ctx, chat1Id)
+		commentsW, err := testRestClient.SearchBlogComments(ctx, chat1Id)
 		require.NoError(t, err, "error in searching blog comments")
+		comments := commentsW.Items
 		assert.Equal(t, 1, len(comments))
 		assert.Equal(t, message2Id, comments[0].Id)
 		assert.Equal(t, message2Text, comments[0].Content)

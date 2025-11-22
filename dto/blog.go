@@ -43,16 +43,30 @@ type BlogPostResponse struct {
 }
 
 type CommentViewDto struct {
-	Id             int64      `json:"id" db:"id"`
-	OwnerId        int64      `json:"ownerId" db:"owner_id"`
-	Content        string     `json:"content" db:"content"`
-	CreateDateTime time.Time  `json:"createDateTime" db:"create_date_time"`
-	UpdateDateTime *time.Time `json:"editDateTime" db:"update_date_time"` // for sake compatibility
+	Id             int64
+	OwnerId        int64
+	Content        string
+	Embed          Embeddable
+	FileItemUuid   *string
+	CreateDateTime time.Time
+	UpdateDateTime *time.Time
 }
 
 type CommentViewEnrichedDto struct {
-	CommentViewDto
-	Owner *User `json:"owner"`
+	Id             int64                 `json:"id"`
+	OwnerId        int64                 `json:"ownerId"`
+	Content        string                `json:"content"`
+	EmbedMessage   *EmbedMessageResponse `json:"embedMessage"`
+	FileItemUuid   *string               `json:"fileItemUuid"`
+	CreateDateTime time.Time             `json:"createDateTime"`
+	UpdateDateTime *time.Time            `json:"editDateTime"` // for sake compatibility
+	Owner          *User                 `json:"owner"`
+}
+
+type CommentsWrapper struct {
+	Items      []CommentViewEnrichedDto `json:"items"`
+	Count      int64                    `json:"count"`
+	PagesCount int64                    `json:"pagesCount"`
 }
 
 type CanCreateBlogDto struct {
