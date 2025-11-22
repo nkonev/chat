@@ -728,7 +728,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 		me := dto.CommentViewEnrichedDto{
 			Id:             co.Id,
 			OwnerId:        co.OwnerId,
-			Content:        PatchStorageUrlToPublic(ctx, m.lgr, m.cfg, co.Content, blogId, cwd.postMessageId),
+			Content:        PatchStorageUrlToPublic(ctx, m.lgr, m.cfg, co.Content, blogId, co.Id),
 			FileItemUuid:   co.FileItemUuid,
 			CreateDateTime: co.CreateDateTime,
 			UpdateDateTime: co.UpdateDateTime,
@@ -741,7 +741,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 		}
 
 		if embed != nil {
-			embed.Text = PatchStorageUrlToPublic(ctx, m.lgr, m.cfg, embed.Text, blogId, cwd.postMessageId)
+			embed.Text = PatchStorageUrlToPublic(ctx, m.lgr, m.cfg, embed.Text, blogId, co.Id)
 			me.EmbedMessage = embed
 		}
 
