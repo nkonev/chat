@@ -184,57 +184,13 @@ func waitForHealthCheck(lgr *logger.LoggerWrapper, restClient *client.TestRestCl
 	lgr.Info("chat have started")
 }
 
-func isChatExists(ctx context.Context, co db.CommonOperations, chatId int64) (bool, error) {
-	r := co.QueryRowContext(ctx, "select exists(select * from chat_common where id = $1 limit 1)", chatId)
-	var exists bool
-	err := r.Scan(&exists)
-	if err != nil {
-		return false, err
-	}
-	return exists, nil
-}
-
-func waitForChatExists(lgr *logger.LoggerWrapper, dba *db.DB, chatId int64) {
+func waitForMessageExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.CommonProjection, dba *db.DB, chatId, messageId int64, maxAttempts int) {
 	ctx := context.Background()
 
 	i := 0
-	const maxAttempts = 120
 	success := false
 	for ; i <= maxAttempts; i++ {
-		exists, err := isChatExists(ctx, dba, chatId)
-		if err != nil || !exists {
-			lgr.Info("Awaiting while chat appear")
-			time.Sleep(time.Second * 1)
-			continue
-		} else {
-			success = true
-			break
-		}
-	}
-	if !success {
-		panic("Cannot await for chat will appear")
-	}
-	lgr.Info("chat appeared")
-}
-
-func isMessageExists(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
-	r := co.QueryRowContext(ctx, "select exists(select * from message where chat_id = $1 and id = $2 limit 1)", chatId, messageId)
-	var exists bool
-	err := r.Scan(&exists)
-	if err != nil {
-		return false, err
-	}
-	return exists, nil
-}
-
-func waitForMessageExists(lgr *logger.LoggerWrapper, dba *db.DB, chatId, messageId int64) {
-	ctx := context.Background()
-
-	i := 0
-	const maxAttempts = 120
-	success := false
-	for ; i <= maxAttempts; i++ {
-		exists, err := isMessageExists(ctx, dba, chatId, messageId)
+		exists, err := commonProjection.IsMessageExists(ctx, dba, chatId, messageId)
 		if err != nil || !exists {
 			lgr.Info("Awaiting while message appear")
 			time.Sleep(time.Second * 1)
@@ -248,4 +204,27 @@ func waitForMessageExists(lgr *logger.LoggerWrapper, dba *db.DB, chatId, message
 		panic("Cannot await for message will appear")
 	}
 	lgr.Info("message appeared")
+}
+
+func waitForChatExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.CommonProjection, dba *db.DB, chatId, behalfUserId int64, maxAttempts int) {
+	ctx := context.Background()
+
+	i := 0
+	success := false
+	for ; i <= maxAttempts; i++ {
+
+		exists, err := commonProjection.IsChatUserViewExists(ctx, dba, chatId, behalfUserId)
+		if err != nil || !exists {
+			lgr.Info("Awaiting while chat appear")
+			time.Sleep(time.Second * 1)
+			continue
+		} else {
+			success = true
+			break
+		}
+	}
+	if !success {
+		panic("Cannot await for chat will appear")
+	}
+	lgr.Info("chat appeared")
 }

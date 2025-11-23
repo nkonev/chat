@@ -27,6 +27,7 @@ func TestUnreads(t *testing.T) {
 		cfg *config.AppConfig,
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
+		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
 		testEventsAccumulator *listener.TestEventAccumulator,
@@ -84,9 +85,7 @@ func TestUnreads(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		title, err := m.GetChatByUserIdAndChatId(ctx, user1, chat1Id)
-		require.NoError(t, err, "error in getting chat")
-		assert.Equal(t, chat1Name, title)
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.PollingMaxTimes)
 
 		const message1Text = "new message 1"
 
@@ -1341,6 +1340,7 @@ func TestPinChat(t *testing.T) {
 		cfg *config.AppConfig,
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
+		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
 		testEventsAccumulator *listener.TestEventAccumulator,
@@ -1383,9 +1383,7 @@ func TestPinChat(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		title, err := m.GetChatByUserIdAndChatId(ctx, user1, chat1Id)
-		require.NoError(t, err, "error in getting chat")
-		assert.Equal(t, chat1Name, title)
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.PollingMaxTimes)
 
 		const message1Text = "new message 1"
 
@@ -1788,9 +1786,7 @@ func TestDeleteChat(t *testing.T) {
 
 		testEventsAccumulator.Clean()
 
-		title, err := m.GetChatByUserIdAndChatId(ctx, user1, chat1Id)
-		require.NoError(t, err, "error in getting chat")
-		assert.Equal(t, chat1Name, title)
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.PollingMaxTimes)
 
 		const message1Text = "new message 1"
 
@@ -1869,6 +1865,7 @@ func TestAddParticipant(t *testing.T) {
 		cfg *config.AppConfig,
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
+		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
 		testEventsAccumulator *listener.TestEventAccumulator,
@@ -1912,9 +1909,7 @@ func TestAddParticipant(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		title, err := m.GetChatByUserIdAndChatId(ctx, user1, chat1Id)
-		require.NoError(t, err, "error in getting chat")
-		assert.Equal(t, chat1Name, title)
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.PollingMaxTimes)
 
 		const message1Text = "new message 1"
 
@@ -2040,6 +2035,7 @@ func TestDeleteParticipant(t *testing.T) {
 		cfg *config.AppConfig,
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
+		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
@@ -2081,9 +2077,7 @@ func TestDeleteParticipant(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		title, err := m.GetChatByUserIdAndChatId(ctx, user1, chat1Id)
-		require.NoError(t, err, "error in getting chat")
-		assert.Equal(t, chat1Name, title)
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.PollingMaxTimes)
 
 		const message1Text = "new message 1"
 
@@ -2169,6 +2163,7 @@ func TestLeaveFromChat(t *testing.T) {
 		cfg *config.AppConfig,
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
+		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
 		testEventsAccumulator *listener.TestEventAccumulator,
@@ -2211,9 +2206,7 @@ func TestLeaveFromChat(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		title, err := m.GetChatByUserIdAndChatId(ctx, user1, chat1Id)
-		require.NoError(t, err, "error in getting chat")
-		assert.Equal(t, chat1Name, title)
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.PollingMaxTimes)
 
 		const message1Text = "new message 1"
 
@@ -2715,6 +2708,7 @@ func TestEditMessage(t *testing.T) {
 		cfg *config.AppConfig,
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
+		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
 		testEventsAccumulator *listener.TestEventAccumulator,
@@ -2756,9 +2750,7 @@ func TestEditMessage(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		title, err := m.GetChatByUserIdAndChatId(ctx, user1, chat1Id)
-		require.NoError(t, err, "error in getting chat")
-		assert.Equal(t, chat1Name, title)
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.PollingMaxTimes)
 
 		const message1Text = "new message 1"
 		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
@@ -3021,6 +3013,7 @@ func TestChatPaginate(t *testing.T) {
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
 		dba *db.DB,
+		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
 	) {
@@ -3041,8 +3034,9 @@ func TestChatPaginate(t *testing.T) {
 			require.NoError(t, err, "error in creating chat")
 			assert.True(t, lastChatId > 0)
 		}
-		waitForChatExists(lgr, dba, lastChatId)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		waitForChatExists(lgr, m, dba, lastChatId, user1, cfg.Cqrs.PollingMaxTimes)
 
 		// get initial page
 		resp1, _, err := testRestClient.GetChats(ctx, user1, client.NewChatGetOptionWithSize(40))
@@ -3133,6 +3127,7 @@ func TestMessagePaginate(t *testing.T) {
 		cfg *config.AppConfig,
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
 		dba *db.DB,
 		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
@@ -3158,8 +3153,8 @@ func TestMessagePaginate(t *testing.T) {
 			lastMessageId, err = testRestClient.CreateMessage(ctx, user1, chat1Id, messagePrefix+utils.ToString(i))
 			require.NoError(t, err, "error in creating message")
 		}
-		waitForMessageExists(lgr, dba, chat1Id, lastMessageId)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat1Id, lastMessageId, cfg.Cqrs.PollingMaxTimes)
 
 		// get first page
 		resp1, _, err := testRestClient.GetMessages(ctx, user1, chat1Id, client.NewMessageGetOptionWithSize(3), client.NewMessageGetOptionWithStartsFromItemId(6))
@@ -3202,6 +3197,7 @@ func TestMessageFuzzySearch(t *testing.T) {
 		cfg *config.AppConfig,
 		testRestClient *client.TestRestClient,
 		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
 		dba *db.DB,
 		aaaRestClient client.AaaRestClient,
 		lc fx.Lifecycle,
@@ -3253,14 +3249,14 @@ func TestMessageFuzzySearch(t *testing.T) {
 
 		messageId1, err := testRestClient.CreateMessage(ctx, user1, chat1Id, messageText1)
 		require.NoError(t, err, "error in creating message")
-		waitForMessageExists(lgr, dba, chat1Id, messageId1)
+		waitForMessageExists(lgr, m, dba, chat1Id, messageId1, cfg.Cqrs.PollingMaxTimes)
 
 		const message2Text = "samsung"
 
 		messageId2, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text)
 		require.NoError(t, err, "error in creating message")
-		waitForMessageExists(lgr, dba, chat1Id, messageId2)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat1Id, messageId2, cfg.Cqrs.PollingMaxTimes)
 
 		const searchString1 = "Опубликованный"
 		resp1Search, _, err := testRestClient.GetMessages(ctx, user1, chat1Id, client.NewMessageGetOptionWithSearch(searchString1))
@@ -3289,6 +3285,7 @@ func TestMessageFuzzySearch(t *testing.T) {
 		message1ResentId, err := testRestClient.CreateMessage(ctx, user2, chat2Id, dto.NoMessageContent, client.NewMessageCreateOptionResend(chat1Id, messageId1))
 		require.NoError(t, err, "error in resending message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat1Id, message1ResentId, cfg.Cqrs.PollingMaxTimes)
 
 		// user 2 searches for the message
 		resp22Search, _, err := testRestClient.GetMessages(ctx, user2, chat2Id, client.NewMessageGetOptionWithSearch(searchString1))
@@ -3379,5 +3376,155 @@ func TestEventSendingOnUserProfileChange(t *testing.T) {
 					*e.CoChattedParticipantNotification.Avatar == a
 			},
 		}))
+	})
+}
+
+func TestDeleteFromDb(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		dba *db.DB,
+		aaaRestClient client.AaaRestClient,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		const chat1Name = "new chat 1"
+		const chat2Name = "new chat 2"
+		const chat3Name = "new chat 3"
+
+		ctx := context.Background()
+
+		// checking message deletion causes reaction deletion
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.PollingMaxTimes)
+
+		const messageText1 = "message 1"
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, messageText1)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat1Id, message1Id, cfg.Cqrs.PollingMaxTimes)
+
+		const reaction = "😀"
+		err = testRestClient.Reaction(ctx, user1, chat1Id, message1Id, reaction)
+		require.NoError(t, err, "error in reacting on message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, message1Id)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert that the reaction is deleted along with message
+		reactionExists, err := m.IsReactionExists(ctx, chat1Id, message1Id, reaction)
+		require.NoError(t, err, "error in checking reaction")
+		assert.False(t, reactionExists)
+
+		// checking chat deletion causes message deletion
+		chat2Id, err := testRestClient.CreateChat(ctx, user1, chat2Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		waitForChatExists(lgr, m, dba, chat2Id, user1, cfg.Cqrs.PollingMaxTimes)
+
+		existsUv21, err := m.IsChatUserViewExists(ctx, dba, chat2Id, user1)
+		require.NoError(t, err, "error in checking chat user view")
+		assert.True(t, existsUv21)
+
+		existsC21, err := m.IsChatExists(ctx, dba, chat2Id)
+		require.NoError(t, err, "error in checking chat common")
+		assert.True(t, existsC21)
+
+		const messageText2 = "message 2"
+
+		message2Id, err := testRestClient.CreateMessage(ctx, user1, chat2Id, messageText2)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat2Id, message2Id, cfg.Cqrs.PollingMaxTimes)
+
+		messageExists, err := m.IsMessageExists(ctx, dba, chat2Id, message2Id)
+		require.NoError(t, err, "error in checking message")
+		assert.True(t, messageExists)
+
+		err = testRestClient.DeleteChat(ctx, user1, chat2Id)
+		require.NoError(t, err, "error in deleting chat")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert that the message is deleted along with chat
+		messageExists2, err := m.IsMessageExists(ctx, dba, chat2Id, message2Id)
+		require.NoError(t, err, "error in checking message")
+		assert.False(t, messageExists2)
+
+		existsUv22, err := m.IsChatUserViewExists(ctx, dba, chat2Id, user1)
+		require.NoError(t, err, "error in checking chat user view")
+		assert.False(t, existsUv22)
+
+		existsC22, err := m.IsChatExists(ctx, dba, chat2Id)
+		require.NoError(t, err, "error in checking chat common")
+		assert.False(t, existsC22)
+
+		// checking blog's chat deletion causes blog deletion
+		chat3Id, err := testRestClient.CreateChat(ctx, user1, chat3Name, client.NewChatOptionParticipants(user2), client.NewChatOptionBlog(true))
+		require.NoError(t, err, "error in creating chat")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		waitForChatExists(lgr, m, dba, chat3Id, user1, cfg.Cqrs.PollingMaxTimes)
+
+		const messageText3 = "message 3"
+
+		message3Id, err := testRestClient.CreateMessage(ctx, user1, chat3Id, messageText3)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat3Id, message3Id, cfg.Cqrs.PollingMaxTimes)
+
+		blogsNewW, err := testRestClient.SearchBlogs(ctx)
+		require.NoError(t, err, "error in searching blog posts")
+		blogsNew := blogsNewW.Items
+		assert.Equal(t, 1, len(blogsNew))
+
+		err = testRestClient.DeleteChat(ctx, user1, chat3Id)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		blogsNewW2, err := testRestClient.SearchBlogs(ctx)
+		require.NoError(t, err, "error in searching blog posts")
+		blogsNew2 := blogsNewW2.Items
+		assert.Equal(t, 0, len(blogsNew2))
+
+		messageExists33, err := m.IsMessageExists(ctx, dba, chat3Id, message3Id)
+		require.NoError(t, err, "error in checking message")
+		assert.False(t, messageExists33)
 	})
 }

@@ -91,7 +91,7 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 
 		return nil
 	})
-	
+
 	if errOuter != nil {
 		return errOuter
 	}
@@ -1005,11 +1005,20 @@ func (m *CommonProjection) GetHasUnreadMessages(ctx context.Context, userIds []i
 	return has, nil
 }
 
-func (m *CommonProjection) GetChatByUserIdAndChatId(ctx context.Context, userId, chatId int64) (string, error) {
-	var t string
-	err := sqlscan.Get(ctx, m.db, &t, "select c.title from chat_user_view ch join chat_common c on ch.id = c.id where ch.user_id = $1 and ch.id = $2", userId, chatId)
+func (m *CommonProjection) IsChatUserViewExists(ctx context.Context, co db.CommonOperations, chatId, userId int64) (bool, error) {
+	var t bool
+	err := sqlscan.Get(ctx, co, &t, "select exists(select c.* from chat_user_view ch join chat_common c on ch.id = c.id where ch.user_id = $1 and ch.id = $2)", userId, chatId)
 	if err != nil {
-		return "", err
+		return false, err
+	}
+	return t, nil
+}
+
+func (m *CommonProjection) IsChatExists(ctx context.Context, co db.CommonOperations, chatId int64) (bool, error) {
+	var t bool
+	err := sqlscan.Get(ctx, co, &t, "select exists(select c.* from chat_common c where c.id = $1)", chatId)
+	if err != nil {
+		return false, err
 	}
 	return t, nil
 }

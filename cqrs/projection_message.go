@@ -1096,6 +1096,15 @@ func makeReactions(users map[int64]*dto.User, reactionsList []dto.ReactionDto) [
 	return convertedReactionsOfMessageToReturn
 }
 
+func (m *CommonProjection) IsReactionExists(ctx context.Context, chatId, messageId int64, reaction string) (bool, error) {
+	var exists bool
+	err := sqlscan.Get(ctx, m.db, &exists, "select exists (select * from message_reaction where chat_id = $1 and message_id = $2 and reaction = $3)", chatId, messageId, reaction)
+	if err != nil {
+		return false, err
+	}
+	return exists, err
+}
+
 func getDeletedUser(id int64) *dto.User {
 	return &dto.User{Login: fmt.Sprintf("deleted_user_%v", id), Id: id}
 }
