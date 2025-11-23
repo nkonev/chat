@@ -61,6 +61,7 @@ type CommentViewEnrichedDto struct {
 	CreateDateTime time.Time             `json:"createDateTime"`
 	UpdateDateTime *time.Time            `json:"editDateTime"` // for sake compatibility
 	Owner          *User                 `json:"owner"`
+	Reactions      []Reaction            `json:"reactions"`
 }
 
 type CommentsWrapper struct {

@@ -588,7 +588,7 @@ func enrichBlog(
 	}
 
 	if blog.MessageId != nil {
-		res.Reactions = getReactions(users, reactions)
+		res.Reactions = makeReactions(users, reactions)
 	}
 
 	return &res
@@ -726,6 +726,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 		usersSet                map[int64]bool
 		postMessageId           int64
 		count                   int64
+		reactions               map[int64][]dto.ReactionDto
 	}
 
 	cwd, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*commentsWithData, error) {
@@ -750,10 +751,20 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 			return nil, errInn
 		}
 
+		messageIds := make([]int64, 0)
+		for _, message := range comments {
+			messageIds = append(messageIds, message.Id)
+		}
+
+		reactions, err := m.getReactions(ctx, tx, blogId, messageIds)
+		if err != nil {
+			return nil, fmt.Errorf("Got error during enriching messages with reactions: %v", err)
+		}
+
 		var usersSet = map[int64]bool{}
 		var chatsPreSet = map[int64]bool{}
 		for _, co := range comments {
-			errInn = populateSets(co.Id, co.OwnerId, co.Embed, usersSet, chatsPreSet, blogId, map[int64][]dto.ReactionDto{}) // TODO reactions
+			errInn = populateSets(co.Id, co.OwnerId, co.Embed, usersSet, chatsPreSet, blogId, reactions)
 			if errInn != nil {
 				return nil, errInn
 			}
@@ -781,6 +792,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 			usersSet:                usersSet,
 			postMessageId:           *postMessageId,
 			count:                   count,
+			reactions:               reactions,
 		}, nil
 	})
 	if errOuter != nil {
@@ -815,6 +827,9 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 			embed.Text = PatchStorageUrlToPublic(ctx, m.lgr, m.cfg, embed.Text, blogId, co.Id)
 			me.EmbedMessage = embed
 		}
+
+		rl := cwd.reactions[co.Id]
+		me.Reactions = makeReactions(usersMap, rl)
 
 		res = append(res, me)
 	}

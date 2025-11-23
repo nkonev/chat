@@ -962,7 +962,7 @@ func enrichMessage(
 	me.EmbedMessage = embed
 
 	rl := reactions[m.Id]
-	me.Reactions = getReactions(users, rl)
+	me.Reactions = makeReactions(users, rl)
 
 	chat := chatsBehalfUser[chatId]
 	if chat == nil {
@@ -1073,7 +1073,7 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 	return d, nil
 }
 
-func getReactions(users map[int64]*dto.User, reactionsList []dto.ReactionDto) []dto.Reaction {
+func makeReactions(users map[int64]*dto.User, reactionsList []dto.ReactionDto) []dto.Reaction {
 	var convertedReactionsOfMessageToReturn = make([]dto.Reaction, 0, len(reactionsList))
 	for _, dbReaction := range reactionsList {
 
