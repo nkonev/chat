@@ -77,3 +77,12 @@ type BlogHeader struct {
 	AboutPostId    *int64  `json:"aboutPostId"`
 	AboutPostTitle *string `json:"aboutPostTitle"`
 }
+
+type BlogSeoItem struct {
+	ChatId       int64     `json:"chatId"`
+	LastModified time.Time `json:"lastModified"`
+}
+
+type SeoBlogPosts struct {
+	Items []BlogSeoItem `json:"items"`
+}

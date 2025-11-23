@@ -104,6 +104,7 @@ create unlogged table blog(
     post text,
     preview varchar(512),
     create_date_time timestamp not null,
+    update_date_time timestamp,
     file_item_uuid varchar(36),
     fts_all_content tsvector generated always as (to_tsvector('russian', strip_tags(coalesce(title, '')) || ' ' || strip_tags(coalesce(post, '')))) stored
 );

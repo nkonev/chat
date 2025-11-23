@@ -102,7 +102,8 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 					post, 
 					preview,
 					file_item_uuid,
-					create_date_time
+					create_date_time,
+					update_date_time
 				)
 				select 
 				     idt.chat_id
@@ -115,6 +116,7 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 					,idt.post_preview
 					,idt.file_item_uuid
 					,idt.create_date_time
+					,null
 				from input_data idt
 				on conflict(id) do update set
 					  blog_about = excluded.blog_about
@@ -125,7 +127,7 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 					, post = excluded.post
 					, preview = excluded.preview
 					, file_item_uuid = excluded.file_item_uuid
-					, create_date_time = excluded.create_date_time
+					, update_date_time = cast ($3 as timestamp)
 			`, chatId, m.cfg.Cqrs.Projections.BlogView.MaxTextPreviewSize, createdTime, imageUrl, blogAboutVar)
 	if errInner != nil {
 		return nil, errInner
@@ -248,10 +250,10 @@ func (m *CommonProjection) gebBlogAbout(ctx context.Context, co db.CommonOperati
 	return &b, nil
 }
 
-func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, offset int64, reverseOrder bool, searchString string) (*dto.BlogPostsDTO, error) {
+func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, offset int64, orderBy BlogOrderBy, reverseOrder bool, searchString string) (*dto.BlogPostsDTO, error) {
 	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
 
-	blogs, count, b, err := m.cp.GetBlogs(ctx, size, offset, reverseOrder, searchString)
+	blogs, count, b, err := m.cp.GetBlogs(ctx, size, offset, orderBy, reverseOrder, searchString)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error getting blogs", "err", err)
 		return nil, err
@@ -281,6 +283,36 @@ func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, 
 		Count:      count,
 		PagesCount: pagesCount,
 	}, nil
+}
+
+func (m *EnrichingProjection) GetBlogsEnrichedForSeo(ctx context.Context, size int32, offset int64) (*dto.SeoBlogPosts, error) {
+	type dbDto struct {
+		BlogId     int64     `db:"blog_id"`
+		UpdateDate time.Time `db:"update_date"`
+	}
+	lst := []dbDto{}
+	err := sqlscan.Select(ctx, m.cp.db, &lst, `
+			select
+				id as blog_id, 
+				coalesce(update_date_time, create_date_time) as update_date
+			from blog
+			limit $1 offset $2
+		`, size, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]dto.BlogSeoItem, 0)
+	for _, bl := range lst {
+		res = append(res, dto.BlogSeoItem{
+			ChatId:       bl.BlogId,
+			LastModified: bl.UpdateDate,
+		})
+	}
+
+	return &dto.SeoBlogPosts{
+		Items: res,
+	}, err
 }
 
 func getUserIdsFromBlogs(chats []BlogListViewDto) []int64 {
@@ -348,7 +380,12 @@ type BlogListViewDto struct {
 	Image          *string   `db:"image_url"`
 }
 
-func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int64, reverseOrder bool, searchString string) ([]BlogListViewDto, int64, *blogAbout, error) {
+type BlogOrderBy int16
+
+const BlogOrderByCreateDateTime BlogOrderBy = 1
+const BlogOrderByUpdateDateTime BlogOrderBy = 2
+
+func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int64, orderBy BlogOrderBy, reverseOrder bool, searchString string) ([]BlogListViewDto, int64, *blogAbout, error) {
 	queryArgs := []any{size, offset}
 
 	order := "asc"
@@ -377,6 +414,16 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 		blogAbout       *blogAbout
 	}
 
+	orderByCaluse := ""
+	switch orderBy {
+	case BlogOrderByCreateDateTime:
+		orderByCaluse = "b.create_date_time"
+	case BlogOrderByUpdateDateTime:
+		orderByCaluse = "b.update_date_time"
+	default:
+		return nil, 0, nil, fmt.Errorf("Unknown order by: %v", orderBy)
+	}
+
 	pwc, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*postsWithCount, error) {
 		ma := []BlogListViewDto{}
 
@@ -392,9 +439,9 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 				b.create_date_time
 			from blog b
 			where true %s
-			order by b.create_date_time %s
+			order by %s %s
 			limit $1 offset $2
-		`, searchClause, order), queryArgs...)
+		`, searchClause, orderByCaluse, order), queryArgs...)
 		if errInner != nil {
 			return nil, errInner
 		}
@@ -570,6 +617,10 @@ func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*BlogPost
 
 	if errOuter != nil {
 		return nil, nil, nil, errOuter
+	}
+
+	if respOuter == nil {
+		return nil, nil, nil, nil
 	}
 
 	return &respOuter.blogDto, &respOuter.chatBasic, respOuter.blogAbout, nil

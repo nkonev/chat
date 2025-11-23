@@ -45,7 +45,7 @@ func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
 	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), true)
 	searchString := g.Query(dto.SearchStringParam)
 
-	blogs, err := ch.enrichingProjection.GetBlogsEnriched(g.Request.Context(), size, offset, reverse, searchString)
+	blogs, err := ch.enrichingProjection.GetBlogsEnriched(g.Request.Context(), size, offset, cqrs.BlogOrderByCreateDateTime, reverse, searchString)
 	if err != nil {
 		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blogs", "err", err)
 		g.Status(http.StatusInternalServerError)
@@ -109,4 +109,19 @@ func (ch *BlogHandler) CanCreateBlog(g *gin.Context) {
 
 	can := cqrs.IsBloggingAllowed(ch.cfg, userRoles)
 	g.JSON(http.StatusOK, &utils.H{"canCreateBlog": can})
+}
+
+func (ch *BlogHandler) GetAllBlogPostsForSeo(g *gin.Context) {
+	page := utils.FixPageString(g.Query(dto.PageParam))
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
+	offset := utils.GetOffset(page, size)
+
+	blogs, err := ch.enrichingProjection.GetBlogsEnrichedForSeo(g.Request.Context(), size, offset)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blogs", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, blogs)
 }
