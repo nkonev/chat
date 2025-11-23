@@ -103,8 +103,8 @@ type MessageViewEnrichedDto struct {
 	UpdateDateTime *time.Time            `json:"editDateTime"` // for sake compatibility
 	FileItemUuid   *string               `json:"fileItemUuid"`
 
-	Owner     *User             `json:"owner"`
-	Reactions []ReactionViewDto `json:"reactions"`
+	Owner     *User      `json:"owner"`
+	Reactions []Reaction `json:"reactions"`
 
 	CanEdit      bool `json:"canEdit"`
 	CanSyncEmbed bool `json:"canSyncEmbed"`
@@ -201,12 +201,6 @@ type ReactionDto struct {
 	UserIds   []int64
 	Reaction  string
 	Count     int64
-}
-
-type ReactionViewDto struct {
-	Count    int64   `json:"count"`
-	Users    []*User `json:"users"`
-	Reaction string  `json:"reaction"`
 }
 
 type HasUnreadMessagesChanged struct {

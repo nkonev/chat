@@ -962,7 +962,7 @@ func enrichMessage(
 	me.EmbedMessage = embed
 
 	rl := reactions[m.Id]
-	setReactions(&me, users, rl)
+	me.Reactions = getReactions(users, rl)
 
 	chat := chatsBehalfUser[chatId]
 	if chat == nil {
@@ -1073,8 +1073,8 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 	return d, nil
 }
 
-func setReactions(dst *dto.MessageViewEnrichedDto, users map[int64]*dto.User, reactionsList []dto.ReactionDto) {
-	var convertedReactionsOfMessageToReturn = make([]dto.ReactionViewDto, 0, len(reactionsList))
+func getReactions(users map[int64]*dto.User, reactionsList []dto.ReactionDto) []dto.Reaction {
+	var convertedReactionsOfMessageToReturn = make([]dto.Reaction, 0, len(reactionsList))
 	for _, dbReaction := range reactionsList {
 
 		reactionUsers := []*dto.User{}
@@ -1086,14 +1086,14 @@ func setReactions(dst *dto.MessageViewEnrichedDto, users map[int64]*dto.User, re
 			reactionUsers = append(reactionUsers, ru)
 		}
 
-		convertedReactionsOfMessageToReturn = append(convertedReactionsOfMessageToReturn, dto.ReactionViewDto{
+		convertedReactionsOfMessageToReturn = append(convertedReactionsOfMessageToReturn, dto.Reaction{
 			Count:    dbReaction.Count,
 			Users:    reactionUsers,
 			Reaction: dbReaction.Reaction,
 		})
 	}
 
-	dst.Reactions = convertedReactionsOfMessageToReturn
+	return convertedReactionsOfMessageToReturn
 }
 
 func getDeletedUser(id int64) *dto.User {

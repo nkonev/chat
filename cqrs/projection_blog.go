@@ -472,46 +472,81 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 }
 
 func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64) (*dto.WrappedBlogPostResponse, error) {
-	blog, chatBasic, b, err := m.cp.GetBlog(ctx, blogId)
-	if err != nil {
-		m.lgr.ErrorContext(ctx, "Error getting blog", "err", err)
-		return nil, err
+	type dbDto struct {
+		blog         *BlogPostViewDto
+		chatBasic    *dto.ChatBasic
+		reactionsMap map[int64][]dto.ReactionDto
+		reactions    []dto.ReactionDto
+		blogAbout    *blogAbout
 	}
+	dd, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*dbDto, error) {
+		blog, chatBasic, b, errInn := m.cp.GetBlog(ctx, tx, blogId)
+		if errInn != nil {
+			m.lgr.ErrorContext(ctx, "Error getting blog", "err", errInn)
+			return nil, errInn
+		}
 
-	if blog == nil {
+		if blog == nil {
+			return nil, nil
+		}
+
+		var reactions []dto.ReactionDto
+		var reactionsMap map[int64][]dto.ReactionDto
+
+		if blog.MessageId != nil {
+			reactionsMap, errInn = m.getReactions(ctx, tx, blogId, []int64{*blog.MessageId})
+			if errInn != nil {
+				return nil, fmt.Errorf("Got error during enriching messages with reactions: %v", errInn)
+			}
+
+			reactions = reactionsMap[*blog.MessageId]
+		}
+
+		return &dbDto{
+			blog:         blog,
+			chatBasic:    chatBasic,
+			reactions:    reactions,
+			reactionsMap: reactionsMap,
+			blogAbout:    b,
+		}, nil
+	})
+
+	if errOuter != nil {
+		return nil, errOuter
+	}
+	if dd == nil {
 		return nil, nil
 	}
 
-	userIds := getUserIdsFromBlog(blog)
-	users, err := m.aaaRestClient.GetUsers(ctx, userIds)
+	var usersSet = map[int64]bool{}
+	var chatsPreSet = map[int64]bool{}
+	if dd.blog != nil && dd.blog.MessageId != nil && dd.blog.OwnerId != nil {
+		err := populateSets(*dd.blog.MessageId, *dd.blog.OwnerId, nil, usersSet, chatsPreSet, dd.blog.Id, dd.reactionsMap)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	users, err := m.aaaRestClient.GetUsers(ctx, utils.MapSetToSlice(usersSet))
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
-	blogEnriched := enrichBlog(ctx, m.lgr, m.cfg, blog, utils.ToMap(users))
+
+	usersMap := utils.ToMap(users)
+
+	blogEnriched := enrichBlog(ctx, m.lgr, m.cfg, dd.blog, usersMap, dd.reactions)
 
 	bh := dto.BlogHeader{}
-	if b != nil {
-		bh.AboutPostId = &b.Id
-		bh.AboutPostTitle = &b.Title
+	if dd.blogAbout != nil {
+		bh.AboutPostId = &dd.blogAbout.Id
+		bh.AboutPostTitle = &dd.blogAbout.Title
 	}
 
 	return &dto.WrappedBlogPostResponse{
 		Header:          bh,
 		Post:            *blogEnriched,
-		CanWriteMessage: chatBasic.RegularParticipantCanWriteMessage,
+		CanWriteMessage: dd.chatBasic.RegularParticipantCanWriteMessage,
 	}, nil
-}
-
-func getUserIdsFromBlog(blog *BlogPostViewDto) []int64 {
-	ret := []int64{}
-	if blog == nil {
-		return ret
-	}
-	ownerIdP := blog.OwnerId
-	if ownerIdP != nil {
-		ret = append(ret, *ownerIdP)
-	}
-	return ret
 }
 
 func enrichBlog(
@@ -520,6 +555,7 @@ func enrichBlog(
 	cfg *config.AppConfig,
 	blog *BlogPostViewDto,
 	users map[int64]*dto.User,
+	reactions []dto.ReactionDto,
 ) *dto.BlogPostResponse {
 	if blog == nil {
 		return nil
@@ -538,7 +574,7 @@ func enrichBlog(
 		postP = &post
 	}
 
-	return &dto.BlogPostResponse{
+	res := dto.BlogPostResponse{
 		ChatId:         blog.Id,
 		Title:          blog.Title,
 		OwnerId:        blog.OwnerId,
@@ -546,10 +582,16 @@ func enrichBlog(
 		MessageId:      blog.MessageId,
 		Text:           postP,
 		CreateDateTime: blog.CreateDateTime,
-		Reactions:      nil, // TODO
+		Reactions:      make([]dto.Reaction, 0),
 		Preview:        blog.Preview,
 		FileItemUuid:   blog.FileItemUuid,
 	}
+
+	if blog.MessageId != nil {
+		res.Reactions = getReactions(users, reactions)
+	}
+
+	return &res
 }
 
 type BlogPostViewDto struct {
@@ -563,16 +605,9 @@ type BlogPostViewDto struct {
 	FileItemUuid   *string   `db:"file_item_uuid"`
 }
 
-func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*BlogPostViewDto, *dto.ChatBasic, *blogAbout, error) {
-	type getBlogResponse struct {
-		blogDto   BlogPostViewDto
-		chatBasic dto.ChatBasic
-		blogAbout *blogAbout
-	}
-
-	respOuter, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*getBlogResponse, error) {
-		var bld BlogPostViewDto
-		err := sqlscan.Get(ctx, tx, &bld, `
+func (m *CommonProjection) GetBlog(ctx context.Context, co db.CommonOperations, blogId int64) (*BlogPostViewDto, *dto.ChatBasic, *blogAbout, error) {
+	var bld BlogPostViewDto
+	err := sqlscan.Get(ctx, co, &bld, `
 		select 
 		    b.id,
 			b.owner_id,
@@ -586,44 +621,29 @@ func (m *CommonProjection) GetBlog(ctx context.Context, blogId int64) (*BlogPost
 		where b.id = $1
 		order by b.create_date_time desc 
 	`, blogId)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				// there were no rows, but otherwise no error occurred
-				return nil, nil
-			}
-			return nil, err
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// there were no rows, but otherwise no error occurred
+			return nil, nil, nil, nil
 		}
-
-		cb, err := m.GetChatBasic(ctx, tx, blogId)
-		if err != nil {
-			return nil, err
-		}
-
-		if cb == nil {
-			return nil, nil
-		}
-
-		b, errInner := m.gebBlogAbout(ctx, tx)
-		if errInner != nil {
-			return nil, errInner
-		}
-
-		return &getBlogResponse{
-			blogDto:   bld,
-			chatBasic: *cb,
-			blogAbout: b,
-		}, nil
-	})
-
-	if errOuter != nil {
-		return nil, nil, nil, errOuter
+		return nil, nil, nil, err
 	}
 
-	if respOuter == nil {
+	cb, err := m.GetChatBasic(ctx, co, blogId)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if cb == nil {
 		return nil, nil, nil, nil
 	}
 
-	return &respOuter.blogDto, &respOuter.chatBasic, respOuter.blogAbout, nil
+	b, errInner := m.gebBlogAbout(ctx, co)
+	if errInner != nil {
+		return nil, nil, nil, errInner
+	}
+
+	return &bld, cb, b, nil
 }
 
 func (m *CommonProjection) getBlogPostMessageId(ctx context.Context, co db.CommonOperations, blogId int64) (*int64, error) {
