@@ -164,20 +164,22 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	}
 
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
-		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving)
+		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving, adt)
 	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting { // delete chat
 		return m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, event.AllParticipantIdsExcepting, func(participantIdsPortion []int64) error {
-			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving)
+			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving, adt)
 		})
 	} else {
 		return fmt.Errorf("Unknown event.GetParticipantsType = %v", event.GetParticipantsType)
 	}
 }
 
-func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isChatRemoving bool) error {
+func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isChatRemoving bool, adt dto.ChatAuthorizationData) error {
 	userIds := participantIds
 
 	eventType := dto.EventTypeChatDeleted
+	eventTypeChatReload := dto.EventTypeChatReload
+
 	eventTypeParticipantDeleted := dto.EventTypeParticipantDeleted
 
 	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
@@ -245,13 +247,25 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 	}
 
 	for _, participantId := range userIds {
-		err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
-			UserId:         participantId,
-			EventType:      eventType,
-			ChatDeletedDto: &dto.ChatDeletedDto{Id: chatId},
-		})
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		if adt.AvailableToSearch || adt.IsBlog {
+			// Introduce CHAT_REDRAW as a tradeoff solution for: An user joined into multiple public chats, has http://localhost:8081/chat/1?qc=__AVAILABLE_FOR_SEARCH, then the user leaves from a public chat, so chat from user just has left should re-appear on the frontend as a isResultFromSearch
+			err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
+				UserId:         participantId,
+				EventType:      eventTypeChatReload,
+				ChatDeletedDto: &dto.ChatDeletedDto{Id: chatId},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		} else {
+			err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
+				UserId:         participantId,
+				EventType:      eventType,
+				ChatDeletedDto: &dto.ChatDeletedDto{Id: chatId},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
 		}
 
 		err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{

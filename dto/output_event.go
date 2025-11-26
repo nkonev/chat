@@ -3,6 +3,7 @@ package dto
 const EventTypeChatCreated = "chat_created"
 const EventTypeChatEdited = "chat_edited"
 const EventTypeChatDeleted = "chat_deleted"
+const EventTypeChatReload = "chat_reload"
 const EventTypeParticipantAdded = "participant_added"
 const EventTypeParticipantDeleted = "participant_deleted"
 const EventTypeParticipantEdited = "participant_edited"
