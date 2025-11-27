@@ -41,7 +41,7 @@ func CreateAaaUserProfileUpdateListener(lgr *logger.LoggerWrapper, cfg *config.A
 		}
 
 		if !typeRegistry.HasType(aType) {
-			lgr.ErrorContext(ctx, "Unexpected type in rabbit test_listener", "type", aType)
+			lgr.InfoContext(ctx, "Unexpected type in rabbit aaa_listener", "type", aType)
 			return nil
 		}
 
