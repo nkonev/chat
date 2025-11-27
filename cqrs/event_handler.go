@@ -74,7 +74,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventTypeChatCreated, "user_ids", userIds)
 
 	// we don't need to change GetChatsEnriched to additionally process [behalf]userIds because we've already added users in our projection and the projection return all the users
-	chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId)
+	chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId, false)
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,6 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 	userIds := participantIds
 
 	eventType := dto.EventTypeChatDeleted
-	eventTypeChatReload := dto.EventTypeChatReload
 
 	eventTypeParticipantDeleted := dto.EventTypeParticipantDeleted
 
@@ -235,6 +234,34 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
 
+	isPubliclyAvailable := adt.AvailableToSearch || adt.IsBlog
+
+	if isPubliclyAvailable {
+		errOuter := m.commonProjection.IterateOverChatParticipantIdsIncluding(ctx, m.db, chatId, userIds, func(participantIdsPortion []int64) error {
+			chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, participantIdsPortion, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &chatId, true)
+			if err != nil {
+				return err
+			}
+			eventTypeRedraw := dto.EventTypeChatRedraw
+
+			for _, cv := range chatViews {
+				err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
+					UserId:           cv.BehalfUserId,
+					EventType:        eventTypeRedraw,
+					ChatNotification: &cv,
+				})
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
+			}
+
+			return nil
+		})
+		if errOuter != nil {
+			return errOuter
+		}
+	}
+
 	errp := m.commonProjection.OnParticipantRemoved(ctx, additionalData, userIds, chatId, behalfUserId, isLeaving, isChatRemoving)
 	if errp != nil {
 		return errp
@@ -247,17 +274,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 	}
 
 	for _, participantId := range userIds {
-		if adt.AvailableToSearch || adt.IsBlog {
-			// Introduce CHAT_REDRAW as a tradeoff solution for: An user joined into multiple public chats, has http://localhost:8081/chat/1?qc=__AVAILABLE_FOR_SEARCH, then the user leaves from a public chat, so chat from user just has left should re-appear on the frontend as a isResultFromSearch
-			err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
-				UserId:         participantId,
-				EventType:      eventTypeChatReload,
-				ChatDeletedDto: &dto.ChatDeletedDto{Id: chatId},
-			})
-			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
-			}
-		} else {
+		if !isPubliclyAvailable {
 			err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
 				UserId:         participantId,
 				EventType:      eventType,
@@ -387,7 +404,7 @@ func (m *EventHandler) OnChatEdited(ctx context.Context, event *ChatEdited) erro
 
 	if previousBlogAbout != nil {
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, []int64{}, func(participantIdsPortion []int64) error {
-			chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, participantIdsPortion, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, previousBlogAbout)
+			chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, participantIdsPortion, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, previousBlogAbout, false)
 			if err != nil {
 				return err
 			}
@@ -520,7 +537,7 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 			return errp
 		}
 
-		chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId)
+		chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId, false)
 		if err != nil {
 			return err
 		}

@@ -469,7 +469,7 @@ func processAdditionalUserIds(queryArgsInput []any, additionalFoundUserIds []int
 
 // contract: either multiple chats
 // or one chatId != nil
-func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfParticipantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, chatId *int64) ([]dto.ChatViewEnrichedDto, map[int64]*dto.User, error) {
+func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfParticipantIds []int64, size int32, startingFromItemId *dto.ChatId, includeStartingFrom, reverse bool, searchString string, chatId *int64, forceNonParticipant bool) ([]dto.ChatViewEnrichedDto, map[int64]*dto.User, error) {
 	if len(behalfParticipantIds) == 0 {
 		return nil, nil, errors.New("Wrong invariant: len(behalfParticipantIds) == 0")
 	}
@@ -532,7 +532,7 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 				admin = areAdminsOfChatIds[ch.Id]
 			}
 
-			che := m.enrichChat(ch.BehalfUserId, ch, usersMap, admin, tetATetOnlines)
+			che := m.enrichChat(ch.BehalfUserId, ch, usersMap, admin, tetATetOnlines, forceNonParticipant)
 			chatsEnriched = append(chatsEnriched, che)
 		}
 
@@ -575,7 +575,7 @@ func (m *EnrichingProjection) GetChat(ctx context.Context, userId, chatId int64)
 	includeStartingFrom := true
 	searchString := ""
 
-	chats, _, errG := m.GetChatsEnriched(ctx, []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, &chatId)
+	chats, _, errG := m.GetChatsEnriched(ctx, []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, &chatId, false)
 	if errG != nil {
 		m.lgr.ErrorContext(ctx, "Error getting chats", "err", errG)
 		err = errG
@@ -668,7 +668,7 @@ func getChatIdsFromChats(chats []dto.ChatViewDto) []int64 {
 	return r
 }
 
-func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.User, admin bool, tetATetOnlines map[int64]bool) dto.ChatViewEnrichedDto {
+func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.User, admin bool, tetATetOnlines map[int64]bool, forceNonParticipant bool) dto.ChatViewEnrichedDto {
 	che := dto.ChatViewEnrichedDto{
 		ChatViewDto:  ch,
 		Participants: makeParticipants(ch.ParticipantIds, users),
@@ -699,7 +699,15 @@ func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto,
 			}
 		}
 	}
-	SetChatPersonalizedFields(&che, behalfUserId, admin, ch.IsParticipant)
+
+	var isParticipant = ch.IsParticipant
+	if forceNonParticipant {
+		isParticipant = false
+
+		che.UnreadMessages = 0
+	}
+
+	SetChatPersonalizedFields(&che, behalfUserId, admin, isParticipant)
 
 	if ch.LastMessageOwnerId != nil && ch.LastMessageContent != nil {
 		u := users[*ch.LastMessageOwnerId]

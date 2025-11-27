@@ -387,7 +387,7 @@ func (ch *ChatHandler) SearchChats(g *gin.Context) {
 
 	searchString := g.Query(dto.SearchStringParam)
 
-	chats, _, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
+	chats, _, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil, false)
 	if err != nil {
 		if translateChatError(g, err) {
 			return
@@ -470,7 +470,7 @@ func (ch *ChatHandler) ChatsFresh(g *gin.Context) {
 		return
 	}
 
-	chatDtos, _, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
+	chatDtos, _, err := ch.enrichingProjection.GetChatsEnriched(g.Request.Context(), []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil, false)
 	if err != nil {
 		if translateChatError(g, err) {
 			return
