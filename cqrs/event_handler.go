@@ -91,14 +91,11 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 			EventType:        eventTypeChatCreated,
 			ChatNotification: &cv,
 		}
-		if event.IsJoining && cv.BehalfUserId == event.AdditionalData.BehalfUserId {
-			dt.EventType = dto.EventTypeChatEdited
-		}
 		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dt)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 		}
-
+		
 		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 			UserId:    cv.BehalfUserId,
 			EventType: eventTypeUnreadMessagesChanged,
