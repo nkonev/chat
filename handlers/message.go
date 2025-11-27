@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"fmt"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
@@ -488,18 +487,6 @@ func (mc *MessageHandler) TypeMessage(g *gin.Context) {
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
 		g.Status(http.StatusInternalServerError)
-		return
-	}
-
-	participant, err := mc.commonProjection.IsParticipant(g.Request.Context(), mc.dbWrapper, userId, chatId)
-	if err != nil {
-		mc.lgr.ErrorContext(g.Request.Context(), "Error checking is participant", "err", err)
-		g.Status(http.StatusInternalServerError)
-		return
-	}
-	if !participant {
-		mc.lgr.InfoContext(g.Request.Context(), fmt.Sprintf("User %v is not participant of chat %v, skipping", userId, chatId))
-		g.Status(http.StatusOK)
 		return
 	}
 

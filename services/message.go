@@ -63,7 +63,17 @@ func (p *AsyncMessageService) BroadcastMessage(ctx context.Context, messageText 
 }
 
 func (p *AsyncMessageService) TypeMessage(ctx context.Context, chatId, userId int64, userLogin string) {
-	err := p.rabbitmqOutputEventPublisher.Publish(ctx, dto.PublishUserTyping{
+	participant, err := p.commonProjection.IsParticipant(ctx, p.dbWrapper, userId, chatId)
+	if err != nil {
+		p.lgr.ErrorContext(ctx, "Error checking is participant", "err", err)
+		return
+	}
+	if !participant {
+		p.lgr.InfoContext(ctx, fmt.Sprintf("User %v is not participant of chat %v, skipping", userId, chatId))
+		return
+	}
+
+	err = p.rabbitmqOutputEventPublisher.Publish(ctx, dto.PublishUserTyping{
 		ChatId:    chatId,
 		UserId:    userId,
 		UserLogin: userLogin,
