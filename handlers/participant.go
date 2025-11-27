@@ -231,23 +231,6 @@ func (ch *ParticipantHandler) JoinChat(g *gin.Context) {
 		return
 	}
 
-	basic, err := ch.commonProjection.GetChatBasic(g.Request.Context(), ch.dbWrapper, chatId)
-	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error betting base chat", "err", err)
-		g.Status(http.StatusInternalServerError)
-		return
-	}
-	if basic == nil {
-		ch.lgr.InfoContext(g.Request.Context(), "No chat found", "chat_id", chatId)
-		g.Status(http.StatusNoContent)
-		return
-	}
-	if !basic.AvailableToSearch && !basic.IsBlog {
-		ch.lgr.InfoContext(g.Request.Context(), "User isn't allowed to join into this chat because chat isn't available for search", "chat_id", chatId, "user_id", userId)
-		g.Status(http.StatusUnauthorized)
-		return
-	}
-
 	cc := cqrs.ParticipantAdd{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		ParticipantIds: []int64{userId},
