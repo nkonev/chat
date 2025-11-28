@@ -972,6 +972,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			RegularParticipantCanWriteMessage:   de.RegularParticipantCanWriteMessage,
 			AvailableToSearch:                   de.AvailableToSearch,
 			IsParticipant:                       de.IsParticipant,
+			CanPin:                              de.IsParticipant,
 		}
 		err = de.ParticipantIds.AssignTo(&mapped.ParticipantIds)
 		if err != nil {

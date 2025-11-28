@@ -34,6 +34,7 @@ type ChatViewDto struct {
 	ConsiderMessagesAsUnread            bool       `json:"considerMessagesAsUnread"`
 	CanResend                           bool       `json:"canResend"`
 	CanReact                            bool       `json:"canReact"`
+	CanPin                              bool       `json:"canPin"`
 	RegularParticipantCanPublishMessage bool       `json:"regularParticipantCanPublishMessage"`
 	RegularParticipantCanPinMessage     bool       `json:"regularParticipantCanPinMessage"`
 	RegularParticipantCanWriteMessage   bool       `json:"regularParticipantCanWriteMessage"`
