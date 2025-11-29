@@ -524,6 +524,9 @@ func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, eve
 		EventType:                       dto.EventTypeChatNotificationSettingsChanged,
 		ChatNotificationSettingsChanged: &d,
 	})
+	if err != nil {
+		return err
+	}
 
 	hasUnreadMessages, err := m.commonProjection.GetHasUnreadMessages(ctx, []int64{event.AdditionalData.BehalfUserId})
 	if err != nil {
