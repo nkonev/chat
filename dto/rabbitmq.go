@@ -1,14 +1,15 @@
 package dto
 
 type GlobalUserEvent struct {
-	EventType                        string                    `json:"eventType"`
-	UserId                           int64                     `json:"userId"`
-	ChatNotification                 *ChatViewEnrichedDto      `json:"chatNotification"`
-	ChatDeletedDto                   *ChatDeletedDto           `json:"chatDeletedNotification"`
-	CoChattedParticipantNotification *User                     `json:"coChattedParticipantNotification"`
-	HasUnreadMessagesChanged         *HasUnreadMessagesChanged `json:"hasUnreadMessagesChanged"`
-	UnreadMessagesNotification       *ChatUnreadMessageChanged `json:"unreadMessagesNotification"`
-	UserTypingNotification           *UserTypingNotification   `json:"userTypingNotification"`
+	EventType                        string                           `json:"eventType"`
+	UserId                           int64                            `json:"userId"`
+	ChatNotification                 *ChatViewEnrichedDto             `json:"chatNotification"`
+	ChatDeletedDto                   *ChatDeletedDto                  `json:"chatDeletedNotification"`
+	CoChattedParticipantNotification *User                            `json:"coChattedParticipantNotification"`
+	HasUnreadMessagesChanged         *HasUnreadMessagesChanged        `json:"hasUnreadMessagesChanged"`
+	UnreadMessagesNotification       *ChatUnreadMessageChanged        `json:"unreadMessagesNotification"`
+	UserTypingNotification           *UserTypingNotification          `json:"userTypingNotification"`
+	ChatNotificationSettingsChanged  *ChatNotificationSettingsChanged `json:"chatNotificationSettingsChanged"`
 }
 
 type ChatEvent struct {

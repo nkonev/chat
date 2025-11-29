@@ -290,8 +290,6 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 		return nil
 	})
 
-	// TODO send consider_messages_as_unread via event
-
 	return errOuter
 }
 

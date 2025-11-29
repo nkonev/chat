@@ -20,3 +20,5 @@ const EventTypeReactionRemoved = "reaction_removed"
 const EventTypeParticipantChanged = "participant_changed"
 const EventTypeMessagesReload = "messages_reload"
 const EventTypeParticipantsReload = "participants_reload"
+
+const EventTypeChatNotificationSettingsChanged = "chat_notification_settings_changed"

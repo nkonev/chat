@@ -95,7 +95,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 		}
-		
+
 		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 			UserId:    cv.BehalfUserId,
 			EventType: eventTypeUnreadMessagesChanged,
@@ -513,6 +513,17 @@ func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, eve
 	if err != nil {
 		return err
 	}
+
+	d := dto.ChatNotificationSettingsChanged{
+		ChatId:                   event.ChatId,
+		ConsiderMessagesAsUnread: event.Setted,
+	}
+
+	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		UserId:                          event.AdditionalData.BehalfUserId,
+		EventType:                       dto.EventTypeChatNotificationSettingsChanged,
+		ChatNotificationSettingsChanged: &d,
+	})
 
 	return nil
 }

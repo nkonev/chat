@@ -148,3 +148,8 @@ type ChatAuthorizationData struct {
 	AvailableToSearch     bool `db:"chat_is_available_to_search"`
 	IsBlog                bool `db:"chat_is_blog"`
 }
+
+type ChatNotificationSettingsChanged struct {
+	ChatId                   int64 `json:"chatId"`
+	ConsiderMessagesAsUnread bool  `json:"considerMessagesAsUnread"`
+}
