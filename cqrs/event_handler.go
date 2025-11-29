@@ -525,6 +525,22 @@ func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, eve
 		ChatNotificationSettingsChanged: &d,
 	})
 
+	hasUnreadMessages, err := m.commonProjection.GetHasUnreadMessages(ctx, []int64{event.AdditionalData.BehalfUserId})
+	if err != nil {
+		return err
+	}
+
+	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		UserId:    event.AdditionalData.BehalfUserId,
+		EventType: dto.EventTypeHasUnreadMessagesChanged,
+		HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+			HasUnreadMessages: hasUnreadMessages[event.AdditionalData.BehalfUserId],
+		},
+	})
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+	}
+
 	return nil
 }
 
