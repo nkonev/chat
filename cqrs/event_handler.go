@@ -525,7 +525,7 @@ func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, eve
 		ChatNotificationSettingsChanged: &d,
 	})
 	if err != nil {
-		return err
+		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 	}
 
 	hasUnreadMessages, err := m.commonProjection.GetHasUnreadMessages(ctx, []int64{event.AdditionalData.BehalfUserId})
