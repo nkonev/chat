@@ -165,13 +165,12 @@ func waitForHealthCheck(lgr *logger.LoggerWrapper, restClient *client.TestRestCl
 	ctx := context.Background()
 
 	i := 0
-	const maxAttempts = 60
 	success := false
-	for ; i <= maxAttempts; i++ {
+	for ; i <= cfg.Cqrs.PollingMaxTimes; i++ {
 		err := restClient.HealthCheck(ctx)
 		if err != nil {
 			lgr.Info("Awaiting while chat have been started")
-			time.Sleep(time.Second * 1)
+			time.Sleep(cfg.Cqrs.SleepBeforePolling)
 			continue
 		} else {
 			success = true
@@ -184,7 +183,7 @@ func waitForHealthCheck(lgr *logger.LoggerWrapper, restClient *client.TestRestCl
 	lgr.Info("chat have started")
 }
 
-func waitForMessageExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.CommonProjection, dba *db.DB, chatId, messageId int64, maxAttempts int) {
+func waitForMessageExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.CommonProjection, dba *db.DB, chatId, messageId int64, sleepBeforePolling time.Duration, maxAttempts int) {
 	ctx := context.Background()
 
 	i := 0
@@ -193,7 +192,7 @@ func waitForMessageExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.Comm
 		exists, err := commonProjection.IsMessageExists(ctx, dba, chatId, messageId)
 		if err != nil || !exists {
 			lgr.Info("Awaiting while message appear")
-			time.Sleep(time.Second * 1)
+			time.Sleep(sleepBeforePolling)
 			continue
 		} else {
 			success = true
@@ -206,7 +205,7 @@ func waitForMessageExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.Comm
 	lgr.Info("message appeared")
 }
 
-func waitForChatExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.CommonProjection, dba *db.DB, chatId, behalfUserId int64, maxAttempts int) {
+func waitForChatExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.CommonProjection, dba *db.DB, chatId, behalfUserId int64, sleepBeforePolling time.Duration, maxAttempts int) {
 	ctx := context.Background()
 
 	i := 0
@@ -216,7 +215,7 @@ func waitForChatExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.CommonP
 		exists, err := commonProjection.IsChatUserViewExists(ctx, dba, chatId, behalfUserId)
 		if err != nil || !exists {
 			lgr.Info("Awaiting while chat appear")
-			time.Sleep(time.Second * 1)
+			time.Sleep(sleepBeforePolling)
 			continue
 		} else {
 			success = true
