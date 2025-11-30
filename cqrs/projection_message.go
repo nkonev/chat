@@ -986,6 +986,7 @@ func setMessagePersonalizedFields(copied *dto.MessageViewEnrichedDto, chatTetATe
 	copied.CanMakeBlogPost = CanMakeMessageBlogPost(chatIsAdmin, chatTetATet, copied.BlogPost, chatIsBlog, bloggingIsAllowed)
 }
 
+// We use pure functions for authorization, for sake simplicity and composability
 func CanWriteMessage(isParticipant, chatIsAdmin, chatCanWriteMessage bool) bool {
 	return isParticipant && (isChatAdminInternal(chatIsAdmin) || canWriteMessageInternal(chatCanWriteMessage))
 }

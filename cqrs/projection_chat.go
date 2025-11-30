@@ -740,6 +740,7 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, behalfUserId int
 	copied.CanWriteMessage = CanWriteMessage(participant, admin, copied.RegularParticipantCanWriteMessage)
 }
 
+// We use pure functions for authorization, for sake simplicity and composability
 func CanEditChat(isAdmin, tetATet bool) bool {
 	return isChatAdminInternal(isAdmin) && !tetATet
 }

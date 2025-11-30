@@ -906,6 +906,7 @@ func makeParticipantsWithAdmin(participants []*ParticipantWithAdmin, users map[i
 	return res
 }
 
+// We use pure functions for authorization, for sake simplicity and composability
 func CanChangeParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat bool, userId int64) bool {
 	return CanEditChat(behalfIsChatAdmin, isTetATetChat) && userId != behalfUserId
 }
