@@ -3388,6 +3388,7 @@ func TestDeleteFromDb(t *testing.T) {
 		m *cqrs.CommonProjection,
 		dba *db.DB,
 		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -3478,9 +3479,28 @@ func TestDeleteFromDb(t *testing.T) {
 		require.NoError(t, err, "error in checking message")
 		assert.True(t, messageExists)
 
+		testEventsAccumulator.Clean()
+
 		err = testRestClient.DeleteChat(ctx, user1, chat2Id)
 		require.NoError(t, err, "error in deleting chat")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeChatDeleted &&
+					e.UserId == user1 &&
+					e.ChatDeletedDto.Id == chat2Id
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeChatDeleted &&
+					e.UserId == user2 &&
+					e.ChatDeletedDto.Id == chat2Id
+			},
+		}))
+
+		testEventsAccumulator.Clean()
 
 		// assert that the message is deleted along with chat
 		messageExists2, err := m.IsMessageExists(ctx, dba, chat2Id, message2Id)
@@ -3514,9 +3534,27 @@ func TestDeleteFromDb(t *testing.T) {
 		blogsNew := blogsNewW.Items
 		assert.Equal(t, 1, len(blogsNew))
 
+		testEventsAccumulator.Clean()
+
 		err = testRestClient.DeleteChat(ctx, user1, chat3Id)
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// for sake waiting on all the events were applied
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeChatRedraw &&
+					e.UserId == user1 &&
+					e.ChatNotification.Id == chat3Id
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeChatRedraw &&
+					e.UserId == user2 &&
+					e.ChatNotification.Id == chat3Id
+			},
+		}))
 
 		blogsNewW2, err := testRestClient.SearchBlogs(ctx)
 		require.NoError(t, err, "error in searching blog posts")

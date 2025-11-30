@@ -57,7 +57,7 @@ cqrs:
   commands:
     maxParticipantsPerSingleCommand: 20
   testHelperMethods: false
-  sleepBeforePolling: 100ms
+  sleepBeforePolling: 250ms
   pollingMaxTimes: 1000
 
 # Rest client
