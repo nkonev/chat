@@ -671,7 +671,7 @@ func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto,
 		ChatViewDto:  ch,
 		Participants: makeParticipants(ch.ParticipantIds, users),
 	}
-	if che.TetATet {
+	if che.ChatViewDto.TetATet {
 		oppa := utils.GetSliceWithout(behalfUserId, che.ParticipantIds)
 		if len(oppa) == 1 {
 			oppositeUserId := oppa[0]

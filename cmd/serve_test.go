@@ -74,6 +74,7 @@ func TestUnreads(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2, &mockUser3}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -454,6 +455,7 @@ func TestUnreadsInitFromEmptyChatOfBothUsers(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -539,6 +541,7 @@ func TestReadAllChats(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -666,6 +669,7 @@ func TestReadOneChat(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -819,6 +823,7 @@ func TestReaction(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -1082,6 +1087,7 @@ func TestResendMessage(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -1244,6 +1250,7 @@ func TestReplyMessage(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -1334,6 +1341,96 @@ func TestReplyMessage(t *testing.T) {
 	})
 }
 
+func TestMentionMessage(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testEventsAccumulator *listener.TestEventAccumulator,
+		testNotificationEventsAccumulator *listener.TestNotificationEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert user 2 sees chat 1
+		user2ChatsNew, _, err := testRestClient.GetChats(ctx, user2)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user2ChatsNew))
+		chat1OfUser2 := user2ChatsNew[0]
+		assert.Equal(t, chat1Name, chat1OfUser2.Title)
+
+		const message1Text = "new message 1 hello @" + user2Login
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		// assert there is message edit with the new embed content
+		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypeMessageCreated &&
+					e.UserId == user2 &&
+					e.ChatId == chat1Id &&
+					e.MessageNotification.Id == message1Id &&
+					e.MessageNotification.Content == message1Text &&
+					e.MessageNotification.Owner.Id == user1 &&
+					e.MessageNotification.Owner.Login == user1Login
+			},
+		}))
+
+		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.NotificationEvent)
+				return ok && e.EventType == dto.EventTypeMentionAdded &&
+					e.UserId == user2 &&
+					e.ChatId == chat1Id &&
+					e.MentionNotification.Id == message1Id &&
+					e.MentionNotification.Text == message1Text
+			},
+		}))
+	})
+}
+
 func TestPinChat(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
@@ -1375,6 +1472,7 @@ func TestPinChat(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -1749,6 +1847,7 @@ func TestDeleteChat(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -1901,6 +2000,7 @@ func TestAddParticipant(t *testing.T) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
 		mockAaaClient.EXPECT().SearchGetUsers(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*dto.User{&mockUser2}, 2, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -2069,6 +2169,7 @@ func TestDeleteParticipant(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -2198,6 +2299,7 @@ func TestLeaveFromChat(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -2617,6 +2719,7 @@ func TestCreateMessage(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -2742,6 +2845,7 @@ func TestEditMessage(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -2912,6 +3016,7 @@ func TestBlog(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -3134,6 +3239,7 @@ func TestMessagePaginate(t *testing.T) {
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		const user1 int64 = 1
 		const chat1Name = "new chat 1"
@@ -3229,6 +3335,7 @@ func TestMessageFuzzySearch(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		const chat1Name = "new chat 1 src"
 		const chat2Name = "new chat 1 dst"
@@ -3418,6 +3525,7 @@ func TestDeleteFromDb(t *testing.T) {
 
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		const chat1Name = "new chat 1"
 		const chat2Name = "new chat 2"

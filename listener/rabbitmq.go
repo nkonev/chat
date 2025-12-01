@@ -10,9 +10,8 @@ import (
 	"go.uber.org/fx"
 )
 
-const ChatExchange = producer.EventsFanoutExchange
-const AaaEventsExchange = producer.AaaEventsExchange
-const testQueueName = "chat-event-test"
+const testOutputQueueName = "chat-output-event-test"
+const testNotificationQueueName = "chat-notification-event-test"
 const aaaEventsQueue = "chat-aaa-profile-events"
 
 type ChatChannel struct{ *rabbitmq.Channel }
@@ -71,15 +70,15 @@ func DeleteTestEventQueue(lgr *logger.LoggerWrapper, connection *rabbitmq.Connec
 		return err
 	}
 
-	lgr.Warn("Deleting test queue", "queue", testQueueName)
-	_, err = ch.QueueDelete(testQueueName, false, false, false)
+	lgr.Warn("Deleting test queue", "queue", testOutputQueueName)
+	_, err = ch.QueueDelete(testOutputQueueName, false, false, false)
 	if err != nil {
-		lgr.Warn("An error during delete", "queue", testQueueName, "err", err)
+		lgr.Warn("An error during delete", "queue", testOutputQueueName, "err", err)
 	}
 	return nil
 }
 
-func CreateAndListenTestEventChannel(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, onMessage TestEventListener, lc fx.Lifecycle, sh fx.Shutdowner) (*ChatChannel, error) {
+func CreateAndListenTestOutputEventChannel(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, onMessage TestOutputEventListener, lc fx.Lifecycle, sh fx.Shutdowner) (*ChatChannel, error) {
 
 	ch, err := myRabbit.CreateRabbitMqChannelWithCallback(
 		lgr,
@@ -87,17 +86,51 @@ func CreateAndListenTestEventChannel(lgr *logger.LoggerWrapper, connection *rabb
 		func(channel *rabbitmq.Channel) error {
 			lc.Append(fx.Hook{
 				OnStop: func(ctx context.Context) error {
-					lgr.Info("Stopping queue listening", "queue", testQueueName)
+					lgr.Info("Stopping queue listening", "queue", testOutputQueueName)
 					return channel.Close()
 				},
 			})
 
-			err := channel.ExchangeDeclare(ChatExchange, "direct", true, false, false, false, nil)
+			err := channel.ExchangeDeclare(producer.EventsFanoutExchange, "direct", true, false, false, false, nil)
 			if err != nil {
 				return err
 			}
 
-			aQueue, err := createAndBind(lgr, testQueueName, "", ChatExchange, channel)
+			aQueue, err := createAndBind(lgr, testOutputQueueName, "", producer.EventsFanoutExchange, channel)
+			if err != nil {
+				return err
+			}
+
+			listen(lgr, channel, aQueue, onMessage, sh)
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ChatChannel{ch}, nil
+}
+
+func CreateAndListenTestNotificationEventChannel(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, onMessage TestNotificationEventListener, lc fx.Lifecycle, sh fx.Shutdowner) (*ChatChannel, error) {
+
+	ch, err := myRabbit.CreateRabbitMqChannelWithCallback(
+		lgr,
+		connection,
+		func(channel *rabbitmq.Channel) error {
+			lc.Append(fx.Hook{
+				OnStop: func(ctx context.Context) error {
+					lgr.Info("Stopping queue listening", "queue", testNotificationQueueName)
+					return channel.Close()
+				},
+			})
+
+			err := channel.ExchangeDeclare(producer.NotificationsFanoutExchange, "direct", true, false, false, false, nil)
+			if err != nil {
+				return err
+			}
+
+			aQueue, err := createAndBind(lgr, testNotificationQueueName, "", producer.NotificationsFanoutExchange, channel)
 			if err != nil {
 				return err
 			}
@@ -167,12 +200,12 @@ func CreateAndListenAaaChannel(lgr *logger.LoggerWrapper, connection *rabbitmq.C
 				},
 			})
 
-			err := channel.ExchangeDeclare(AaaEventsExchange, "fanout", true, false, false, false, nil)
+			err := channel.ExchangeDeclare(producer.AaaEventsExchange, "fanout", true, false, false, false, nil)
 			if err != nil {
 				return err
 			}
 
-			aQueue, err := createAndBind(lgr, aaaEventsQueue, "", AaaEventsExchange, channel)
+			aQueue, err := createAndBind(lgr, aaaEventsQueue, "", producer.AaaEventsExchange, channel)
 			if err != nil {
 				return err
 			}

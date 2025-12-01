@@ -639,10 +639,11 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 	return maxMessageId, nil
 }
 
-func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, needCheckAuth bool, authForUserId *int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageViewEnrichedDto, bool, error) {
+func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, needCheckAuth bool, authForUserId *int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageViewEnrichedDto, bool, []*dto.User, error) {
 	type resDto struct {
 		items           []dto.MessageViewEnrichedDto
 		notAparticipant bool
+		users           []*dto.User
 	}
 	res, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*resDto, error) {
 		if needCheckAuth {
@@ -705,7 +706,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 		var usersSet = map[int64]bool{}
 		var chatsPreSet = map[int64]bool{}
 		for _, message := range messages {
-			err = populateSets(message.Id, message.OwnerId, message.Embed, usersSet, chatsPreSet, chatId, reactions)
+			err = populateSets(message.Id, message.OwnerId, message.BehalfUserId, message.Embed, usersSet, chatsPreSet, chatId, reactions)
 			if err != nil {
 				return nil, err
 			}
@@ -756,14 +757,15 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 		return &resDto{
 			items:           messagesEnriched,
 			notAparticipant: notAparticipant,
+			users:           users,
 		}, nil
 	})
 
 	if errOuter != nil {
-		return nil, false, errOuter
+		return nil, false, nil, errOuter
 	}
 
-	return res.items, res.notAparticipant, nil
+	return res.items, res.notAparticipant, res.users, nil
 }
 
 func getUserRoles(usersMap map[int64]*dto.User, behalfUserId int64) []string {
@@ -892,8 +894,12 @@ func (m *CommonProjection) GetReaction(ctx context.Context, co db.CommonOperatio
 	return r, nil
 }
 
-func populateSets(messageId, messageOwnerId int64, embed dto.Embeddable, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, reactions map[int64][]dto.ReactionDto) error {
+func populateSets(messageId, messageOwnerId, behalfUserId int64, embed dto.Embeddable, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, reactions map[int64][]dto.ReactionDto) error {
 	usersSet[messageOwnerId] = true
+
+	if behalfUserId != dto.NonExistentUser {
+		usersSet[behalfUserId] = true
+	}
 
 	chatsPreSet[currentChatId] = true
 
@@ -926,6 +932,19 @@ func takeOnAccountReactions(messageId int64, ownersSet map[int64]bool, messageRe
 			}
 		}
 	}
+}
+
+func (m *CommonProjection) getChatNameForNotification(ctx context.Context, co db.CommonOperations, chatId int64) (string, error) {
+	chatBasic, err := m.GetChatBasic(ctx, co, chatId)
+	if err != nil {
+		return "", err
+	}
+	chatName := chatBasic.Title
+	if chatBasic.TetATet {
+		chatName = ""
+	}
+	return chatName, nil
+
 }
 
 func enrichMessage(
@@ -1453,7 +1472,7 @@ func (m *EnrichingProjection) GetReadMessageUsers(ctx context.Context, userId in
 		usersToGet[txRes.msg.OwnerId] = true
 	}
 
-	users, err := m.aaaRestClient.GetUsers(ctx, utils.SetToArray(usersToGet))
+	users, err := m.aaaRestClient.GetUsers(ctx, utils.MapSetToSlice(usersToGet))
 	if err != nil {
 		return nil, err
 	}

@@ -17,7 +17,7 @@ import (
 
 type InternalEventsListener func(*amqp.Delivery) error
 
-func CreateInternalEventsListener(
+func CreateRabbitInternalEventsListener(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	typeRegistry *type_registry.TypeRegistryInstance,

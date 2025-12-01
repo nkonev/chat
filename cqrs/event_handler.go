@@ -8,12 +8,15 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/producer"
+	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"maps"
 	"slices"
+	"strings"
 )
 
 // performs Authorization,
@@ -21,28 +24,34 @@ import (
 // mutations via delegating to projection
 // sending after events
 type EventHandler struct {
-	commonProjection             *CommonProjection
-	enrichingProjection          *EnrichingProjection
-	rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher
-	db                           *db.DB
-	lgr                          *logger.LoggerWrapper
-	tr                           trace.Tracer
-	aaaRestClient                client.AaaRestClient
-	chatUserViewConfig           *config.ChatUserViewConfig
+	commonProjection                    *CommonProjection
+	enrichingProjection                 *EnrichingProjection
+	rabbitmqOutputEventPublisher        *producer.RabbitOutputEventsPublisher
+	rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher
+	db                                  *db.DB
+	lgr                                 *logger.LoggerWrapper
+	tr                                  trace.Tracer
+	aaaRestClient                       client.AaaRestClient
+	cfg                                 *config.AppConfig
+	stripSourceContent                  *sanitizer.StripSourcePolicy
+	stripAllTags                        *sanitizer.StripTagsPolicy
 }
 
-func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *EnrichingProjection, rabbitmqEventPublisher *producer.RabbitOutputEventsPublisher, db *db.DB, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient, cfg *config.AppConfig) *EventHandler {
+func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *EnrichingProjection, rabbitmqEventPublisher *producer.RabbitOutputEventsPublisher, rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher, db *db.DB, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient, cfg *config.AppConfig, stripSourceContent *sanitizer.StripSourcePolicy, stripAllTags *sanitizer.StripTagsPolicy) *EventHandler {
 	tr := otel.Tracer("event")
 
 	return &EventHandler{
-		commonProjection:             commonProjection,
-		enrichingProjection:          enrichingProjection,
-		rabbitmqOutputEventPublisher: rabbitmqEventPublisher,
-		db:                           db,
-		lgr:                          lgr,
-		tr:                           tr,
-		aaaRestClient:                aaaRestClient,
-		chatUserViewConfig:           &cfg.Cqrs.Projections.ChatUserView,
+		commonProjection:                    commonProjection,
+		enrichingProjection:                 enrichingProjection,
+		rabbitmqOutputEventPublisher:        rabbitmqEventPublisher,
+		rabbitmqNotificationEventsPublisher: rabbitmqNotificationEventsPublisher,
+		db:                                  db,
+		lgr:                                 lgr,
+		tr:                                  tr,
+		aaaRestClient:                       aaaRestClient,
+		cfg:                                 cfg,
+		stripSourceContent:                  stripSourceContent,
+		stripAllTags:                        stripAllTags,
 	}
 }
 
@@ -645,8 +654,14 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 
 	// TODO NotifyNewMessageBrowserNotification browser_notification_add_message
 
+	chatNotificationTitle, err := m.commonProjection.getChatNameForNotification(ctx, m.db, event.MessageCommoned.ChatId)
+	if err != nil {
+		m.lgr.WarnContext(ctx, "Unable to get chatNotificationTitle", "chat_id", event.MessageCommoned.ChatId, "err", err)
+		// nothing
+	}
+
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.MessageCommoned.ChatId, nil, func(participantIdsPortion []int64) error {
-		messageViews, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id)
+		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id)
 		if errInn != nil {
 			return errInn
 		}
@@ -663,6 +678,49 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 			}
 		}
 
+		userOnlines, err := m.aaaRestClient.GetOnlines(ctx, participantIdsPortion) // get online for opposite user
+		if err != nil {
+			m.lgr.WarnContext(ctx, "Unable to get online for", "user_ids", participantIdsPortion, "err", err)
+			// nothing
+		}
+
+		userOnlinesMap := utils.ToMap(userOnlines)
+
+		behalfUsersMap := map[int64]*dto.User{}
+		allPortionUsersMap := utils.ToMap(allPortionUsers)
+		for _, p := range participantIdsPortion {
+			behalfUsersMap[p] = allPortionUsersMap[p]
+		}
+
+		var addedMentions, strippedText = findMentions(ctx, m.lgr, event.MessageCommoned.Content, event.AdditionalData.BehalfUserId, true, behalfUsersMap, userOnlinesMap, m.stripSourceContent, m.stripAllTags, m.cfg.Message.PreviewMaxTextSize)
+
+		if behalfUserDto, ok := allPortionUsersMap[event.AdditionalData.BehalfUserId]; !ok {
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for mentioning", "user_id", event.AdditionalData.BehalfUserId, "err", err)
+		} else {
+			for _, participantId := range addedMentions {
+				err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+					EventType: dto.EventTypeMentionAdded,
+					UserId:    participantId,
+					ChatId:    event.MessageCommoned.ChatId,
+					MentionNotification: &dto.MentionNotification{
+						Id:   event.MessageCommoned.Id,
+						Text: strippedText,
+					},
+					ByUserId:  behalfUserDto.Id,
+					ByLogin:   behalfUserDto.Login,
+					ByAvatar:  behalfUserDto.Avatar,
+					ChatTitle: chatNotificationTitle,
+				})
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				}
+			}
+		}
+
+		// TODO message edit, message delete for mention
+		// TODO remove notification in message read
+		// TODO there is an error during click "Clear" notification button
+
 		return nil
 	})
 	if errOuter != nil {
@@ -670,6 +728,42 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	}
 
 	return nil
+}
+
+func findMentions(ctx context.Context, lgr *logger.LoggerWrapper, messageText string, behalfUserId int64, isFindingNewMentions bool, users map[int64]*dto.User, userOnlines map[int64]*dto.UserOnline, stripSourceContent *sanitizer.StripSourcePolicy, stripAllTags *sanitizer.StripTagsPolicy, previewMaxTextSize int) ([]int64, string) {
+	var aMap = map[int64]bool{}
+	withoutSourceTags := stripSourceContent.Sanitize(messageText)
+	for uid, user := range users {
+		if user == nil { // nil check: the user can be deleted in aaa
+			lgr.InfoContext(ctx, "Unable to get evaluatable user dto for mentioning", "user_id", uid)
+			continue
+		}
+		if user.Id != behalfUserId { // exclude myself
+			if strings.Contains(withoutSourceTags, "@"+dto.AllUsersLogin) && isFindingNewMentions {
+				aMap[user.Id] = true
+			} else if strings.Contains(withoutSourceTags, "@"+user.Login) {
+				aMap[user.Id] = true
+			}
+		}
+	}
+	for uid, user := range userOnlines {
+		if user == nil { // nil check: the user can be deleted in aaa
+			lgr.InfoContext(ctx, "Unable to get evaluatable user online for mentioning", "user_id", uid)
+			continue
+		}
+		if user.Id != behalfUserId { // exclude myself
+			if strings.Contains(withoutSourceTags, "@"+dto.HereUsersLogin) && isFindingNewMentions {
+				aMap[user.Id] = true
+			}
+		}
+	}
+
+	withoutAnyHtml := stripAllTags.Sanitize(withoutSourceTags)
+	if withoutAnyHtml != "" {
+		withoutAnyHtml = preview.CreateMessagePreviewWithoutLogin(stripAllTags, previewMaxTextSize, withoutAnyHtml)
+	}
+
+	return utils.MapSetToSlice(aMap), withoutAnyHtml
 }
 
 func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
@@ -705,7 +799,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.MessageCommoned.ChatId, nil, func(participantIdsPortion []int64) error {
-		messageViews, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id)
+		messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id)
 		if errInn != nil {
 			return errInn
 		}
@@ -895,7 +989,7 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 		m.lgr.DebugContext(ctx, "Sending notification about the message is no more blog post to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
 
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-			messageViews, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, currentBlogPost)
+			messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, currentBlogPost)
 			if errInn != nil {
 				return errInn
 			}
@@ -922,7 +1016,7 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 	m.lgr.DebugContext(ctx, "Sending notification about the message become blog post to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-		messageViews, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId)
+		messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId)
 		if errInn != nil {
 			return errInn
 		}

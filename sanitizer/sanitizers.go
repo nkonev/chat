@@ -21,6 +21,10 @@ type StripTagsPolicy struct {
 	*bluemonday.Policy
 }
 
+type StripSourcePolicy struct {
+	*bluemonday.Policy
+}
+
 func CreateSanitizer() *SanitizerPolicy {
 	policy := bluemonday.UGCPolicy()
 	policy.AllowAttrs("style").OnElements("span", "p", "strong", "em", "s", "u", "img", "mark")
@@ -34,6 +38,12 @@ func CreateSanitizer() *SanitizerPolicy {
 
 func CreateStripTags() *StripTagsPolicy {
 	return &StripTagsPolicy{bluemonday.StrictPolicy()}
+}
+
+func CreateStripSource() *StripSourcePolicy {
+	policy := bluemonday.StrictPolicy()
+	policy.SkipElementsContent("code", "pre")
+	return &StripSourcePolicy{policy}
 }
 
 func TrimAmdSanitizeChatTitle(policy *StripTagsPolicy, title string) string {

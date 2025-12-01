@@ -17,32 +17,52 @@ import (
 	"time"
 )
 
-type TestEventAccumulator struct {
+type TestEventAccumulator0 struct {
 	cfg          *config.AppConfig
 	lgr          *logger.LoggerWrapper
 	eventsBuffer []any
 }
 
-func (p *TestEventAccumulator) OnEvent(ctx context.Context, e any) {
+type TestEventAccumulator struct {
+	TestEventAccumulator0
+}
+
+func (p *TestEventAccumulator0) OnEvent(ctx context.Context, e any) {
 	p.eventsBuffer = append(p.eventsBuffer, e)
 }
 
-func NewTestEventAccumulator(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestEventAccumulator {
+func NewRabbitTestEventAccumulator(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestEventAccumulator {
 	return &TestEventAccumulator{
-		cfg:          cfg,
-		lgr:          lgr,
-		eventsBuffer: make([]any, 0),
+		TestEventAccumulator0{
+			cfg:          cfg,
+			lgr:          lgr,
+			eventsBuffer: make([]any, 0),
+		},
 	}
 }
 
-func (p *TestEventAccumulator) Clean() {
+type TestNotificationEventAccumulator struct {
+	TestEventAccumulator0
+}
+
+func NewRabbitTestNotificationEventAccumulator(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestNotificationEventAccumulator {
+	return &TestNotificationEventAccumulator{
+		TestEventAccumulator0{
+			cfg:          cfg,
+			lgr:          lgr,
+			eventsBuffer: make([]any, 0),
+		},
+	}
+}
+
+func (p *TestEventAccumulator0) Clean() {
 	p.eventsBuffer = []any{}
 }
 
 // there can be more events than asserters
 
 // AssertHasEventsOrdered returns true if all the asserters are matched events in order of asserters
-func (p *TestEventAccumulator) AssertHasEventsOrdered(asserters []func(e any) bool) bool {
+func (p *TestEventAccumulator0) AssertHasEventsOrdered(asserters []func(e any) bool) bool {
 	j := 0 // both second pointer and num of success comparisons
 
 	for _, e := range p.eventsBuffer {
@@ -60,7 +80,7 @@ func (p *TestEventAccumulator) AssertHasEventsOrdered(asserters []func(e any) bo
 }
 
 // AssertHasEventsUnordered returns true if all the asserters are matched events in any order
-func (p *TestEventAccumulator) AssertHasEventsUnordered(asserters []func(e any) bool) bool {
+func (p *TestEventAccumulator0) AssertHasEventsUnordered(asserters []func(e any) bool) bool {
 	assertersCopy := make([]func(e any) bool, len(asserters))
 	copy(assertersCopy, asserters)
 
@@ -77,7 +97,7 @@ func (p *TestEventAccumulator) AssertHasEventsUnordered(asserters []func(e any) 
 	return len(assertersCopy) == 0
 }
 
-func (p *TestEventAccumulator) AwaitForBufferContainsSpecifiedEvents(duration time.Duration, ordered bool, comparators []func(e any) bool) error {
+func (p *TestEventAccumulator0) AwaitForBufferContainsSpecifiedEvents(duration time.Duration, ordered bool, comparators []func(e any) bool) error {
 	du := p.cfg.RabbitMQ.CheckAreEventsProcessedInterval
 
 	startTime := time.Now()
@@ -122,14 +142,14 @@ func (p *TestEventAccumulator) AwaitForBufferContainsSpecifiedEvents(duration ti
 
 }
 
-type TestEventListener func(*amqp.Delivery) error
+type TestOutputEventListener func(*amqp.Delivery) error
 
-func CreateTestEventListener(service *TestEventAccumulator, lgr *logger.LoggerWrapper, typeRegistry *type_registry.TypeRegistryInstance) TestEventListener {
+func CreateRabbitTestOutputEventListener(service *TestEventAccumulator, lgr *logger.LoggerWrapper, typeRegistry *type_registry.TypeRegistryInstance) TestOutputEventListener {
 	tr := otel.Tracer("amqp/listener")
 
 	return func(msg *amqp.Delivery) error {
 		ctx := rabbitmq.ExtractAMQPHeaders(context.Background(), msg.Headers)
-		ctx, span := tr.Start(ctx, "test.event.listener")
+		ctx, span := tr.Start(ctx, "test.output.event.listener")
 		defer span.End()
 
 		bytesData := msg.Body
@@ -139,7 +159,7 @@ func CreateTestEventListener(service *TestEventAccumulator, lgr *logger.LoggerWr
 		lgr.DebugContext(ctx, "Received", "data", strData, "type", aType)
 
 		if !typeRegistry.HasType(aType) {
-			lgr.ErrorContext(ctx, "Unexpected type in rabbit test_listener", "type", aType)
+			lgr.ErrorContext(ctx, "Unexpected type in rabbit test_output_listener", "type", aType)
 			return nil
 		}
 
@@ -154,6 +174,46 @@ func CreateTestEventListener(service *TestEventAccumulator, lgr *logger.LoggerWr
 			}
 			service.OnEvent(ctx, &bindTo)
 		case dto.ChatEvent:
+			err := json.Unmarshal(bytesData, &bindTo)
+			if err != nil {
+				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)
+				return err
+			}
+			service.OnEvent(ctx, &bindTo)
+		default:
+			lgr.ErrorContext(ctx, "Unexpected type:", "instance", anInstance)
+			return errors.New(fmt.Sprintf("Unexpected type : %v", anInstance))
+		}
+
+		return nil
+	}
+}
+
+type TestNotificationEventListener func(*amqp.Delivery) error
+
+func CreateRabbitTestNotificationEventListener(service *TestNotificationEventAccumulator, lgr *logger.LoggerWrapper, typeRegistry *type_registry.TypeRegistryInstance) TestNotificationEventListener {
+	tr := otel.Tracer("amqp/listener")
+
+	return func(msg *amqp.Delivery) error {
+		ctx := rabbitmq.ExtractAMQPHeaders(context.Background(), msg.Headers)
+		ctx, span := tr.Start(ctx, "test.notification.event.listener")
+		defer span.End()
+
+		bytesData := msg.Body
+		strData := string(bytesData)
+		aType := msg.Type
+
+		lgr.DebugContext(ctx, "Received", "data", strData, "type", aType)
+
+		if !typeRegistry.HasType(aType) {
+			lgr.ErrorContext(ctx, "Unexpected type in rabbit test_notification_listener", "type", aType)
+			return nil
+		}
+
+		anInstance := typeRegistry.MakeInstance(aType)
+
+		switch bindTo := anInstance.(type) {
+		case dto.NotificationEvent:
 			err := json.Unmarshal(bytesData, &bindTo)
 			if err != nil {
 				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)

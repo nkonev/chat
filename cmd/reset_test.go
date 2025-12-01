@@ -63,6 +63,7 @@ func TestReset(t *testing.T) {
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, []int64{user1}).Return([]*dto.User{&mockUser1}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 
@@ -139,6 +140,7 @@ func TestReset(t *testing.T) {
 	) {
 		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
 		mockAaaClient.EXPECT().GetUsers(mock.Anything, []int64{user1}).Return([]*dto.User{&mockUser1}, nil)
+		mockAaaClient.EXPECT().GetOnlines(mock.Anything, mock.Anything).Return([]*dto.UserOnline{}, nil)
 
 		ctx := context.Background()
 

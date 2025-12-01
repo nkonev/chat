@@ -17,7 +17,7 @@ import (
 
 type AaaUserProfileUpdateListener func(*amqp.Delivery) error
 
-func CreateAaaUserProfileUpdateListener(lgr *logger.LoggerWrapper, cfg *config.AppConfig, not *services.InputEventHandler, typeRegistry *type_registry.TypeRegistryInstance) AaaUserProfileUpdateListener {
+func CreateRabbitAaaUserProfileUpdateListener(lgr *logger.LoggerWrapper, cfg *config.AppConfig, not *services.InputEventHandler, typeRegistry *type_registry.TypeRegistryInstance) AaaUserProfileUpdateListener {
 	tr := otel.Tracer("amqp/listener")
 
 	return func(msg *amqp.Delivery) error {

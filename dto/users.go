@@ -56,6 +56,10 @@ type UserOnline struct {
 	Online bool  `json:"online"`
 }
 
+func (u UserOnline) GetId() int64 {
+	return u.Id
+}
+
 type ParticipantAddDto struct {
 	ParticipantIds []int64 `json:"addParticipantIds"`
 }

@@ -170,16 +170,6 @@ func ContainUrl(parsedUrlToTest, parsedAllowedUrl *url.URL) bool {
 
 type H map[string]interface{}
 
-func MapSetToSlice(m map[int64]bool) []int64 {
-	ret := make([]int64, 0, len(m))
-	for k, v := range m {
-		if v {
-			ret = append(ret, k)
-		}
-	}
-	return ret
-}
-
 type WithId interface {
 	GetId() int64
 }
@@ -235,8 +225,8 @@ func CompareStringPointers(p1, p2 *string) bool {
 	}
 }
 
-func SetToArray(set map[int64]bool) []int64 {
-	var ownerIds []int64
+func MapSetToSlice(set map[int64]bool) []int64 {
+	var ownerIds = make([]int64, 0)
 	for k, v := range set {
 		if v {
 			ownerIds = append(ownerIds, k)
@@ -245,7 +235,7 @@ func SetToArray(set map[int64]bool) []int64 {
 	return ownerIds
 }
 
-func ArrayToSet(arr []int64) map[int64]bool {
+func SliceToMapSet(arr []int64) map[int64]bool {
 	var ownerIds map[int64]bool = map[int64]bool{}
 	for _, el := range arr {
 		ownerIds[el] = true

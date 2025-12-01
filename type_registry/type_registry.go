@@ -27,6 +27,8 @@ func NewTypeRegistryInstance() *TypeRegistryInstance {
 	res.AddToRegistryIfNeed(dto.PublishBroadcastMessage{})
 	res.AddToRegistryIfNeed(dto.PublishUserTyping{})
 
+	res.AddToRegistryIfNeed(dto.NotificationEvent{})
+
 	return res
 }
 

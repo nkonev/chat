@@ -14,6 +14,7 @@ import (
 )
 
 const EventsFanoutExchange = "async-events-exchange"
+const NotificationsFanoutExchange = "notifications-exchange"
 const ChatInternalExchange = "chat-internal-exchange"
 const AaaEventsExchange = "aaa-profile-events-exchange"
 const correlationIdName = "correlationId"
@@ -205,6 +206,72 @@ func NewRabbitTestInputEventsPublisher(lgr *logger.LoggerWrapper, connection *ra
 		return nil, err
 	}
 	return &RabbitTestInputEventsPublisher{
+		channel:      cha,
+		lgr:          lgr,
+		typeRegistry: typeRegistry,
+		cfg:          cfg,
+	}, nil
+}
+
+func (rp *RabbitNotificationEventsPublisher) Publish(ctx context.Context, correlationId *string, aDto interface{}) error {
+	headers := myRabbitmq.InjectAMQPHeaders(ctx)
+	if correlationId != nil {
+		headers[correlationIdName] = *correlationId
+	}
+
+	aType := rp.typeRegistry.GetType(aDto)
+
+	bytea, err := json.Marshal(aDto)
+	if err != nil {
+		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", "err", err)
+		return err
+	}
+
+	msg := amqp.Publishing{
+		DeliveryMode: amqp.Transient,
+		Timestamp:    time.Now().UTC(),
+		ContentType:  "application/json",
+		Body:         bytea,
+		Type:         aType,
+		Headers:      headers,
+	}
+
+	publisherName := "notification"
+
+	if rp.cfg.RabbitMQ.Dump {
+		strData := string(bytea)
+		var correlationIdStr string
+		if correlationId != nil {
+			correlationIdStr = *correlationId
+		}
+		if rp.cfg.RabbitMQ.PrettyLog && !rp.cfg.Logger.Json {
+			fmt.Printf("[rabbitmq publisher] Sending message: publisher=%s, trace_id=%s, headers=%v, type=%v, correlationId=%v, body: %v\n", publisherName, logger.GetTraceId(ctx), msg.Headers, aType, correlationIdStr, strData)
+		} else {
+			rp.lgr.InfoContext(ctx, fmt.Sprintf("[rabbitmq publisher] Sending message: publisher=%s, trace_id=%s, headers=%v, type=%v, correlationId=%v, body: %v\n", publisherName, logger.GetTraceId(ctx), msg.Headers, aType, correlationIdStr, strData))
+		}
+	}
+
+	if err := rp.channel.Publish(NotificationsFanoutExchange, "", false, false, msg); err != nil {
+		rp.lgr.ErrorContext(ctx, "Error during publishing dto", "err", err)
+		return err
+	} else {
+		return nil
+	}
+}
+
+type RabbitNotificationEventsPublisher struct {
+	channel      *rabbitmq.Channel
+	lgr          *logger.LoggerWrapper
+	typeRegistry *type_registry.TypeRegistryInstance
+	cfg          *config.AppConfig
+}
+
+func NewRabbitNotificationEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbitmq.Connection, typeRegistry *type_registry.TypeRegistryInstance, cfg *config.AppConfig) (*RabbitNotificationEventsPublisher, error) {
+	cha, err := myRabbitmq.CreateRabbitMqChannel(lgr, connection)
+	if err != nil {
+		return nil, err
+	}
+	return &RabbitNotificationEventsPublisher{
 		channel:      cha,
 		lgr:          lgr,
 		typeRegistry: typeRegistry,

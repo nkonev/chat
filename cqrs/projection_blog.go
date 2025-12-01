@@ -521,7 +521,7 @@ func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64)
 	var usersSet = map[int64]bool{}
 	var chatsPreSet = map[int64]bool{}
 	if dd.blog != nil && dd.blog.MessageId != nil && dd.blog.OwnerId != nil {
-		err := populateSets(*dd.blog.MessageId, *dd.blog.OwnerId, nil, usersSet, chatsPreSet, dd.blog.Id, dd.reactionsMap)
+		err := populateSets(*dd.blog.MessageId, *dd.blog.OwnerId, dto.NonExistentUser, nil, usersSet, chatsPreSet, dd.blog.Id, dd.reactionsMap)
 		if err != nil {
 			return nil, err
 		}
@@ -764,7 +764,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 		var usersSet = map[int64]bool{}
 		var chatsPreSet = map[int64]bool{}
 		for _, co := range comments {
-			errInn = populateSets(co.Id, co.OwnerId, co.Embed, usersSet, chatsPreSet, blogId, reactions)
+			errInn = populateSets(co.Id, co.OwnerId, dto.NonExistentUser, co.Embed, usersSet, chatsPreSet, blogId, reactions)
 			if errInn != nil {
 				return nil, errInn
 			}
