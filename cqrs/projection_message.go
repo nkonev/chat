@@ -1060,32 +1060,36 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 	// it's ok if message is not found - sql handles it
 	err := sqlscan.Get(ctx, co, &d, `
 		with
+		provided as (
+			select 
+				 cast($2 as bigint) as chat_id
+				,cast($3 as bigint) as message_id
+		),
 		chat_participant_row as (
-			SELECT user_id, chat_admin FROM chat_participant WHERE user_id = $1 AND chat_id = $2 LIMIT 1
+			SELECT user_id, chat_id, chat_admin FROM chat_participant WHERE user_id = $1 AND chat_id = $2 LIMIT 1
 		),
 		chat_info as (
 			select * from chat_common where id = $2
 		),
 		message_info as (
 			select * from message m where chat_id = $2 and id = $3
-		),
-		chat_blog as (
-			select b.id is not null as is_blog
-			from chat_common cc
-			left join blog b on cc.id = b.id
-			where cc.id = $2
 		)
-		SELECT 
-			(SELECT exists(SELECT * FROM chat_participant_row) as is_chat_participant)
-			,(SELECT exists(SELECT * FROM chat_participant_row WHERE chat_admin) as is_chat_admin)
-			,(select cc.regular_participant_can_write_message as chat_can_write_message from chat_info cc)
-			,(select cc.tet_a_tet as chat_is_tet_a_tet from chat_info cc)
-			,(select exists(select * from message_info mm) as is_message_found)
-			,(select((select exists(select * from message_info mm)) and (select (mm.embed is not null) from message_info mm))) as message_has_embed
-			,(select coalesce((select mm.owner_id from message_info mm), $4) as message_owner_id)
-			,(select coalesce((select mm.embed ->> 'embedMessageType' from message_info mm), $5) as message_embed_type)
-			,(select coalesce((select mm.blog_post from message_info mm), false) as is_message_blog_post)
-			,(select cb.is_blog as chat_is_blog from chat_blog cb)
+		SELECT
+			 cc.id is not null as is_chat_found
+			,mm.id is not null as is_message_found
+			,exists(SELECT * FROM chat_participant_row) as is_chat_participant
+			,exists(SELECT * FROM chat_participant_row WHERE chat_admin) as is_chat_admin
+			,coalesce(cc.regular_participant_can_write_message, false) as chat_can_write_message
+			,coalesce(cc.tet_a_tet, false) as chat_is_tet_a_tet
+			,(mm.id is not null) and (mm.embed is not null) as message_has_embed
+			,coalesce(mm.owner_id, $4) as message_owner_id
+			,coalesce(mm.embed ->> 'embedMessageType', $5) as message_embed_type
+			,coalesce(mm.blog_post, false) as is_message_blog_post
+			,b.id is not null as chat_is_blog
+		FROM provided pr
+		LEFT JOIN chat_info cc on pr.chat_id = cc.id
+		LEFT JOIN message_info mm ON pr.message_id = mm.id
+		left join blog b on cc.id = b.id
 	`, userId, chatId, messageId, dto.NoOwner, dto.EmbedMessageTypeNone)
 	if err != nil {
 		return d, err

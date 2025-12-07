@@ -271,6 +271,7 @@ type MessageAuthorizationData struct {
 	ChatIsTetATet        bool   `db:"chat_is_tet_a_tet"`
 	ChatCanWriteMessage  bool   `db:"chat_can_write_message"`
 	IsMessageFound       bool   `db:"is_message_found"`
+	IsChatFound          bool   `db:"is_chat_found"`
 	IsMessageBlogPost    bool   `db:"is_message_blog_post"`
 	MessageOwnerId       int64  `db:"message_owner_id"`
 	HasEmbedMessage      bool   `db:"message_has_embed"`

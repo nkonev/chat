@@ -712,6 +712,10 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 
 	adt := ad.adt
 
+	if !adt.IsChatFound {
+		return 0, NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", copyCommand.ChatId))
+	}
+
 	if !CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage) {
 		return 0, NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to write the message in chat %v", sp.AdditionalData.BehalfUserId, sp.ChatId))
 	}
@@ -935,6 +939,14 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId, copyCommand.MessageId)
 	if err != nil {
 		return err
+	}
+
+	if !adt.IsChatFound {
+		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", copyCommand.ChatId))
+	}
+
+	if !adt.IsMessageFound {
+		return NewMessageStillNotExistsError(fmt.Sprintf("message %d still does not exist in chat %d", copyCommand.MessageId, copyCommand.ChatId))
 	}
 
 	canWriteMessage := CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage)

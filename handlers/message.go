@@ -881,6 +881,7 @@ func translateMessageError(g *gin.Context, err error) bool {
 	var mediaOverflowError *sanitizer.MediaOverflowErr
 	var validationError *cqrs.ValidationError
 	var chatStillNotExistsError *cqrs.ChatStillNotExistsError
+	var messageStillNotExistsError *cqrs.MessageStillNotExistsError
 	var unauthError *cqrs.UnauthorizedError
 	if errors.As(err, &mediaError) {
 		g.JSON(http.StatusBadRequest, &utils.H{"message": mediaError.Error(), "businessErrorCode": badMediaUrl})
@@ -892,6 +893,9 @@ func translateMessageError(g *gin.Context, err error) bool {
 		g.JSON(http.StatusBadRequest, &dto.ErrorMessageDto{validationError.Error()})
 		return true
 	} else if errors.As(err, &chatStillNotExistsError) {
+		g.Status(http.StatusTeapot)
+		return true
+	} else if errors.As(err, &messageStillNotExistsError) {
 		g.Status(http.StatusTeapot)
 		return true
 	} else if errors.As(err, &unauthError) {

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"github.com/IBM/sarama"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -17,6 +18,7 @@ import (
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/utils"
 	"go.uber.org/fx"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -2805,6 +2807,33 @@ func TestCreateMessage(t *testing.T) {
 	})
 }
 
+// TODO chat still not exists (add a participant)
+
+func TestCreateMessageChatStillNoExists(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+
+		const message1Text = "message text 1"
+
+		ctx := context.Background()
+
+		const chat1Id = 12345
+
+		_, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+		require.NotNil(t, err)
+		assert.True(t, strings.Contains(err.Error(), fmt.Sprintf("code: %v", http.StatusTeapot)))
+	})
+}
+
 func TestEditMessage(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
@@ -2985,6 +3014,69 @@ func TestEditMessage(t *testing.T) {
 		assert.Equal(t, message1TextNew, message1New2.Content)
 		assert.Equal(t, message2Id, message2New2.Id)
 		assert.Equal(t, message2TextNew, message2New2.Content)
+	})
+}
+
+func TestEditMessageStillNoExists(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		dba *db.DB,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		const chat10Id = 12345
+		const message1Id = 54321
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		// chat still not exists
+		const message1TextNew = "new message 1 edited"
+		err := testRestClient.EditMessage(ctx, user1, chat10Id, message1Id, message1TextNew)
+		require.NotNil(t, err)
+		assert.True(t, strings.Contains(err.Error(), fmt.Sprintf("code: %v", http.StatusTeapot)))
+
+		// chat exists but the message still not exists
+		chat12Id, err := testRestClient.CreateChat(ctx, user1, "chat1Name")
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat12Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		err = testRestClient.EditMessage(ctx, user1, chat12Id, message1Id, message1TextNew)
+		require.NotNil(t, err)
+		assert.True(t, strings.Contains(err.Error(), fmt.Sprintf("code: %v", http.StatusTeapot)))
 	})
 }
 
