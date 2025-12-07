@@ -769,27 +769,29 @@ func (m *CommonProjection) GetChatDataForAuthorization(ctx context.Context, co d
 	d := dto.ChatAuthorizationData{}
 	err := sqlscan.Get(ctx, co, &d, `
 		with
+		provided as (
+			select 
+				 cast($2 as bigint) as chat_id
+		),
 		chat_participant_row as (
 			SELECT user_id, chat_admin FROM chat_participant WHERE user_id = $1 AND chat_id = $2 LIMIT 1
 		),
 		chat_info as (
 			select * from chat_common where id = $2
-		),
-		chat_blog as (
-			select b.id is not null as is_blog
-			from chat_common cc
-			left join blog b on cc.id = b.id
-			where cc.id = $2
 		)
 		SELECT 
-			(SELECT exists(SELECT * FROM chat_participant_row) as is_chat_participant)
+			cc.id is not null as is_chat_found
+			,(SELECT exists(SELECT * FROM chat_participant_row) as is_chat_participant)
 			,(SELECT exists(SELECT * FROM chat_participant_row WHERE chat_admin) as is_chat_admin)
-			,(select cc.regular_participant_can_write_message as chat_can_write_message from chat_info cc)
-			,(select cc.can_resend as chat_can_resend_message from chat_info cc)
-			,(select cc.can_react as chat_can_react_on_message from chat_info cc)
-			,(select cc.tet_a_tet as chat_is_tet_a_tet from chat_info cc)
-			,(select cc.available_to_search as chat_is_available_to_search from chat_info cc)
-			,(select cb.is_blog as chat_is_blog from chat_blog cb)
+			,coalesce(cc.regular_participant_can_write_message, false) as chat_can_write_message
+			,coalesce(cc.tet_a_tet, false) as chat_is_tet_a_tet
+			,coalesce(cc.can_resend, false) as chat_can_resend_message
+			,coalesce(cc.can_react, false) as chat_can_react_on_message
+			,coalesce(cc.available_to_search, false) as chat_is_available_to_search
+			,b.id is not null as chat_is_blog
+		FROM provided pr
+		LEFT JOIN chat_info cc on pr.chat_id = cc.id
+		left join blog b on cc.id = b.id
 	`, userId, chatId)
 	if err != nil {
 		return d, err

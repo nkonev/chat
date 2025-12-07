@@ -139,6 +139,7 @@ type ChatFilterDto struct {
 }
 
 type ChatAuthorizationData struct {
+	IsChatFound           bool `db:"is_chat_found"`
 	IsParticipant         bool `db:"is_chat_participant"`
 	IsChatAdmin           bool `db:"is_chat_admin"`
 	ChatCanWriteMessage   bool `db:"chat_can_write_message"`

@@ -474,6 +474,10 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 		return err
 	}
 
+	if !adt.IsChatFound {
+		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", s.ChatId))
+	}
+
 	if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, s.IsJoining, adt.AvailableToSearch, adt.IsBlog, false) {
 		return NewUnauthorizedError(fmt.Sprintf("user %v cannot add into chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
@@ -611,6 +615,10 @@ func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterfa
 	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
+	}
+
+	if !adt.IsChatFound {
+		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", s.ChatId))
 	}
 
 	if !CanChangeParticipant(s.AdditionalData.BehalfUserId, adt.IsChatAdmin, adt.ChatIsTetATet, s.ParticipantId) {

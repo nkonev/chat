@@ -2131,6 +2131,31 @@ func TestAddParticipant(t *testing.T) {
 	})
 }
 
+func TestAddParticipantChatStillNotExists(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		dba *db.DB,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+
+		ctx := context.Background()
+
+		const chat1Id = 234
+
+		err := testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
+		require.NotNil(t, err)
+		assert.True(t, strings.Contains(err.Error(), fmt.Sprintf("code: %v", http.StatusTeapot)))
+	})
+}
+
 func TestDeleteParticipant(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
@@ -2549,7 +2574,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 		// negative test
 		err = testRestClient.ChangeChatParticipant(ctx, user2, chat1Id, user1, false)
 		require.NotNil(t, err)
-		assert.True(t, strings.Contains(err.Error(), "code: 401"))
+		assert.True(t, strings.Contains(err.Error(), fmt.Sprintf("code: %v", http.StatusUnauthorized)))
 
 		chat1Participants, _, err := testRestClient.GetChatParticipants(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in chat participants")
@@ -2807,9 +2832,7 @@ func TestCreateMessage(t *testing.T) {
 	})
 }
 
-// TODO chat still not exists (add a participant)
-
-func TestCreateMessageChatStillNoExists(t *testing.T) {
+func TestCreateMessageChatStillNotExists(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
@@ -3017,7 +3040,7 @@ func TestEditMessage(t *testing.T) {
 	})
 }
 
-func TestEditMessageStillNoExists(t *testing.T) {
+func TestEditMessageStillNotExists(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
