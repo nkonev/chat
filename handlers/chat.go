@@ -503,6 +503,10 @@ func (ch *ChatHandler) ChatsFresh(g *gin.Context) {
 			edge = false
 			break
 		}
+		if !utils.CompareStringPointers(currentChat.LastMessagePreview, gottenChat.LastMessagePreview) {
+			edge = false
+			break
+		}
 		if !utils.CompareStringPointers(currentChat.Avatar, gottenChat.Avatar) {
 			edge = false
 			break
