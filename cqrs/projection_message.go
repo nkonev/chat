@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/config"
@@ -15,6 +16,7 @@ import (
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -1539,4 +1541,72 @@ func (m *EnrichingProjection) getParticipantsRead(ctx context.Context, co db.Com
 		return nil, err
 	}
 	return list, nil
+}
+
+func findMentions(ctx context.Context, lgr *logger.LoggerWrapper, messageText string, behalfUserId int64, isFindingNewMentions bool, users map[int64]*dto.User, userOnlines map[int64]*dto.UserOnline, stripSourceContent *sanitizer.StripSourcePolicy, stripAllTags *sanitizer.StripTagsPolicy, previewMaxTextSize int) ([]int64, string) {
+	var aMap = map[int64]bool{}
+	withoutSourceTags := stripSourceContent.Sanitize(messageText)
+	mentionedUserIds := parseMentionUserIdsFromMessageHtml(ctx, lgr, messageText)
+
+	for uid, user := range users {
+		if user == nil { // nil check: the user can be deleted in aaa
+			lgr.InfoContext(ctx, "Unable to get evaluatable user dto for mentioning", "user_id", uid)
+			continue
+		}
+		if user.Id != behalfUserId { // exclude myself
+			if strings.Contains(withoutSourceTags, "@"+dto.AllUsersLogin) && isFindingNewMentions {
+				aMap[user.Id] = true
+			} else if slices.Contains(mentionedUserIds, user.Id) {
+				aMap[user.Id] = true
+			}
+		}
+	}
+	for uid, user := range userOnlines {
+		if user == nil { // nil check: the user can be deleted in aaa
+			lgr.InfoContext(ctx, "Unable to get evaluatable user online for mentioning", "user_id", uid)
+			continue
+		}
+		if user.Id != behalfUserId { // exclude myself
+			if strings.Contains(withoutSourceTags, "@"+dto.HereUsersLogin) && isFindingNewMentions {
+				aMap[user.Id] = true
+			}
+		}
+	}
+
+	withoutAnyHtml := stripAllTags.Sanitize(withoutSourceTags)
+	if withoutAnyHtml != "" {
+		withoutAnyHtml = preview.CreateMessagePreviewWithoutLogin(stripAllTags, previewMaxTextSize, withoutAnyHtml)
+	}
+
+	return utils.MapSetToSlice(aMap), withoutAnyHtml
+}
+
+func parseMentionUserIdsFromMessageHtml(ctx context.Context, lgr *logger.LoggerWrapper, msg string) []int64 {
+	ret := []int64{}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(msg))
+	if err != nil {
+		lgr.WarnContext(ctx, "Unable to read html", "err", err)
+		return ret
+	}
+
+	doc.Find("a").Each(func(i int, s *goquery.Selection) {
+		maybeA := s.First()
+
+		if maybeA != nil && maybeA.HasClass("mention") {
+			idS, ok := maybeA.Attr("data-id")
+			if !ok {
+				lgr.WarnContext(ctx, "a with class mention has no data-id")
+			} else {
+				id, errP := utils.ParseInt64(idS)
+				if errP != nil {
+					lgr.WarnContext(ctx, fmt.Sprintf("unable to parse user id from data-id: '%s'", idS))
+				} else {
+					ret = append(ret, id)
+				}
+			}
+		}
+	})
+
+	return ret
 }

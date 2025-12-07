@@ -8,7 +8,6 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
-	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
@@ -16,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"maps"
 	"slices"
-	"strings"
 )
 
 // performs Authorization,
@@ -728,42 +726,6 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	}
 
 	return nil
-}
-
-func findMentions(ctx context.Context, lgr *logger.LoggerWrapper, messageText string, behalfUserId int64, isFindingNewMentions bool, users map[int64]*dto.User, userOnlines map[int64]*dto.UserOnline, stripSourceContent *sanitizer.StripSourcePolicy, stripAllTags *sanitizer.StripTagsPolicy, previewMaxTextSize int) ([]int64, string) {
-	var aMap = map[int64]bool{}
-	withoutSourceTags := stripSourceContent.Sanitize(messageText)
-	for uid, user := range users {
-		if user == nil { // nil check: the user can be deleted in aaa
-			lgr.InfoContext(ctx, "Unable to get evaluatable user dto for mentioning", "user_id", uid)
-			continue
-		}
-		if user.Id != behalfUserId { // exclude myself
-			if strings.Contains(withoutSourceTags, "@"+dto.AllUsersLogin) && isFindingNewMentions {
-				aMap[user.Id] = true
-			} else if strings.Contains(withoutSourceTags, "@"+user.Login) {
-				aMap[user.Id] = true
-			}
-		}
-	}
-	for uid, user := range userOnlines {
-		if user == nil { // nil check: the user can be deleted in aaa
-			lgr.InfoContext(ctx, "Unable to get evaluatable user online for mentioning", "user_id", uid)
-			continue
-		}
-		if user.Id != behalfUserId { // exclude myself
-			if strings.Contains(withoutSourceTags, "@"+dto.HereUsersLogin) && isFindingNewMentions {
-				aMap[user.Id] = true
-			}
-		}
-	}
-
-	withoutAnyHtml := stripAllTags.Sanitize(withoutSourceTags)
-	if withoutAnyHtml != "" {
-		withoutAnyHtml = preview.CreateMessagePreviewWithoutLogin(stripAllTags, previewMaxTextSize, withoutAnyHtml)
-	}
-
-	return utils.MapSetToSlice(aMap), withoutAnyHtml
 }
 
 func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited) error {

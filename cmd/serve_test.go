@@ -1400,7 +1400,7 @@ func TestMentionMessage(t *testing.T) {
 		chat1OfUser2 := user2ChatsNew[0]
 		assert.Equal(t, chat1Name, chat1OfUser2.Title)
 
-		const message1Text = "new message 1 hello @" + user2Login
+		var message1Text = fmt.Sprintf(`<p>Hello <a href="/user/%d" data-type="mention" class="mention" data-id="%d" data-label="%s" data-mention-suggestion-char="@">@%s</a> </p>`, user2, user2, user2Login, user2Login)
 
 		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
 		require.NoError(t, err, "error in creating message")
@@ -1414,7 +1414,7 @@ func TestMentionMessage(t *testing.T) {
 					e.UserId == user2 &&
 					e.ChatId == chat1Id &&
 					e.MessageNotification.Id == message1Id &&
-					e.MessageNotification.Content == message1Text &&
+					strings.Contains(e.MessageNotification.Content, "Hello") && strings.Contains(e.MessageNotification.Content, "@"+user2Login) &&
 					e.MessageNotification.Owner.Id == user1 &&
 					e.MessageNotification.Owner.Login == user1Login
 			},
@@ -1427,7 +1427,7 @@ func TestMentionMessage(t *testing.T) {
 					e.UserId == user2 &&
 					e.ChatId == chat1Id &&
 					e.MentionNotification.Id == message1Id &&
-					e.MentionNotification.Text == message1Text
+					strings.Contains(e.MentionNotification.Text, "Hello") && strings.Contains(e.MentionNotification.Text, "@"+user2Login)
 			},
 		}))
 	})
