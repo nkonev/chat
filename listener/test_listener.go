@@ -17,23 +17,23 @@ import (
 	"time"
 )
 
-type TestEventAccumulator0 struct {
+type TestEventAccumulator struct {
 	cfg          *config.AppConfig
 	lgr          *logger.LoggerWrapper
 	eventsBuffer []any
 }
 
-type TestEventAccumulator struct {
-	TestEventAccumulator0
+type TestOutputEventAccumulator struct {
+	TestEventAccumulator
 }
 
-func (p *TestEventAccumulator0) OnEvent(ctx context.Context, e any) {
+func (p *TestEventAccumulator) OnEvent(ctx context.Context, e any) {
 	p.eventsBuffer = append(p.eventsBuffer, e)
 }
 
-func NewRabbitTestEventAccumulator(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestEventAccumulator {
-	return &TestEventAccumulator{
-		TestEventAccumulator0{
+func NewRabbitTestOutputEventAccumulator(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestOutputEventAccumulator {
+	return &TestOutputEventAccumulator{
+		TestEventAccumulator{
 			cfg:          cfg,
 			lgr:          lgr,
 			eventsBuffer: make([]any, 0),
@@ -42,12 +42,12 @@ func NewRabbitTestEventAccumulator(cfg *config.AppConfig, lgr *logger.LoggerWrap
 }
 
 type TestNotificationEventAccumulator struct {
-	TestEventAccumulator0
+	TestEventAccumulator
 }
 
 func NewRabbitTestNotificationEventAccumulator(cfg *config.AppConfig, lgr *logger.LoggerWrapper) *TestNotificationEventAccumulator {
 	return &TestNotificationEventAccumulator{
-		TestEventAccumulator0{
+		TestEventAccumulator{
 			cfg:          cfg,
 			lgr:          lgr,
 			eventsBuffer: make([]any, 0),
@@ -55,14 +55,14 @@ func NewRabbitTestNotificationEventAccumulator(cfg *config.AppConfig, lgr *logge
 	}
 }
 
-func (p *TestEventAccumulator0) Clean() {
+func (p *TestEventAccumulator) Clean() {
 	p.eventsBuffer = []any{}
 }
 
 // there can be more events than asserters
 
 // AssertHasEventsOrdered returns true if all the asserters are matched events in order of asserters
-func (p *TestEventAccumulator0) AssertHasEventsOrdered(asserters []func(e any) bool) bool {
+func (p *TestEventAccumulator) AssertHasEventsOrdered(asserters []func(e any) bool) bool {
 	j := 0 // both second pointer and num of success comparisons
 
 	for _, e := range p.eventsBuffer {
@@ -80,7 +80,7 @@ func (p *TestEventAccumulator0) AssertHasEventsOrdered(asserters []func(e any) b
 }
 
 // AssertHasEventsUnordered returns true if all the asserters are matched events in any order
-func (p *TestEventAccumulator0) AssertHasEventsUnordered(asserters []func(e any) bool) bool {
+func (p *TestEventAccumulator) AssertHasEventsUnordered(asserters []func(e any) bool) bool {
 	assertersCopy := make([]func(e any) bool, len(asserters))
 	copy(assertersCopy, asserters)
 
@@ -97,7 +97,7 @@ func (p *TestEventAccumulator0) AssertHasEventsUnordered(asserters []func(e any)
 	return len(assertersCopy) == 0
 }
 
-func (p *TestEventAccumulator0) AwaitForBufferContainsSpecifiedEvents(duration time.Duration, ordered bool, comparators []func(e any) bool) error {
+func (p *TestEventAccumulator) AwaitForBufferContainsSpecifiedEvents(duration time.Duration, ordered bool, comparators []func(e any) bool) error {
 	du := p.cfg.RabbitMQ.CheckAreEventsProcessedInterval
 
 	startTime := time.Now()
@@ -144,7 +144,7 @@ func (p *TestEventAccumulator0) AwaitForBufferContainsSpecifiedEvents(duration t
 
 type TestOutputEventListener func(*amqp.Delivery) error
 
-func CreateRabbitTestOutputEventListener(service *TestEventAccumulator, lgr *logger.LoggerWrapper, typeRegistry *type_registry.TypeRegistryInstance) TestOutputEventListener {
+func CreateRabbitTestOutputEventListener(service *TestOutputEventAccumulator, lgr *logger.LoggerWrapper, typeRegistry *type_registry.TypeRegistryInstance) TestOutputEventListener {
 	tr := otel.Tracer("amqp/listener")
 
 	return func(msg *amqp.Delivery) error {

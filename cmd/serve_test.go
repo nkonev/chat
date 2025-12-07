@@ -30,7 +30,7 @@ func TestUnreads(t *testing.T) {
 		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -126,7 +126,7 @@ func TestUnreads(t *testing.T) {
 		assert.Equal(t, message1Id, message1.Id)
 		assert.Equal(t, message1Text, message1.Content)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		// 2 separate calls to guarantee order
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
@@ -138,7 +138,7 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in adding participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatCreated &&
@@ -193,13 +193,13 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user3HasUnreadMessagesNew)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.ReadMessage(ctx, user2, chat1Id, message1.Id)
 		require.NoError(t, err, "error in reading message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatUnreadMessagesChanged &&
@@ -241,14 +241,14 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user3HasUnreadMessagesNew2)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		const message2Text = "new message 2"
 		messageId2, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text)
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatEdited &&
@@ -299,13 +299,13 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user3HasUnreadMessagesNew3)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, messageId3)
 		require.NoError(t, err, "error in delete message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeMessageDeleted &&
@@ -423,7 +423,7 @@ func TestUnreadsInitFromEmptyChatOfBothUsers(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -508,7 +508,7 @@ func TestReadAllChats(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -590,7 +590,7 @@ func TestReadAllChats(t *testing.T) {
 		require.NoError(t, err, "error in read all messages")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatUnreadMessagesChanged &&
@@ -636,7 +636,7 @@ func TestReadOneChat(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -718,7 +718,7 @@ func TestReadOneChat(t *testing.T) {
 		require.NoError(t, err, "error in read all messages")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatUnreadMessagesChanged &&
@@ -752,7 +752,7 @@ func TestReadOneChat(t *testing.T) {
 		require.NoError(t, err, "error in read all messages")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatUnreadMessagesChanged &&
@@ -791,7 +791,7 @@ func TestReaction(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -849,7 +849,7 @@ func TestReaction(t *testing.T) {
 		err = testRestClient.Reaction(ctx, user1, chat1Id, message1Id, reaction)
 		require.NoError(t, err, "error in reacting on message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeReactionChanged &&
@@ -875,12 +875,12 @@ func TestReaction(t *testing.T) {
 			},
 		}))
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.Reaction(ctx, user2, chat1Id, message1Id, reaction)
 		require.NoError(t, err, "error in reacting on message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeReactionChanged &&
@@ -938,14 +938,14 @@ func TestReaction(t *testing.T) {
 		assert.Equal(t, 1, len(messageNew.Reactions[0].Users))
 		assert.Equal(t, user1, messageNew.Reactions[0].Users[0].Id)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		// user 1 flips - removes the reaction
 		err = testRestClient.Reaction(ctx, user1, chat1Id, message1Id, reaction)
 		require.NoError(t, err, "error in reacting on message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeReactionRemoved &&
@@ -1054,7 +1054,7 @@ func TestResendMessage(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -1149,7 +1149,7 @@ func TestResendMessage(t *testing.T) {
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		// user 2 synchronizes the resend message
 		err = testRestClient.SyncMessage(ctx, user2, chat2Id, message1ResentId)
@@ -1157,7 +1157,7 @@ func TestResendMessage(t *testing.T) {
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		// assert there is message edit with the new embed content
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeMessageEdited &&
@@ -1349,7 +1349,7 @@ func TestMentionMessage(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		testNotificationEventsAccumulator *listener.TestNotificationEventAccumulator,
 		lc fx.Lifecycle,
 	) {
@@ -1405,7 +1405,7 @@ func TestMentionMessage(t *testing.T) {
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		// assert there is message edit with the new embed content
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeMessageCreated &&
@@ -1440,7 +1440,7 @@ func TestPinChat(t *testing.T) {
 		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -1526,13 +1526,13 @@ func TestPinChat(t *testing.T) {
 		assert.Equal(t, chat1Name, chat1OfUser2.Title)
 		assert.Equal(t, int64(1), chat1OfUser2.UnreadMessages)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.PinChat(ctx, user1, chat1Id, true)
 		require.NoError(t, err, "error in pinning chats")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatEdited &&
@@ -1579,7 +1579,7 @@ func TestCreateChat(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -1619,7 +1619,7 @@ func TestCreateChat(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatCreated &&
@@ -1642,7 +1642,7 @@ func TestCreateChatWithMultipleParticipants(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -1682,7 +1682,7 @@ func TestCreateChatWithMultipleParticipants(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatCreated &&
@@ -1719,7 +1719,7 @@ func TestEditChatWithAddingParticipants(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -1764,7 +1764,7 @@ func TestEditChatWithAddingParticipants(t *testing.T) {
 		require.NoError(t, err, "error in changing chat")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			// caused by CreateChat()
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
@@ -1815,7 +1815,7 @@ func TestDeleteChat(t *testing.T) {
 		m *cqrs.CommonProjection,
 		dba *db.DB,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -1856,7 +1856,7 @@ func TestDeleteChat(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatCreated &&
@@ -1883,7 +1883,7 @@ func TestDeleteChat(t *testing.T) {
 			},
 		}))
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
 
@@ -1922,7 +1922,7 @@ func TestDeleteChat(t *testing.T) {
 		assert.Equal(t, chat1Name, chat1OfUser2.Title)
 		assert.Equal(t, int64(1), chat1OfUser2.UnreadMessages)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.DeleteChat(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in removing chats")
@@ -1936,7 +1936,7 @@ func TestDeleteChat(t *testing.T) {
 		require.NoError(t, err, "error in getting chats")
 		assert.Equal(t, 0, len(user2ChatsNew2))
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatDeleted &&
@@ -1967,7 +1967,7 @@ func TestAddParticipant(t *testing.T) {
 		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -2069,13 +2069,13 @@ func TestAddParticipant(t *testing.T) {
 		avatarBig := "http://example.com/avatar-big.jpg"
 
 		// test CHatEdited on rename
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.EditChat(ctx, user1, chat1Id, chat1NewName, client.NewChatOptionAvatar(&avatar, &avatarBig))
 		require.NoError(t, err, "error in changing chat")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			// caused by EditChat
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
@@ -2267,7 +2267,7 @@ func TestLeaveFromChat(t *testing.T) {
 		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -2361,13 +2361,13 @@ func TestLeaveFromChat(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user2HasUnreadMessages)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.LeaveChat(ctx, user2, chat1Id)
 		require.NoError(t, err, "error in removing chat participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
@@ -2437,7 +2437,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -2477,7 +2477,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatCreated &&
@@ -2490,13 +2490,13 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 		}))
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
 		require.NoError(t, err, "error in adding participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			// caused by AddChatParticipants
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
@@ -2542,7 +2542,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 		}))
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		// negative test
 		err = testRestClient.ChangeChatParticipant(ctx, user2, chat1Id, user1, false)
@@ -2565,7 +2565,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 		assert.Equal(t, int64(2), chat1OfUser2.ParticipantsCount)
 		assert.Equal(t, []int64{2, 1}, chat1OfUser2.ParticipantIds)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.ChangeChatParticipant(ctx, user1, chat1Id, user2, true)
 		require.NoError(t, err, "error in changing chat participants")
@@ -2579,7 +2579,7 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 		assert.Equal(t, user1, chat1Participants2[1].Id)
 		assert.Equal(t, true, chat1Participants2[1].ChatAdmin)
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeParticipantEdited &&
@@ -2634,13 +2634,13 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			},
 		}))
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.DeleteChatParticipants(ctx, user1, chat1Id, user2)
 		require.NoError(t, err, "error in removing chat participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeParticipantDeleted &&
@@ -2686,7 +2686,7 @@ func TestCreateMessage(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -2728,14 +2728,14 @@ func TestCreateMessage(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 		assert.True(t, message1Id > 0)
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeMessageCreated &&
@@ -2814,7 +2814,7 @@ func TestEditMessage(t *testing.T) {
 		dba *db.DB,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -2906,13 +2906,13 @@ func TestEditMessage(t *testing.T) {
 		assert.Equal(t, message2Id, message2New.Id)
 		assert.Equal(t, message2Text, message2New.Content)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 		const message2TextNew = "new message 2 edited"
 		err = testRestClient.EditMessage(ctx, user1, chat1Id, message2.Id, message2TextNew)
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeMessageEdited &&
@@ -2996,7 +2996,7 @@ func TestBlog(t *testing.T) {
 		saramaClient sarama.Client,
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -3038,7 +3038,7 @@ func TestBlog(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeMessagesReload &&
@@ -3069,13 +3069,13 @@ func TestBlog(t *testing.T) {
 		assert.Equal(t, message2Id, comments[0].Id)
 		assert.Equal(t, message2Text, comments[0].Content)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.MakeMessageBlogPost(ctx, user1, chat1Id, message2Id)
 		require.NoError(t, err, "error in making message blog post")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.ChatEvent)
 				return ok && e.EventType == dto.EventTypeMessageEdited &&
@@ -3412,7 +3412,7 @@ func TestEventSendingOnUserProfileChange(t *testing.T) {
 		m *cqrs.CommonProjection,
 		aaaRestClient client.AaaRestClient,
 		testEventsPublisher *producer.RabbitTestInputEventsPublisher,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -3465,7 +3465,7 @@ func TestEventSendingOnUserProfileChange(t *testing.T) {
 		})
 		require.NoError(t, err, "error in sending test event")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeParticipantChanged &&
@@ -3495,7 +3495,7 @@ func TestDeleteFromDb(t *testing.T) {
 		m *cqrs.CommonProjection,
 		dba *db.DB,
 		aaaRestClient client.AaaRestClient,
-		testEventsAccumulator *listener.TestEventAccumulator,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -3587,13 +3587,13 @@ func TestDeleteFromDb(t *testing.T) {
 		require.NoError(t, err, "error in checking message")
 		assert.True(t, messageExists)
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.DeleteChat(ctx, user1, chat2Id)
 		require.NoError(t, err, "error in deleting chat")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatDeleted &&
@@ -3608,7 +3608,7 @@ func TestDeleteFromDb(t *testing.T) {
 			},
 		}))
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		// assert that the message is deleted along with chat
 		messageExists2, err := m.IsMessageExists(ctx, dba, chat2Id, message2Id)
@@ -3642,14 +3642,14 @@ func TestDeleteFromDb(t *testing.T) {
 		blogsNew := blogsNewW.Items
 		assert.Equal(t, 1, len(blogsNew))
 
-		testEventsAccumulator.Clean()
+		testOutputEventsAccumulator.Clean()
 
 		err = testRestClient.DeleteChat(ctx, user1, chat3Id)
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		// for sake waiting on all the events were applied
-		require.NoError(t, testEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatRedraw &&
