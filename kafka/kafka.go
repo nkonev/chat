@@ -137,6 +137,7 @@ func ConfigureSaramaClient(
 	return client, nil
 }
 
+// https://github.com/IBM/sarama/wiki/Frequently-Asked-Questions#how-do-i-consume-until-the-end-of-a-partition
 func WaitForAllEventsProcessed(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
