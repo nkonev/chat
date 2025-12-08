@@ -11,6 +11,7 @@ import (
 	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 	"net/http"
+	"slices"
 
 	"github.com/gin-gonic/gin"
 )
@@ -627,11 +628,17 @@ func (mc *MessageHandler) MessagesFresh(g *gin.Context) {
 			edge = false
 			break
 		}
-		if len(currentMessage.Reactions) != len(gottenMessage.Reactions) {
+		if !slices.EqualFunc(currentMessage.Reactions, gottenMessage.Reactions, func(reaction1 dto.Reaction, reaction2 dto.Reaction) bool {
+			return reaction1.Reaction == reaction2.Reaction && reaction1.Count == reaction2.Count
+		}) {
 			edge = false
 			break
 		}
 		if currentMessage.BlogPost != gottenMessage.BlogPost {
+			edge = false
+			break
+		}
+		if !utils.ComparePointers(currentMessage.UpdateDateTime, gottenMessage.UpdateDateTime) {
 			edge = false
 			break
 		}

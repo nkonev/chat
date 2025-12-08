@@ -215,7 +215,7 @@ func Contains(ids []int64, elem int64) bool {
 	return GetIndexOf(ids, elem) != -1
 }
 
-func CompareStringPointers(p1, p2 *string) bool {
+func ComparePointers[E comparable](p1, p2 *E) bool {
 	if p1 == p2 {
 		return true
 	} else if p1 != nil && p2 != nil {

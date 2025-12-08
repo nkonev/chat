@@ -499,15 +499,19 @@ func (ch *ChatHandler) ChatsFresh(g *gin.Context) {
 			edge = false
 			break
 		}
-		if currentChat.UnreadMessages != gottenChat.UnreadMessages {
+		if !utils.ComparePointers(currentChat.UpdateDateTime, gottenChat.UpdateDateTime) {
 			edge = false
 			break
 		}
-		if !utils.CompareStringPointers(currentChat.LastMessagePreview, gottenChat.LastMessagePreview) {
+		if !utils.ComparePointers(currentChat.LastMessagePreview, gottenChat.LastMessagePreview) {
 			edge = false
 			break
 		}
-		if !utils.CompareStringPointers(currentChat.Avatar, gottenChat.Avatar) {
+		if !utils.ComparePointers(currentChat.Avatar, gottenChat.Avatar) {
+			edge = false
+			break
+		}
+		if !utils.ComparePointers(currentChat.LoginColor, gottenChat.LoginColor) {
 			edge = false
 			break
 		}
