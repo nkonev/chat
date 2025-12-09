@@ -661,6 +661,10 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 
 	withoutSourceTags := m.stripSourceContent.Sanitize(event.MessageCommoned.Content)
 	mentionedUserIds, hasHere, hasAll := m.enrichingProjection.parseMentionUserIdsFromMessageHtml(ctx, withoutSourceTags)
+	mentionedUserIdsMap := map[int64]struct{}{}
+	for _, mi := range mentionedUserIds {
+		mentionedUserIdsMap[mi] = struct{}{}
+	}
 
 	withoutAnyHtml := m.stripAllTags.Sanitize(withoutSourceTags)
 	if withoutAnyHtml != "" {
@@ -700,7 +704,11 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 				toSendMentions = append(toSendMentions, uo.Id)
 			}
 		} else {
-			toSendMentions = append(toSendMentions, mentionedUserIds...)
+			for _, pi := range participantIdsPortion {
+				if _, ok := mentionedUserIdsMap[pi]; ok {
+					toSendMentions = append(toSendMentions, pi)
+				}
+			}
 		}
 
 		allPortionUsersMap := utils.ToMap(allPortionUsers)
