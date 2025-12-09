@@ -499,6 +499,10 @@ func (ch *ChatHandler) ChatsFresh(g *gin.Context) {
 			edge = false
 			break
 		}
+		if currentChat.UnreadMessages != gottenChat.UnreadMessages {
+			edge = false
+			break
+		}
 		if !utils.ComparePointers(currentChat.UpdateDateTime, gottenChat.UpdateDateTime) {
 			edge = false
 			break
