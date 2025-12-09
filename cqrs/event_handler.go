@@ -8,6 +8,7 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
@@ -658,6 +659,14 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 		// nothing
 	}
 
+	withoutSourceTags := m.stripSourceContent.Sanitize(event.MessageCommoned.Content)
+	mentionedUserIds, hasHere, hasAll := m.enrichingProjection.parseMentionUserIdsFromMessageHtml(ctx, withoutSourceTags)
+
+	withoutAnyHtml := m.stripAllTags.Sanitize(withoutSourceTags)
+	if withoutAnyHtml != "" {
+		withoutAnyHtml = preview.CreateMessagePreviewWithoutLogin(m.stripAllTags, m.cfg.Message.PreviewMaxTextSize, withoutAnyHtml)
+	}
+
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.MessageCommoned.ChatId, nil, func(participantIdsPortion []int64) error {
 		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id)
 		if errInn != nil {
@@ -676,33 +685,37 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 			}
 		}
 
-		userOnlines, err := m.aaaRestClient.GetOnlines(ctx, participantIdsPortion) // get online for opposite user
-		if err != nil {
-			m.lgr.WarnContext(ctx, "Unable to get online for", "user_ids", participantIdsPortion, "err", err)
-			// nothing
+		var toSendMentions = []int64{}
+
+		// see also cqrs/projection_message.go :: parseMentionUserIdsFromMessageHtml()
+		if hasAll {
+			toSendMentions = append(toSendMentions, participantIdsPortion...)
+		} else if hasHere {
+			userOnlines, err := m.aaaRestClient.GetOnlines(ctx, participantIdsPortion) // get online for opposite user
+			if err != nil {
+				m.lgr.WarnContext(ctx, "Unable to get online for", "user_ids", participantIdsPortion, "err", err)
+				// nothing
+			}
+			for _, uo := range userOnlines {
+				toSendMentions = append(toSendMentions, uo.Id)
+			}
+		} else {
+			toSendMentions = append(toSendMentions, mentionedUserIds...)
 		}
 
-		userOnlinesMap := utils.ToMap(userOnlines)
-
-		behalfUsersMap := map[int64]*dto.User{}
 		allPortionUsersMap := utils.ToMap(allPortionUsers)
-		for _, p := range participantIdsPortion {
-			behalfUsersMap[p] = allPortionUsersMap[p]
-		}
-
-		var addedMentions, strippedText = m.enrichingProjection.findMentions(ctx, event.MessageCommoned.Content, event.AdditionalData.BehalfUserId, true, behalfUsersMap, userOnlinesMap)
 
 		if behalfUserDto, ok := allPortionUsersMap[event.AdditionalData.BehalfUserId]; !ok {
 			m.lgr.InfoContext(ctx, "Unable to get behalf user for mentioning", "user_id", event.AdditionalData.BehalfUserId, "err", err)
 		} else {
-			for _, participantId := range addedMentions {
+			for _, participantId := range toSendMentions {
 				err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
 					EventType: dto.EventTypeMentionAdded,
 					UserId:    participantId,
 					ChatId:    event.MessageCommoned.ChatId,
 					MentionNotification: &dto.MentionNotification{
 						Id:   event.MessageCommoned.Id,
-						Text: strippedText,
+						Text: withoutAnyHtml,
 					},
 					ByUserId:  behalfUserDto.Id,
 					ByLogin:   behalfUserDto.Login,
