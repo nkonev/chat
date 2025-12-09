@@ -690,7 +690,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 			behalfUsersMap[p] = allPortionUsersMap[p]
 		}
 
-		var addedMentions, strippedText = findMentions(ctx, m.lgr, event.MessageCommoned.Content, event.AdditionalData.BehalfUserId, true, behalfUsersMap, userOnlinesMap, m.stripSourceContent, m.stripAllTags, m.cfg.Message.PreviewMaxTextSize)
+		var addedMentions, strippedText = m.enrichingProjection.findMentions(ctx, event.MessageCommoned.Content, event.AdditionalData.BehalfUserId, true, behalfUsersMap, userOnlinesMap)
 
 		if behalfUserDto, ok := allPortionUsersMap[event.AdditionalData.BehalfUserId]; !ok {
 			m.lgr.InfoContext(ctx, "Unable to get behalf user for mentioning", "user_id", event.AdditionalData.BehalfUserId, "err", err)

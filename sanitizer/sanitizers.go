@@ -41,9 +41,9 @@ func CreateStripTags() *StripTagsPolicy {
 }
 
 func CreateStripSource() *StripSourcePolicy {
-	policy := bluemonday.StrictPolicy()
+	policy := CreateSanitizer()
 	policy.SkipElementsContent("code", "pre", "blockquote")
-	return &StripSourcePolicy{policy}
+	return &StripSourcePolicy{policy.Policy}
 }
 
 func TrimAmdSanitizeChatTitle(policy *StripTagsPolicy, title string) string {
