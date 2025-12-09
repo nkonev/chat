@@ -1555,7 +1555,7 @@ func (m *EnrichingProjection) parseMentionUserIdsFromMessageHtml(ctx context.Con
 		return ret, false, false
 	}
 
-	doc.Find("a").Each(func(i int, s *goquery.Selection) {
+	doc.Find("a, span").Each(func(i int, s *goquery.Selection) { // span is for @all, @here
 		maybeA := s.First()
 
 		if maybeA != nil && maybeA.HasClass("mention") {

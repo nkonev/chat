@@ -717,6 +717,10 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 			m.lgr.InfoContext(ctx, "Unable to get behalf user for mentioning", "user_id", event.AdditionalData.BehalfUserId, "err", err)
 		} else {
 			for _, participantId := range toSendMentions {
+				if participantId == event.AdditionalData.BehalfUserId {
+					continue // skip myself
+				}
+
 				err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
 					EventType: dto.EventTypeMentionAdded,
 					UserId:    participantId,
