@@ -42,7 +42,7 @@ func CreateStripTags() *StripTagsPolicy {
 
 func CreateStripSource() *StripSourcePolicy {
 	policy := bluemonday.StrictPolicy()
-	policy.SkipElementsContent("code", "pre")
+	policy.SkipElementsContent("code", "pre", "blockquote")
 	return &StripSourcePolicy{policy}
 }
 
