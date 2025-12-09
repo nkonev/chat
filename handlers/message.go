@@ -588,7 +588,7 @@ func (mc *MessageHandler) MessagesFresh(g *gin.Context) {
 		return
 	}
 
-	messageDtos, notAparticipant, _, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, true, &userId, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
+	messageDtos, notAparticipant, _, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, true, &userId, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil, nil)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
@@ -775,7 +775,7 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 	includeStartingFrom := utils.GetBoolean(g.Query(dto.IncludeStartingFromParam))
 	searchString := g.Query(dto.SearchStringParam)
 
-	messages, notAparticipant, _, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, true, &userId, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil)
+	messages, notAparticipant, _, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, true, &userId, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil, nil)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
