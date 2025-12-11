@@ -225,7 +225,7 @@ func ComparePointers[E comparable](p1, p2 *E) bool {
 	}
 }
 
-func MapIdBoolToSlice[ID ~int | ~int64 | ~int32 | ~int16](set map[ID]bool) []ID {
+func SetMapIdBoolToSlice[ID ~int | ~int64 | ~int32 | ~int16](set map[ID]bool) []ID {
 	var ownerIds = make([]ID, 0)
 	for k, v := range set {
 		if v {
@@ -235,28 +235,45 @@ func MapIdBoolToSlice[ID ~int | ~int64 | ~int32 | ~int16](set map[ID]bool) []ID 
 	return ownerIds
 }
 
-func SliceToMapIdBool[ID ~int | ~int64 | ~int32 | ~int16](arr []ID) map[ID]bool {
-	var ownerIds map[ID]bool = map[ID]bool{}
+func SliceToSetMapIdBool[ID ~int | ~int64 | ~int32 | ~int16](arr []ID) map[ID]bool {
+	var ids map[ID]bool = map[ID]bool{}
 	for _, el := range arr {
-		ownerIds[el] = true
+		ids[el] = true
 	}
-	return ownerIds
+	return ids
 }
 
-func MapIdStructToSlice[ID ~int | ~int64 | ~int32 | ~int16](set map[ID]struct{}) []ID {
-	var ownerIds = make([]ID, 0)
-	for k, _ := range set {
-		ownerIds = append(ownerIds, k)
+func SetMapIdStructToSlice[ID ~int | ~int64 | ~int32 | ~int16](set map[ID]struct{}) []ID {
+	var ids = make([]ID, 0)
+	for k := range set {
+		ids = append(ids, k)
 	}
-	return ownerIds
+	return ids
 }
 
-func SliceToMapIdStruct[ID ~int | ~int64 | ~int32 | ~int16](arr []ID) map[ID]struct{} {
-	var ownerIds map[ID]struct{} = map[ID]struct{}{}
+func SliceToSetMapIdStruct[ID ~int | ~int64 | ~int32 | ~int16](arr []ID) map[ID]struct{} {
+	var ids map[ID]struct{} = map[ID]struct{}{}
 	for _, el := range arr {
-		ownerIds[el] = struct{}{}
+		ids[el] = struct{}{}
 	}
-	return ownerIds
+	return ids
+}
+
+func IntersectSetMapIdStructs[ID ~int | ~int64 | ~int32 | ~int16](set1 map[ID]struct{}, set2 map[ID]struct{}) map[ID]struct{} {
+	var ids = make([]ID, 0)
+	for k := range set1 {
+		if _, ok := set2[k]; ok {
+			ids = append(ids, k)
+		}
+	}
+	return nil
+}
+
+func IntersectSetSlices[ID ~int | ~int64 | ~int32 | ~int16](set1 []ID, set2 []ID) []ID {
+	s1 := SliceToSetMapIdStruct(set1)
+	s2 := SliceToSetMapIdStruct(set2)
+	res := IntersectSetMapIdStructs(s1, s2)
+	return SetMapIdStructToSlice(res)
 }
 
 const FileParam = "file"

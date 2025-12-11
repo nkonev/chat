@@ -661,7 +661,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 
 	withoutSourceTags := m.stripSourceContent.Sanitize(event.MessageCommoned.Content)
 	mentionedUserIds, hasHere, hasAll := m.enrichingProjection.parseMentionUserIdsFromMessageHtml(ctx, withoutSourceTags)
-	mentionedUserIdsMap := utils.SliceToMapIdStruct(mentionedUserIds)
+	mentionedUserIdsMap := utils.SliceToSetMapIdStruct(mentionedUserIds)
 
 	withoutAnyHtml := m.stripAllTags.Sanitize(withoutSourceTags)
 	if withoutAnyHtml != "" {

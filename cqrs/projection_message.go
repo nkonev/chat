@@ -713,7 +713,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 				return nil, err
 			}
 		}
-		chatsByUserIdByChatId, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapIdBoolToSlice(chatsPreSet), behalfUserIds)
+		chatsByUserIdByChatId, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.SetMapIdBoolToSlice(chatsPreSet), behalfUserIds)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", err)
 			return nil, err
@@ -725,7 +725,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			return nil, err
 		}
 
-		users, err := m.aaaRestClient.GetUsers(ctx, utils.MapIdBoolToSlice(usersSet))
+		users, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdBoolToSlice(usersSet))
 		if err != nil {
 			m.lgr.WarnContext(ctx, "unable to get users")
 		}
@@ -1478,7 +1478,7 @@ func (m *EnrichingProjection) GetReadMessageUsers(ctx context.Context, userId in
 		usersToGet[txRes.msg.OwnerId] = true
 	}
 
-	users, err := m.aaaRestClient.GetUsers(ctx, utils.MapIdBoolToSlice(usersToGet))
+	users, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdBoolToSlice(usersToGet))
 	if err != nil {
 		return nil, err
 	}

@@ -527,7 +527,7 @@ func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64)
 		}
 	}
 
-	users, err := m.aaaRestClient.GetUsers(ctx, utils.MapIdBoolToSlice(usersSet))
+	users, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdBoolToSlice(usersSet))
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
@@ -771,7 +771,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 		}
 
 		behalfUserId := int64(dto.NonExistentUser)
-		chatsByUserByChatId, errInn := m.cp.GetChatsBasicExtended(ctx, tx, utils.MapIdBoolToSlice(chatsPreSet), []int64{behalfUserId})
+		chatsByUserByChatId, errInn := m.cp.GetChatsBasicExtended(ctx, tx, utils.SetMapIdBoolToSlice(chatsPreSet), []int64{behalfUserId})
 		if errInn != nil {
 			m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", errInn)
 			return nil, errInn
@@ -801,7 +801,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 
 	res := make([]dto.CommentViewEnrichedDto, 0, len(cwd.comments))
 
-	users, err := m.aaaRestClient.GetUsers(ctx, utils.MapIdBoolToSlice(cwd.usersSet))
+	users, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdBoolToSlice(cwd.usersSet))
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
