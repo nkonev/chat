@@ -225,8 +225,8 @@ func ComparePointers[E comparable](p1, p2 *E) bool {
 	}
 }
 
-func MapSetToSlice(set map[int64]bool) []int64 {
-	var ownerIds = make([]int64, 0)
+func MapIdBoolToSlice[ID ~int | ~int64 | ~int32 | ~int16](set map[ID]bool) []ID {
+	var ownerIds = make([]ID, 0)
 	for k, v := range set {
 		if v {
 			ownerIds = append(ownerIds, k)
@@ -235,10 +235,26 @@ func MapSetToSlice(set map[int64]bool) []int64 {
 	return ownerIds
 }
 
-func SliceToMapSet(arr []int64) map[int64]bool {
-	var ownerIds map[int64]bool = map[int64]bool{}
+func SliceToMapIdBool[ID ~int | ~int64 | ~int32 | ~int16](arr []ID) map[ID]bool {
+	var ownerIds map[ID]bool = map[ID]bool{}
 	for _, el := range arr {
 		ownerIds[el] = true
+	}
+	return ownerIds
+}
+
+func MapIdStructToSlice[ID ~int | ~int64 | ~int32 | ~int16](set map[ID]struct{}) []ID {
+	var ownerIds = make([]ID, 0)
+	for k, _ := range set {
+		ownerIds = append(ownerIds, k)
+	}
+	return ownerIds
+}
+
+func SliceToMapIdStruct[ID ~int | ~int64 | ~int32 | ~int16](arr []ID) map[ID]struct{} {
+	var ownerIds map[ID]struct{} = map[ID]struct{}{}
+	for _, el := range arr {
+		ownerIds[el] = struct{}{}
 	}
 	return ownerIds
 }
