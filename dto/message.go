@@ -192,6 +192,13 @@ type MessageBasic struct {
 	FileItemUuid *string `db:"file_item_uuid"`
 }
 
+func (m *MessageBasic) GetContentOrEmpty() string {
+	if m == nil {
+		return ""
+	}
+	return m.Content
+}
+
 type ReactionPutDto struct {
 	Reaction string `json:"reaction"`
 }
