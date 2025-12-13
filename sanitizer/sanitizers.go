@@ -31,7 +31,8 @@ func CreateSanitizer() *SanitizerPolicy {
 	policy.AllowAttrs("class").OnElements("img", "span")
 	policy.AllowAttrs("data-original", "data-width", "data-height", "data-allowfullscreen").OnElements("img")
 	policy.AllowAttrs("data-type", "data-id").OnElements("span")
-	policy.AllowAttrs("target", "class", "data-id", "data-label").OnElements("a")
+	policy.AllowAttrs("target", "class", "data-id", "data-label", "data-type", "data-mention-suggestion-char").OnElements("a")
+	policy.AllowAttrs("class", "data-id", "data-label", "data-type", "data-mention-suggestion-char").OnElements("span")
 	policy.AllowAttrs("class").OnElements("div")
 	return &SanitizerPolicy{policy}
 }
