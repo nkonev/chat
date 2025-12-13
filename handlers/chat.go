@@ -83,6 +83,7 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		RegularParticipantCanPublishMessage: utils.GetNullableBooleanOr(ccd.RegularParticipantCanPublishMessage, dto.DefaultRegularParticipantCanPublishMessage),
 		RegularParticipantCanPinMessage:     utils.GetNullableBooleanOr(ccd.RegularParticipantCanPinMessage, dto.DefaultRegularParticipantCanPinMessage),
 		RegularParticipantCanWriteMessage:   utils.GetNullableBooleanOr(ccd.RegularParticipantCanWriteMessage, dto.DefaultRegularParticipantCanWriteMessage),
+		RegularParticipantCanAddParticipant: utils.GetNullableBooleanOr(ccd.RegularParticipantCanAddParticipant, dto.DefaultRegularParticipantCanAddParticipant),
 	}
 
 	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
@@ -182,6 +183,7 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		RegularParticipantCanPublishMessage: utils.GetNullableBooleanOr(ccd.RegularParticipantCanPublishMessage, dto.DefaultRegularParticipantCanPublishMessage),
 		RegularParticipantCanPinMessage:     utils.GetNullableBooleanOr(ccd.RegularParticipantCanPinMessage, dto.DefaultRegularParticipantCanPinMessage),
 		RegularParticipantCanWriteMessage:   utils.GetNullableBooleanOr(ccd.RegularParticipantCanWriteMessage, dto.DefaultRegularParticipantCanWriteMessage),
+		RegularParticipantCanAddParticipant: utils.GetNullableBooleanOr(ccd.RegularParticipantCanAddParticipant, dto.DefaultRegularParticipantCanAddParticipant),
 	}
 
 	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)

@@ -103,6 +103,7 @@ type ChatCreate struct {
 	RegularParticipantCanPublishMessage bool
 	RegularParticipantCanPinMessage     bool
 	RegularParticipantCanWriteMessage   bool
+	RegularParticipantCanAddParticipant bool
 }
 
 type ChatEdit struct {
@@ -120,6 +121,7 @@ type ChatEdit struct {
 	RegularParticipantCanPublishMessage bool
 	RegularParticipantCanPinMessage     bool
 	RegularParticipantCanWriteMessage   bool
+	RegularParticipantCanAddParticipant bool
 }
 
 func (cc *ChatEdit) IsValidatabale() bool {
@@ -318,6 +320,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		RegularParticipantCanPublishMessage: copyCommand.RegularParticipantCanPublishMessage,
 		RegularParticipantCanPinMessage:     copyCommand.RegularParticipantCanPinMessage,
 		RegularParticipantCanWriteMessage:   copyCommand.RegularParticipantCanWriteMessage,
+		RegularParticipantCanAddParticipant: copyCommand.RegularParticipantCanAddParticipant,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {
@@ -391,6 +394,7 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		RegularParticipantCanPublishMessage: copyCommand.RegularParticipantCanPublishMessage,
 		RegularParticipantCanPinMessage:     copyCommand.RegularParticipantCanPinMessage,
 		RegularParticipantCanWriteMessage:   copyCommand.RegularParticipantCanWriteMessage,
+		RegularParticipantCanAddParticipant: copyCommand.RegularParticipantCanAddParticipant,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {

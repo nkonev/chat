@@ -13,6 +13,7 @@ const DefaultAvailableToSearch = false
 const DefaultRegularParticipantCanWriteMessage = true
 const DefaultRegularParticipantCanPublishMessage = false
 const DefaultRegularParticipantCanPinMessage = false
+const DefaultRegularParticipantCanAddParticipant = true
 
 type ChatViewDto struct {
 	Id                                  int64      `json:"id"`
@@ -40,6 +41,7 @@ type ChatViewDto struct {
 	RegularParticipantCanWriteMessage   bool       `json:"regularParticipantCanWriteMessage"`
 	AvailableToSearch                   bool       `json:"availableToSearch"`
 	IsParticipant                       bool       `json:"-"`
+	RegularParticipantCanAddParticipant bool       `json:"regularParticipantCanAddParticipant"`
 }
 
 type ChatId struct {
@@ -61,6 +63,7 @@ type ChatBaseCreateDto struct {
 	AvailableToSearch                   *bool   `json:"availableToSearch"`
 	RegularParticipantCanPublishMessage *bool   `json:"regularParticipantCanPublishMessage"`
 	RegularParticipantCanPinMessage     *bool   `json:"regularParticipantCanPinMessage"`
+	RegularParticipantCanAddParticipant *bool   `json:"regularParticipantCanAddParticipant"`
 }
 
 type ChatCreateDto struct {

@@ -27,6 +27,7 @@ create unlogged table chat_common(
     regular_participant_can_publish_message boolean not null,
     regular_participant_can_pin_message BOOLEAN NOT NULL,
     regular_participant_can_write_message BOOLEAN NOT NULL,
+    regular_participant_can_add_participant BOOLEAN NOT NULL,
     participants_count bigint not null default 0,
     participant_ids bigint[] not null default array[]::bigint[],
     last_message_id bigint,

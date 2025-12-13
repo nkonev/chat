@@ -37,6 +37,7 @@ type ChatCreated struct {
 	RegularParticipantCanPublishMessage bool            `json:"regularParticipantCanPublishMessage"`
 	RegularParticipantCanPinMessage     bool            `json:"regularParticipantCanPinMessage"`
 	RegularParticipantCanWriteMessage   bool            `json:"regularParticipantCanWriteMessage"`
+	RegularParticipantCanAddParticipant bool            `json:"regularParticipantCanAddParticipant"`
 }
 
 type ChatEdited struct {
@@ -53,6 +54,7 @@ type ChatEdited struct {
 	RegularParticipantCanPublishMessage bool            `json:"regularParticipantCanPublishMessage"`
 	RegularParticipantCanPinMessage     bool            `json:"regularParticipantCanPinMessage"`
 	RegularParticipantCanWriteMessage   bool            `json:"regularParticipantCanWriteMessage"`
+	RegularParticipantCanAddParticipant bool            `json:"regularParticipantCanAddParticipant"`
 }
 
 type ChatDeleted struct {
