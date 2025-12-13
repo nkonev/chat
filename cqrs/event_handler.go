@@ -69,7 +69,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 		return err
 	}
 
-	if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, event.IsJoining, adt.AvailableToSearch, adt.IsBlog, event.IsChatCreating) {
+	if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, event.IsJoining, adt.AvailableToSearch, adt.IsBlog, event.IsChatCreating, adt.IsParticipant, adt.RegularParticipantCanAddParticipants) {
 		m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
 		return nil
 	}

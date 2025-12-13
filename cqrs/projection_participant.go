@@ -481,7 +481,18 @@ func (m *EnrichingProjection) SearchUsersContaining(ctx context.Context, co db.C
 	return resUsers, totalCountInChat, nil
 }
 
-func (m *EnrichingProjection) SearchUsersNotContaining(ctx context.Context, co db.CommonOperations, searchString string, chatId int64, pageSize int32) ([]*dto.User, error) {
+func (m *EnrichingProjection) SearchUsersNotContainingForAdding(ctx context.Context, co db.CommonOperations, userId int64, searchString string, chatId int64, pageSize int32) ([]*dto.User, error) {
+
+	adt, err := m.cp.GetChatDataForAuthorization(ctx, co, userId, chatId)
+	if err != nil {
+		return nil, err
+	}
+
+	canAddParticipant := CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, false, adt.AvailableToSearch, adt.IsBlog, false, adt.IsParticipant, adt.RegularParticipantCanAddParticipants)
+	if !canAddParticipant {
+		return nil, NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to add the chat %v participants", userId, chatId))
+	}
+
 	searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
 
 	var notFoundUsers []*dto.User = make([]*dto.User, 0)
@@ -911,12 +922,12 @@ func CanChangeParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetC
 	return CanEditChat(behalfIsChatAdmin, isTetATetChat) && userId != behalfUserId
 }
 
-func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatIsBlog, isChatCreating bool) bool {
+func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatIsBlog, isChatCreating, isParticipant, regularParticipantCanAddParticipant bool) bool {
 	if isChatCreating {
 		return true
 	}
 
-	if CanEditChat(admin, tetATet) {
+	if CanEditChat(admin, tetATet) || (isParticipant && regularParticipantCanAddParticipant) {
 		// ok
 	} else {
 		if isJoining {

@@ -482,7 +482,7 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", s.ChatId))
 	}
 
-	if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, s.IsJoining, adt.AvailableToSearch, adt.IsBlog, false) {
+	if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, s.IsJoining, adt.AvailableToSearch, adt.IsBlog, false, adt.IsParticipant, adt.RegularParticipantCanAddParticipants) {
 		return NewUnauthorizedError(fmt.Sprintf("user %v cannot add into chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 	}
 

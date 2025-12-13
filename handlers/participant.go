@@ -371,21 +371,14 @@ func (ch *ParticipantHandler) SearchForUsersToAdd(g *gin.Context) {
 		return
 	}
 
-	admin, err := ch.commonProjection.IsChatAdmin(g.Request.Context(), ch.dbWrapper, userId, chatId)
-	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error checking is admin", "err", err)
-		g.Status(http.StatusInternalServerError)
-		return
-	}
-	if !admin {
-		g.JSON(http.StatusUnauthorized, &utils.H{"message": "You have no access to this chat"})
-		return
-	}
-
 	searchString := g.Query(dto.SearchStringParam)
 
-	users, err := ch.enrichingProjection.SearchUsersNotContaining(g.Request.Context(), ch.dbWrapper, searchString, chatId, utils.DefaultSize)
+	users, err := ch.enrichingProjection.SearchUsersNotContainingForAdding(g.Request.Context(), ch.dbWrapper, userId, searchString, chatId, utils.DefaultSize)
 	if err != nil {
+		if translateParticipantError(g, err) {
+			return
+		}
+
 		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing searching", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return

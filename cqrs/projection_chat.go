@@ -742,6 +742,7 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, behalfUserId int
 	copied.IsResultFromSearch = !participant
 
 	copied.CanWriteMessage = CanWriteMessage(participant, admin, copied.RegularParticipantCanWriteMessage)
+	copied.CanAddParticipant = CanAddParticipant(admin, copied.TetATet, false, copied.AvailableToSearch, copied.Blog, false, participant, copied.RegularParticipantCanAddParticipant)
 }
 
 // We use pure functions for authorization, for sake simplicity and composability
@@ -792,6 +793,7 @@ func (m *CommonProjection) GetChatDataForAuthorization(ctx context.Context, co d
 			,coalesce(cc.can_resend, false) as chat_can_resend_message
 			,coalesce(cc.can_react, false) as chat_can_react_on_message
 			,coalesce(cc.available_to_search, false) as chat_is_available_to_search
+			,coalesce(cc.regular_participant_can_add_participant, false) as regular_participant_can_add_participant
 			,b.id is not null as chat_is_blog
 		FROM provided pr
 		LEFT JOIN chat_info cc on pr.chat_id = cc.id
