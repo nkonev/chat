@@ -1572,6 +1572,105 @@ func TestMentionCreateAndReadMessage(t *testing.T) {
 	})
 }
 
+func TestReplyEditAndReadMessage(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
+		testNotificationEventsAccumulator *listener.TestNotificationEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		const chat1Name = "new chat 1"
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		const message1Text = "hi there1"
+		const message2Text = "hi there2"
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		message2Id, err := testRestClient.CreateMessage(ctx, user2, chat1Id, message2Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		testOutputEventsAccumulator.Clean()
+		testNotificationEventsAccumulator.Clean()
+
+		const message2TextNew = "It is a reply new2"
+		err = testRestClient.EditMessage(ctx, user2, chat1Id, message2Id, message2TextNew, client.NewMessageCreateOptionReply(message1Id))
+		require.NoError(t, err, "error in resending message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.NotificationEvent)
+				return ok && e.EventType == dto.EventTypeReplyAdded &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					e.ReplyNotification.MessageId == message2Id &&
+					e.ReplyNotification.ReplyableMessage == message2TextNew
+			},
+		}))
+
+		testOutputEventsAccumulator.Clean()
+		testNotificationEventsAccumulator.Clean()
+
+		// read the message
+		err = testRestClient.ReadMessage(ctx, user1, chat1Id, message2Id)
+		require.NoError(t, err, "error in reading message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.NotificationEvent)
+				return ok && e.EventType == dto.EventTypeReplyDeleted &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					e.ReplyNotification.MessageId == message2Id
+			},
+		}))
+	})
+}
+
 func TestPinChat(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
