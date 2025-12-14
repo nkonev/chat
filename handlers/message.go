@@ -7,6 +7,7 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
@@ -19,16 +20,17 @@ import (
 const badMediaUrl = "BAD_MEDIA_URL"
 
 type MessageHandler struct {
-	lgr                 *logger.LoggerWrapper
-	eventBus            *cqrs.PartitionAwareEventBus
-	dbWrapper           *db.DB
-	commonProjection    *cqrs.CommonProjection
-	policy              *sanitizer.SanitizerPolicy
-	stripAllTags        *sanitizer.StripTagsPolicy
-	cfg                 *config.AppConfig
-	enrichingProjection *cqrs.EnrichingProjection
-	asyncMessageService *services.AsyncMessageService
-	messageService      *services.MessageService
+	lgr                                 *logger.LoggerWrapper
+	eventBus                            *cqrs.PartitionAwareEventBus
+	dbWrapper                           *db.DB
+	commonProjection                    *cqrs.CommonProjection
+	policy                              *sanitizer.SanitizerPolicy
+	stripAllTags                        *sanitizer.StripTagsPolicy
+	cfg                                 *config.AppConfig
+	enrichingProjection                 *cqrs.EnrichingProjection
+	asyncMessageService                 *services.AsyncMessageService
+	messageService                      *services.MessageService
+	rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher
 }
 
 func NewMessageHandler(
@@ -42,18 +44,20 @@ func NewMessageHandler(
 	enrichingProjection *cqrs.EnrichingProjection,
 	asyncMessageService *services.AsyncMessageService, // we use async message service in order not to perform potentially heavyweight iterations in user-facing handles
 	messageService *services.MessageService,
+	rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher,
 ) *MessageHandler {
 	return &MessageHandler{
-		lgr:                 lgr,
-		eventBus:            eventBus,
-		dbWrapper:           dbWrapper,
-		commonProjection:    commonProjection,
-		policy:              policy,
-		stripAllTags:        stripAllTags,
-		cfg:                 cfg,
-		enrichingProjection: enrichingProjection,
-		asyncMessageService: asyncMessageService,
-		messageService:      messageService,
+		lgr:                                 lgr,
+		eventBus:                            eventBus,
+		dbWrapper:                           dbWrapper,
+		commonProjection:                    commonProjection,
+		policy:                              policy,
+		stripAllTags:                        stripAllTags,
+		cfg:                                 cfg,
+		enrichingProjection:                 enrichingProjection,
+		asyncMessageService:                 asyncMessageService,
+		messageService:                      messageService,
+		rabbitmqNotificationEventsPublisher: rabbitmqNotificationEventsPublisher,
 	}
 }
 
@@ -291,7 +295,7 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 		ReadMessagesAction: cqrs.ReadMessagesActionOneMessage,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection, mc.dbWrapper)
+	err = mr.Handle(g.Request.Context(), mc.lgr, mc.eventBus, mc.commonProjection, mc.dbWrapper, mc.rabbitmqNotificationEventsPublisher)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
@@ -328,7 +332,7 @@ func (mc *MessageHandler) MarkChatAsRead(g *gin.Context) {
 		ChatId:             chatId,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection, mc.dbWrapper)
+	err = mr.Handle(g.Request.Context(), mc.lgr, mc.eventBus, mc.commonProjection, mc.dbWrapper, mc.rabbitmqNotificationEventsPublisher)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
@@ -356,7 +360,7 @@ func (mc *MessageHandler) MarkAsReadAllChats(g *gin.Context) {
 		ReadMessagesAction: cqrs.ReadMessagesActionAllChats,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.eventBus, mc.commonProjection, mc.dbWrapper)
+	err = mr.Handle(g.Request.Context(), mc.lgr, mc.eventBus, mc.commonProjection, mc.dbWrapper, mc.rabbitmqNotificationEventsPublisher)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return

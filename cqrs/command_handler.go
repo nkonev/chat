@@ -17,6 +17,7 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/sanitizer"
 	"slices"
 	"time"
@@ -809,7 +810,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 	return messageId, nil
 }
 
-func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, commonProjection *CommonProjection, dba *db.DB) error {
+func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eventBus EventBusInterface, commonProjection *CommonProjection, dba *db.DB, rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher) error {
 	// seems it's not need to immediately respond errot in case is no participant, so we skip authorization check here
 	// the authorization is in event_handler
 	if s.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
@@ -863,6 +864,63 @@ func (s *MessageRead) Handle(ctx context.Context, eventBus EventBusInterface, co
 				return err
 			}
 		}
+
+		// notification deletes
+		messageBasic, err := commonProjection.GetMessageBasic(ctx, dba, s.ChatId, s.MessageId)
+		if err != nil {
+			return err
+		}
+
+		reactions, err := commonProjection.GetReactionsOnMessage(ctx, dba, s.ChatId, s.MessageId)
+		if err != nil {
+			return err
+		}
+
+		err = rabbitmqNotificationEventsPublisher.Publish(ctx, s.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+			EventType: dto.EventTypeMentionDeleted,
+			UserId:    s.AdditionalData.BehalfUserId,
+			ChatId:    s.ChatId,
+			MentionNotification: &dto.MentionNotification{
+				Id: s.MessageId,
+			},
+		})
+		if err != nil {
+			lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+
+		err = rabbitmqNotificationEventsPublisher.Publish(ctx, s.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+			EventType: dto.EventTypeReplyDeleted,
+			UserId:    s.AdditionalData.BehalfUserId,
+			ChatId:    s.ChatId,
+			ReplyNotification: &dto.ReplyDto{
+				MessageId: s.MessageId,
+				ChatId:    s.ChatId,
+			},
+		})
+		if err != nil {
+			lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+
+		for _, reaction := range reactions {
+			var messageOwnerId = messageBasic.GetOwnerId()
+			if messageOwnerId == dto.NoOwner || messageOwnerId == dto.NoId {
+				lgr.InfoContext(ctx, "Unable to get message owner for reaction notification")
+			} else {
+				err = rabbitmqNotificationEventsPublisher.Publish(ctx, s.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+					EventType: dto.EventTypeReactionDeleted,
+					ReactionEvent: &dto.ReactionEvent{
+						Reaction:  reaction,
+						MessageId: s.MessageId,
+					},
+					UserId: messageOwnerId,
+					ChatId: s.ChatId,
+				})
+				if err != nil {
+					lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
+			}
+		}
+
 		return nil
 	} else if s.ReadMessagesAction == ReadMessagesActionAllChats {
 		cp := &MessageReaded{

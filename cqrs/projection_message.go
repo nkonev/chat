@@ -537,22 +537,24 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 	return nil
 }
 
-func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) (bool, error) {
+	wasAdded, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (bool, error) {
+		var wasAddedInner bool
+
 		messageExists, errInner := m.checkMessageExists(ctx, tx, event.ChatId, event.MessageId)
 		if errInner != nil {
-			return errInner
+			return false, errInner
 		}
 
 		if !messageExists {
 			m.lgr.InfoContext(ctx, "Skipping MessageReactionFlipped because there is no message", "chat_id", event.ChatId, "message_id", event.MessageId)
-			return nil
+			return false, nil
 		}
 
 		var reactionExists bool
 		errInner = sqlscan.Get(ctx, tx, &reactionExists, "SELECT EXISTS(SELECT 1 FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4)", event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction)
 		if errInner != nil {
-			return errInner
+			return false, errInner
 		}
 
 		if !reactionExists {
@@ -562,17 +564,18 @@ func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *
 			on conflict (chat_id, message_id, user_id, reaction) do nothing
 		`, event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction, event.AdditionalData.CreatedAt)
 			if errInner != nil {
-				return errInner
+				return false, errInner
 			}
+			wasAddedInner = true
 		} else {
 			_, errInner = tx.ExecContext(ctx, "DELETE FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4", event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction)
 			if errInner != nil {
-				return errInner
+				return false, errInner
 			}
 		}
-		return nil
+		return wasAddedInner, nil
 	})
-	return errOuter
+	return wasAdded, errOuter
 }
 
 func (m *CommonProjection) checkMessageExists(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
@@ -1371,6 +1374,18 @@ func (m *CommonProjection) GetMessageEmbed(ctx context.Context, co db.CommonOper
 	}
 
 	return embeddable, nil
+}
+
+func (m *CommonProjection) GetReactionsOnMessage(ctx context.Context, co db.CommonOperations, chatId, messageId int64) ([]string, error) {
+	res := []string{}
+
+	err := sqlscan.Select(ctx, co, &res, `
+		select distinct on (reaction) reaction from message_reaction where chat_id = $1 and message_id = $2
+	`, chatId, messageId)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (m *CommonProjection) GetMessageWithEmbed(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.MessageWithEmbed, error) {

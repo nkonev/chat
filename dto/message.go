@@ -199,6 +199,13 @@ func (m *MessageBasic) GetContentOrEmpty() string {
 	return m.Content
 }
 
+func (m *MessageBasic) GetOwnerId() int64 {
+	if m == nil {
+		return NoOwner
+	}
+	return m.OwnerId
+}
+
 type MessageWithEmbed struct {
 	Id      int64
 	OwnerId int64
