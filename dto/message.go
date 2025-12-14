@@ -199,6 +199,28 @@ func (m *MessageBasic) GetContentOrEmpty() string {
 	return m.Content
 }
 
+type MessageWithEmbed struct {
+	Id      int64
+	OwnerId int64
+	Content string
+	Embed   Embeddable
+}
+
+func (m *MessageWithEmbed) GetContentOrEmpty() string {
+	if m == nil {
+		return ""
+	}
+	return m.Content
+}
+
+func (m *MessageWithEmbed) GetEmbed() Embeddable {
+	if m == nil {
+		return nil
+	}
+
+	return m.Embed
+}
+
 type ReactionPutDto struct {
 	Reaction string `json:"reaction"`
 }

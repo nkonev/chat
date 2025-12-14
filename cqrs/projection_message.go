@@ -1373,6 +1373,39 @@ func (m *CommonProjection) GetMessageEmbed(ctx context.Context, co db.CommonOper
 	return embeddable, nil
 }
 
+func (m *CommonProjection) GetMessageWithEmbed(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.MessageWithEmbed, error) {
+	type messageDto struct {
+		Id      int64        `db:"id"`
+		OwnerId int64        `db:"owner_id"`
+		Content string       `db:"content"`
+		Embed   pgtype.JSONB `db:"embed"`
+	}
+
+	var msg messageDto
+	err := sqlscan.Get(ctx, co, &msg, `
+	select m.id, m.owner_id, m.content, m.embed
+	from message m where m.chat_id = $1 and m.id = $2
+	`, chatId, messageId)
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	embeddable, err := makeEmbedddable(msg.Embed)
+	if err != nil {
+		return nil, fmt.Errorf("error during mapping: %w", err)
+	}
+
+	return &dto.MessageWithEmbed{
+		Id:      msg.Id,
+		OwnerId: msg.OwnerId,
+		Content: msg.Content,
+		Embed:   embeddable,
+	}, nil
+}
+
 func (m *CommonProjection) IsMessageExists(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
 	var exists bool
 	err := sqlscan.Get(ctx, co, &exists, `

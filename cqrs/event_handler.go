@@ -659,8 +659,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 		// nothing
 	}
 
-	newMentionedUserIds, newHasHere, newHasAll, newWithoutAnyHtml := m.getMentionData(ctx, event.MessageCommoned.Content)
-	newRepliedUserId := m.getRepliedUserId(event.MessageCommoned)
+	newMentionedUserIds, newHasHere, newHasAll, newWithoutAnyHtml, newRepliedUserId := m.getNotificationData(ctx, event.MessageCommoned.Content, event.MessageCommoned.Embed)
 
 	// for cache purposes, kinda optimization
 	var behalfUserDto *dto.User
@@ -776,15 +775,6 @@ func (m *EventHandler) prepareMentionParticipantIds(ctx context.Context, newHasA
 	return newToSendMentions
 }
 
-func (m *EventHandler) getRepliedUserId(commoned MessageCommoned) *int64 {
-	if commoned.Embed != nil {
-		if reply, ok := commoned.Embed.(*dto.EmbedReply); ok {
-			return &reply.OwnerId
-		}
-	}
-	return nil
-}
-
 func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
 	eventType := dto.EventTypeMessageEdited
 
@@ -810,12 +800,12 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		}
 	}
 
-	messageBasic, err := m.commonProjection.GetMessageBasic(ctx, m.db, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
+	messageBasicOld, err := m.commonProjection.GetMessageWithEmbed(ctx, m.db, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
 	if err != nil {
 		return err
 	}
 
-	oldMentionedUserIds, oldHasHere, oldHasAll, _ := m.getMentionData(ctx, messageBasic.GetContentOrEmpty())
+	oldMentionedUserIds, oldHasHere, oldHasAll, _, oldRepliedUserId := m.getNotificationData(ctx, messageBasicOld.GetContentOrEmpty(), messageBasicOld.GetEmbed())
 	oldMentionedUserIdsMap := utils.SliceToSetMapIdStruct(oldMentionedUserIds)
 
 	err = m.commonProjection.OnMessageEdited(ctx, event)
@@ -831,7 +821,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		// nothing
 	}
 
-	newMentionedUserIds, newHasHere, newHasAll, newWithoutAnyHtml := m.getMentionData(ctx, event.MessageCommoned.Content)
+	newMentionedUserIds, newHasHere, newHasAll, newWithoutAnyHtml, newRepliedUserId := m.getNotificationData(ctx, event.MessageCommoned.Content, event.MessageCommoned.Embed)
 	newMentionedUserIdsMap := utils.SliceToSetMapIdStruct(newMentionedUserIds)
 
 	// for cache purposes, kinda optimization
@@ -839,6 +829,9 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 
 	addedMentionedUserIds := []int64{}
 	removedMentionedUserIds := []int64{}
+
+	var addedRepliedUserId *int64
+	var removedRepliedUserId *int64
 
 	for newUserId := range newMentionedUserIdsMap {
 		if _, ok := oldMentionedUserIdsMap[newUserId]; !ok {
@@ -850,6 +843,17 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		if _, ok := newMentionedUserIdsMap[oldUserId]; !ok {
 			removedMentionedUserIds = append(removedMentionedUserIds, oldUserId)
 		}
+	}
+
+	if newRepliedUserId != nil && oldRepliedUserId != nil {
+		if *newRepliedUserId != *oldRepliedUserId {
+			addedRepliedUserId = newRepliedUserId
+			removedRepliedUserId = oldRepliedUserId
+		}
+	} else if newRepliedUserId != nil {
+		addedRepliedUserId = newRepliedUserId
+	} else if oldRepliedUserId != nil {
+		removedRepliedUserId = oldRepliedUserId
 	}
 
 	addedHasAll := !oldHasAll && newHasAll
@@ -936,10 +940,54 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		return errOuter
 	}
 
+	if addedRepliedUserId != nil {
+		if behalfUserDto == nil {
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", "user_id", event.AdditionalData.BehalfUserId)
+		} else {
+			err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+				EventType: dto.EventTypeReplyAdded,
+				UserId:    *addedRepliedUserId,
+				ChatId:    event.MessageCommoned.ChatId,
+				ReplyNotification: &dto.ReplyDto{
+					MessageId:        event.MessageCommoned.Id,
+					ChatId:           event.MessageCommoned.ChatId,
+					ReplyableMessage: newWithoutAnyHtml,
+				},
+				ByUserId:  behalfUserDto.Id,
+				ByLogin:   behalfUserDto.Login,
+				ByAvatar:  behalfUserDto.Avatar,
+				ChatTitle: chatNotificationTitle,
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+	}
+
+	if removedRepliedUserId != nil {
+		if behalfUserDto == nil {
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", "user_id", event.AdditionalData.BehalfUserId)
+		} else {
+
+			err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+				EventType: dto.EventTypeReplyDeleted,
+				UserId:    *removedRepliedUserId,
+				ChatId:    event.MessageCommoned.ChatId,
+				ReplyNotification: &dto.ReplyDto{
+					MessageId: event.MessageCommoned.Id,
+					ChatId:    event.MessageCommoned.ChatId,
+				},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+	}
+
 	return nil
 }
 
-func (m *EventHandler) getMentionData(ctx context.Context, messageHtml string) ([]int64, bool, bool, string) {
+func (m *EventHandler) getNotificationData(ctx context.Context, messageHtml string, em dto.Embeddable) ([]int64, bool, bool, string, *int64) {
 	newWithoutSourceTags := m.stripSourceContent.Sanitize(messageHtml)
 	newMentionedUserIds, newHasHere, newHasAll := m.enrichingProjection.parseMentionUserIdsFromMessageHtml(ctx, newWithoutSourceTags)
 
@@ -948,7 +996,14 @@ func (m *EventHandler) getMentionData(ctx context.Context, messageHtml string) (
 		newWithoutAnyHtml = preview.CreateMessagePreviewWithoutLogin(m.stripAllTags, m.cfg.Message.PreviewMaxTextSize, newWithoutAnyHtml)
 	}
 
-	return newMentionedUserIds, newHasHere, newHasAll, newWithoutAnyHtml
+	var repliedUserId *int64
+	if em != nil {
+		if reply, ok := em.(*dto.EmbedReply); ok {
+			repliedUserId = &reply.OwnerId
+		}
+	}
+
+	return newMentionedUserIds, newHasHere, newHasAll, newWithoutAnyHtml, repliedUserId
 }
 
 func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDeleted) error {
