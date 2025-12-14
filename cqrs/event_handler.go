@@ -661,11 +661,19 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 
 	newMentionedUserIds, newHasHere, newHasAll, newWithoutAnyHtml := m.getMentionData(ctx, event.MessageCommoned.Content)
 
+	newRepliedUserId := m.getNewRepliedUserId(event.MessageCommoned)
+
+	// for cache purposes, kinda optimization
+	var behalfUserDto *dto.User
+
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.MessageCommoned.ChatId, nil, func(participantIdsPortion []int64) error {
 		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id, &event.AdditionalData.BehalfUserId)
 		if errInn != nil {
 			return errInn
 		}
+
+		allPortionUsersMap := utils.ToMap(allPortionUsers)
+		behalfUserDto = allPortionUsersMap[event.AdditionalData.BehalfUserId]
 
 		for _, messageView := range messageViews {
 			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
@@ -681,10 +689,8 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 
 		newToSendMentions := m.prepareNewMentionParticipantIds(ctx, newHasAll, newHasHere, newMentionedUserIds, participantIdsPortion)
 
-		allPortionUsersMap := utils.ToMap(allPortionUsers)
-
-		if behalfUserDto, ok := allPortionUsersMap[event.AdditionalData.BehalfUserId]; !ok {
-			m.lgr.InfoContext(ctx, "Unable to get behalf user for mentioning", "user_id", event.AdditionalData.BehalfUserId, "err", errInn)
+		if behalfUserDto == nil {
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for mention notification", "user_id", event.AdditionalData.BehalfUserId)
 		} else {
 			for _, participantId := range newToSendMentions {
 				if participantId == event.AdditionalData.BehalfUserId {
@@ -720,6 +726,30 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 		return errOuter
 	}
 
+	if newRepliedUserId != nil {
+		if behalfUserDto == nil {
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", "user_id", event.AdditionalData.BehalfUserId)
+		} else {
+			err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+				EventType: dto.EventTypeReplyAdded,
+				UserId:    *newRepliedUserId,
+				ChatId:    event.MessageCommoned.ChatId,
+				ReplyNotification: &dto.ReplyDto{
+					MessageId:        event.MessageCommoned.Id,
+					ChatId:           event.MessageCommoned.ChatId,
+					ReplyableMessage: newWithoutAnyHtml,
+				},
+				ByUserId:  behalfUserDto.Id,
+				ByLogin:   behalfUserDto.Login,
+				ByAvatar:  behalfUserDto.Avatar,
+				ChatTitle: chatNotificationTitle,
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -749,6 +779,15 @@ func (m *EventHandler) prepareNewMentionParticipantIds(ctx context.Context, newH
 	}
 
 	return newToSendMentions
+}
+
+func (m *EventHandler) getNewRepliedUserId(commoned MessageCommoned) *int64 {
+	if commoned.Embed != nil {
+		if reply, ok := commoned.Embed.(*dto.EmbedReply); ok {
+			return &reply.OwnerId
+		}
+	}
+	return nil
 }
 
 func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
@@ -800,6 +839,9 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 	newMentionedUserIds1, newHasHere, newHasAll, newWithoutAnyHtml := m.getMentionData(ctx, event.MessageCommoned.Content)
 	newMentionedUserIdsMap := utils.SliceToSetMapIdStruct(newMentionedUserIds1)
 
+	// for cache purposes, kinda optimization
+	var behalfUserDto *dto.User
+
 	addedMentionedUserIds := []int64{}
 	removedMentionedUserIds := []int64{}
 
@@ -822,10 +864,13 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 	removedHasHere := oldHasHere && !newHasHere
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.MessageCommoned.ChatId, nil, func(participantIdsPortion []int64) error {
-		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id, nil)
+		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id, &event.AdditionalData.BehalfUserId)
 		if errInn != nil {
 			return errInn
 		}
+
+		allPortionUsersMap := utils.ToMap(allPortionUsers)
+		behalfUserDto = allPortionUsersMap[event.AdditionalData.BehalfUserId]
 
 		for _, messageView := range messageViews {
 			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
@@ -842,10 +887,8 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		addedToSendMentions := m.prepareNewMentionParticipantIds(ctx, addedHasAll, addedHasHere, addedMentionedUserIds, participantIdsPortion)
 		removedToSendMentions := m.prepareNewMentionParticipantIds(ctx, removedHasAll, removedHasHere, removedMentionedUserIds, participantIdsPortion)
 
-		allPortionUsersMap := utils.ToMap(allPortionUsers)
-
-		if behalfUserDto, ok := allPortionUsersMap[event.AdditionalData.BehalfUserId]; !ok {
-			m.lgr.InfoContext(ctx, "Unable to get behalf user for mentioning", "user_id", event.AdditionalData.BehalfUserId)
+		if behalfUserDto == nil {
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for mention notification", "user_id", event.AdditionalData.BehalfUserId)
 		} else {
 
 			// add notification
@@ -961,6 +1004,19 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 			if err != nil {
 				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 			}
+
+			err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+				EventType: dto.EventTypeReplyDeleted,
+				UserId:    participantId,
+				ChatId:    event.ChatId,
+				ReplyNotification: &dto.ReplyDto{
+					MessageId: event.MessageId,
+					ChatId:    event.ChatId,
+				},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
 		}
 
 		return nil
@@ -1066,6 +1122,19 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 		ChatId:    event.ChatId,
 		MentionNotification: &dto.MentionNotification{
 			Id: event.MessageId,
+		},
+	})
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+	}
+
+	err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+		EventType: dto.EventTypeReplyDeleted,
+		UserId:    event.AdditionalData.BehalfUserId,
+		ChatId:    event.ChatId,
+		ReplyNotification: &dto.ReplyDto{
+			MessageId: event.MessageId,
+			ChatId:    event.ChatId,
 		},
 	})
 	if err != nil {
