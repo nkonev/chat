@@ -660,8 +660,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	}
 
 	newMentionedUserIds, newHasHere, newHasAll, newWithoutAnyHtml := m.getMentionData(ctx, event.MessageCommoned.Content)
-
-	newRepliedUserId := m.getNewRepliedUserId(event.MessageCommoned)
+	newRepliedUserId := m.getRepliedUserId(event.MessageCommoned)
 
 	// for cache purposes, kinda optimization
 	var behalfUserDto *dto.User
@@ -687,7 +686,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 			}
 		}
 
-		newToSendMentions := m.prepareNewMentionParticipantIds(ctx, newHasAll, newHasHere, newMentionedUserIds, participantIdsPortion)
+		newToSendMentions := m.prepareMentionParticipantIds(ctx, newHasAll, newHasHere, newMentionedUserIds, participantIdsPortion)
 
 		if behalfUserDto == nil {
 			m.lgr.InfoContext(ctx, "Unable to get behalf user for mention notification", "user_id", event.AdditionalData.BehalfUserId)
@@ -715,10 +714,6 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 				}
 			}
 		}
-
-		// TODO message edit, message delete for mention
-		// TODO remove notification in message read
-		// TODO there is an error during click "Clear" notification button
 
 		return nil
 	})
@@ -753,7 +748,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	return nil
 }
 
-func (m *EventHandler) prepareNewMentionParticipantIds(ctx context.Context, newHasAll, newHasHere bool, newMentionedUserIds []int64, participantIdsPortion []int64) []int64 {
+func (m *EventHandler) prepareMentionParticipantIds(ctx context.Context, newHasAll, newHasHere bool, newMentionedUserIds []int64, participantIdsPortion []int64) []int64 {
 	newToSendMentions := []int64{}
 
 	newMentionedUserIdsMap := utils.SliceToSetMapIdStruct(newMentionedUserIds)
@@ -781,7 +776,7 @@ func (m *EventHandler) prepareNewMentionParticipantIds(ctx context.Context, newH
 	return newToSendMentions
 }
 
-func (m *EventHandler) getNewRepliedUserId(commoned MessageCommoned) *int64 {
+func (m *EventHandler) getRepliedUserId(commoned MessageCommoned) *int64 {
 	if commoned.Embed != nil {
 		if reply, ok := commoned.Embed.(*dto.EmbedReply); ok {
 			return &reply.OwnerId
@@ -836,8 +831,8 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		// nothing
 	}
 
-	newMentionedUserIds1, newHasHere, newHasAll, newWithoutAnyHtml := m.getMentionData(ctx, event.MessageCommoned.Content)
-	newMentionedUserIdsMap := utils.SliceToSetMapIdStruct(newMentionedUserIds1)
+	newMentionedUserIds, newHasHere, newHasAll, newWithoutAnyHtml := m.getMentionData(ctx, event.MessageCommoned.Content)
+	newMentionedUserIdsMap := utils.SliceToSetMapIdStruct(newMentionedUserIds)
 
 	// for cache purposes, kinda optimization
 	var behalfUserDto *dto.User
@@ -884,8 +879,8 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 			}
 		}
 
-		addedToSendMentions := m.prepareNewMentionParticipantIds(ctx, addedHasAll, addedHasHere, addedMentionedUserIds, participantIdsPortion)
-		removedToSendMentions := m.prepareNewMentionParticipantIds(ctx, removedHasAll, removedHasHere, removedMentionedUserIds, participantIdsPortion)
+		addedToSendMentions := m.prepareMentionParticipantIds(ctx, addedHasAll, addedHasHere, addedMentionedUserIds, participantIdsPortion)
+		removedToSendMentions := m.prepareMentionParticipantIds(ctx, removedHasAll, removedHasHere, removedMentionedUserIds, participantIdsPortion)
 
 		if behalfUserDto == nil {
 			m.lgr.InfoContext(ctx, "Unable to get behalf user for mention notification", "user_id", event.AdditionalData.BehalfUserId)
