@@ -651,8 +651,6 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 
 	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
 
-	// TODO NotifyNewMessageBrowserNotification browser_notification_add_message
-
 	chatNotificationTitle, err := m.commonProjection.getChatNameForNotification(ctx, m.db, event.MessageCommoned.ChatId)
 	if err != nil {
 		m.lgr.WarnContext(ctx, "Unable to get chatNotificationTitle", "chat_id", event.MessageCommoned.ChatId, "err", err)
@@ -661,19 +659,40 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 
 	newMentionedUserIds, newHasHere, newHasAll, newWithoutAnyHtml, newRepliedUserId := m.getNotificationData(ctx, event.MessageCommoned.Content, event.MessageCommoned.Embed)
 
+	var additionalUserIdToFetch []int64 = []int64{event.AdditionalData.BehalfUserId}
+
+	var oppositeTetATetUserId *int64
+	if adt.ChatIsTetATet {
+		oppositeTetATetUserId, err = m.enrichingProjection.getTetATetOpposite(ctx, m.db, event.MessageCommoned.ChatId, event.AdditionalData.BehalfUserId)
+		if err != nil || oppositeTetATetUserId == nil {
+			m.lgr.WarnContext(ctx, "Unable to get opposite", "chat_id", event.MessageCommoned.ChatId, "err", err)
+		} else {
+			additionalUserIdToFetch = append(additionalUserIdToFetch, *oppositeTetATetUserId)
+		}
+	}
+
 	// for cache purposes, kinda optimization
 	var behalfUserDto *dto.User
 
+	cin, err := m.enrichingProjection.getChatInfoForMessageNotification(ctx, m.db, event.MessageCommoned.ChatId, event.AdditionalData.BehalfUserId)
+	if err != nil {
+		return err
+	}
+
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.MessageCommoned.ChatId, nil, func(participantIdsPortion []int64) error {
-		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id, &event.AdditionalData.BehalfUserId)
+		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id, additionalUserIdToFetch)
 		if errInn != nil {
 			return errInn
 		}
 
 		allPortionUsersMap := utils.ToMap(allPortionUsers)
+
+		cinp := m.enrichingProjection.patchChatInfoForMessageNotification(ctx, cin, allPortionUsersMap, oppositeTetATetUserId)
+
 		behalfUserDto = allPortionUsersMap[event.AdditionalData.BehalfUserId]
 
 		for _, messageView := range messageViews {
+			// frontend event to add the message on the web page
 			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:           eventType,
 				UserId:              messageView.UserId,
@@ -682,6 +701,30 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 			})
 			if errInn != nil {
 				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+			}
+
+			// notification about the new message (red dot)
+			if messageView.UserId != event.AdditionalData.BehalfUserId { // skip myself
+				if owner, ok := allPortionUsersMap[messageView.OwnerId]; !ok {
+					m.lgr.InfoContext(ctx, "Message owner isn't found", "user_id", messageView.OwnerId)
+				} else {
+					err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+						UserId:    messageView.UserId,
+						EventType: dto.EventTypeMessageBrowserNotificationAdd,
+						BrowserNotification: &dto.BrowserNotification{
+							ChatId:      messageView.ChatId,
+							ChatName:    cinp.ChatName,
+							ChatAvatar:  cinp.ChatAvatar,
+							MessageId:   messageView.Id,
+							MessageText: newWithoutAnyHtml,
+							OwnerId:     owner.Id,
+							OwnerLogin:  owner.Login,
+						},
+					})
+					if err != nil {
+						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					}
+				}
 			}
 		}
 
@@ -864,8 +907,10 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 	removedHasAll := oldHasAll && !newHasAll
 	removedHasHere := oldHasHere && !newHasHere
 
+	var additionalUserIdToFetch []int64 = []int64{event.AdditionalData.BehalfUserId}
+
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.MessageCommoned.ChatId, nil, func(participantIdsPortion []int64) error {
-		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id, &event.AdditionalData.BehalfUserId)
+		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id, additionalUserIdToFetch)
 		if errInn != nil {
 			return errInn
 		}
@@ -1100,6 +1145,19 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 					}
 				}
+			}
+
+			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+				UserId:    participantId,
+				EventType: dto.EventTypeMessageBrowserNotificationDelete,
+				BrowserNotification: &dto.BrowserNotification{
+					ChatId:    event.ChatId,
+					MessageId: event.MessageId,
+					OwnerId:   dto.NonExistentUser,
+				},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
 			}
 		}
 

@@ -30,6 +30,7 @@ type MessageHandler struct {
 	enrichingProjection                 *cqrs.EnrichingProjection
 	asyncMessageService                 *services.AsyncMessageService
 	messageService                      *services.MessageService
+	rabbitmqOutputEventPublisher        *producer.RabbitOutputEventsPublisher
 	rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher
 }
 
@@ -44,6 +45,7 @@ func NewMessageHandler(
 	enrichingProjection *cqrs.EnrichingProjection,
 	asyncMessageService *services.AsyncMessageService, // we use async message service in order not to perform potentially heavyweight iterations in user-facing handles
 	messageService *services.MessageService,
+	rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher,
 	rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher,
 ) *MessageHandler {
 	return &MessageHandler{
@@ -57,6 +59,7 @@ func NewMessageHandler(
 		enrichingProjection:                 enrichingProjection,
 		asyncMessageService:                 asyncMessageService,
 		messageService:                      messageService,
+		rabbitmqOutputEventPublisher:        rabbitmqOutputEventPublisher,
 		rabbitmqNotificationEventsPublisher: rabbitmqNotificationEventsPublisher,
 	}
 }
@@ -295,7 +298,7 @@ func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 		ReadMessagesAction: cqrs.ReadMessagesActionOneMessage,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.lgr, mc.eventBus, mc.commonProjection, mc.dbWrapper, mc.rabbitmqNotificationEventsPublisher)
+	err = mr.Handle(g.Request.Context(), mc.lgr, mc.eventBus, mc.commonProjection, mc.dbWrapper, mc.rabbitmqOutputEventPublisher, mc.rabbitmqNotificationEventsPublisher)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
@@ -332,7 +335,7 @@ func (mc *MessageHandler) MarkChatAsRead(g *gin.Context) {
 		ChatId:             chatId,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.lgr, mc.eventBus, mc.commonProjection, mc.dbWrapper, mc.rabbitmqNotificationEventsPublisher)
+	err = mr.Handle(g.Request.Context(), mc.lgr, mc.eventBus, mc.commonProjection, mc.dbWrapper, mc.rabbitmqOutputEventPublisher, mc.rabbitmqNotificationEventsPublisher)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
@@ -360,7 +363,7 @@ func (mc *MessageHandler) MarkAsReadAllChats(g *gin.Context) {
 		ReadMessagesAction: cqrs.ReadMessagesActionAllChats,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.lgr, mc.eventBus, mc.commonProjection, mc.dbWrapper, mc.rabbitmqNotificationEventsPublisher)
+	err = mr.Handle(g.Request.Context(), mc.lgr, mc.eventBus, mc.commonProjection, mc.dbWrapper, mc.rabbitmqOutputEventPublisher, mc.rabbitmqNotificationEventsPublisher)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return

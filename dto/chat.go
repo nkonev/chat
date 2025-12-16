@@ -159,3 +159,8 @@ type ChatNotificationSettingsChanged struct {
 	ChatId                   int64 `json:"chatId"`
 	ConsiderMessagesAsUnread bool  `json:"considerMessagesAsUnread"`
 }
+
+type ChatInfoForNotification struct {
+	ChatName   string  `db:"title"`
+	ChatAvatar *string `db:"avatar"`
+}

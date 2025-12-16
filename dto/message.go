@@ -317,3 +317,13 @@ type MessageAuthorizationData struct {
 type MessageId struct {
 	MessageId int64 `json:"messageId"`
 }
+
+type BrowserNotification struct {
+	ChatId      int64   `json:"chatId"`
+	ChatName    string  `json:"chatName"`
+	ChatAvatar  *string `json:"chatAvatar"`
+	MessageId   int64   `json:"messageId"`
+	MessageText string  `json:"messageText"`
+	OwnerId     int64   `json:"ownerId"`
+	OwnerLogin  string  `json:"ownerLogin"`
+}

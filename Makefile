@@ -1,9 +1,10 @@
 EXECUTABLE := chat
+TEST_TIMEOUT := 360s
 
 .PHONY: test-verbose
 test-verbose:
 	# here is timeout for all the tests
-	go test ./... -count=1 -test.v -test.timeout=360s -p 1
+	go test ./... -count=1 -test.v -test.timeout=$(TEST_TIMEOUT) -p 1
 
 .PHONY: download
 download:
@@ -51,4 +52,4 @@ test: export CHAT_RABBITMQ.PRETTYLOG = false
 test: export CHAT_RABBITMQ.DUMP = false
 test:
 	# here is timeout for all the tests
-	go test ./... -count=1 -test.v -test.timeout=360s -p 1
+	go test ./... -count=1 -test.v -test.timeout=$(TEST_TIMEOUT) -p 1

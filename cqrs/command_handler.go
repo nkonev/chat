@@ -810,7 +810,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 	return messageId, nil
 }
 
-func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eventBus EventBusInterface, commonProjection *CommonProjection, dba *db.DB, rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher) error {
+func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eventBus EventBusInterface, commonProjection *CommonProjection, dba *db.DB, rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher, rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher) error {
 	// seems it's not need to immediately respond errot in case is no participant, so we skip authorization check here
 	// the authorization is in event_handler
 	if s.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
@@ -898,7 +898,8 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 
 		var messageOwnerId = messageBasic.GetOwnerId()
 		if messageOwnerId == s.AdditionalData.BehalfUserId { // only for myself
-			reactions, err := commonProjection.GetReactionsOnMessage(ctx, dba, s.ChatId, s.MessageId)
+			var reactions []string
+			reactions, err = commonProjection.GetReactionsOnMessage(ctx, dba, s.ChatId, s.MessageId)
 			if err != nil {
 				return err
 			}
@@ -921,6 +922,19 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 					}
 				}
 			}
+		}
+
+		err = rabbitmqOutputEventPublisher.Publish(ctx, s.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			UserId:    s.AdditionalData.BehalfUserId,
+			EventType: dto.EventTypeMessageBrowserNotificationDelete,
+			BrowserNotification: &dto.BrowserNotification{
+				ChatId:    s.ChatId,
+				MessageId: s.MessageId,
+				OwnerId:   dto.NonExistentUser,
+			},
+		})
+		if err != nil {
+			lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 		}
 
 		return nil

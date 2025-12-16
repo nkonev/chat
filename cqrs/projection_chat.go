@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/qdm12/reprint"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/preview"
@@ -547,6 +548,66 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 		return nil, nil, errOuter
 	}
 	return d.resultChats, d.intermediateUsers, nil
+}
+
+func (m *EnrichingProjection) getChatInfoForMessageNotification(ctx context.Context, co db.CommonOperations, chatId, behalfUserId int64) (*dto.ChatInfoForNotification, error) {
+	var chatBasic dto.ChatInfoForNotification
+
+	err := sqlscan.Get(ctx, co, &chatBasic, `
+		select 
+		    c.title,
+		    c.avatar
+		from chat_common c
+		where c.id = $1
+	`, chatId)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	return &chatBasic, nil
+}
+
+func (m *EnrichingProjection) patchChatInfoForMessageNotification(ctx context.Context, inp *dto.ChatInfoForNotification, allPortionUsersMap map[int64]*dto.User, oppositeTetATetUserId *int64) *dto.ChatInfoForNotification {
+	if oppositeTetATetUserId != nil {
+		var copyInp *dto.ChatInfoForNotification
+		err := reprint.FromTo(&inp, &copyInp)
+		if err != nil {
+			m.lgr.WarnContext(ctx, "Unable to copy", "err", err)
+			return inp
+		} else {
+			us, ok := allPortionUsersMap[*oppositeTetATetUserId]
+			if !ok {
+				m.lgr.InfoContext(ctx, "Opposite user isn't found in the map", "user_id", *oppositeTetATetUserId)
+			} else {
+				copyInp.ChatName = us.Login
+				copyInp.ChatAvatar = us.Avatar
+			}
+
+			return copyInp
+		}
+	} else {
+		return inp
+	}
+}
+
+func (m *EnrichingProjection) getTetATetOpposite(ctx context.Context, co db.CommonOperations, chatId, behalfUserId int64) (*int64, error) {
+	var oppositeUserId *int64
+
+	err := sqlscan.Get(ctx, co, &oppositeUserId, `
+		select 
+		    cp.user_id
+		from chat_participant cp
+		where cp.chat_id = $1 and cp.user_id != $2
+	`, chatId, behalfUserId)
+	if err != nil {
+		return nil, err
+	}
+
+	return oppositeUserId, nil
 }
 
 func (m *EnrichingProjection) getParticipantsOnlineForTetATetMap(ctx context.Context, userIds []int64) (map[int64]bool, error) {
