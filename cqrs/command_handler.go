@@ -871,11 +871,6 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 			return err
 		}
 
-		reactions, err := commonProjection.GetReactionsOnMessage(ctx, dba, s.ChatId, s.MessageId)
-		if err != nil {
-			return err
-		}
-
 		err = rabbitmqNotificationEventsPublisher.Publish(ctx, s.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
 			EventType: dto.EventTypeMentionDeleted,
 			UserId:    s.AdditionalData.BehalfUserId,
@@ -901,22 +896,29 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 			lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
 		}
 
-		for _, reaction := range reactions {
-			var messageOwnerId = messageBasic.GetOwnerId()
-			if messageOwnerId == dto.NoOwner || messageOwnerId == dto.NoId {
-				lgr.InfoContext(ctx, "Unable to get message owner for reaction notification")
-			} else {
-				err = rabbitmqNotificationEventsPublisher.Publish(ctx, s.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
-					EventType: dto.EventTypeReactionDeleted,
-					ReactionEvent: &dto.ReactionEvent{
-						Reaction:  reaction,
-						MessageId: s.MessageId,
-					},
-					UserId: messageOwnerId,
-					ChatId: s.ChatId,
-				})
-				if err != nil {
-					lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		var messageOwnerId = messageBasic.GetOwnerId()
+		if messageOwnerId == s.AdditionalData.BehalfUserId { // only for myself
+			reactions, err := commonProjection.GetReactionsOnMessage(ctx, dba, s.ChatId, s.MessageId)
+			if err != nil {
+				return err
+			}
+
+			for _, reaction := range reactions {
+				if messageOwnerId == dto.NoOwner || messageOwnerId == dto.NoId {
+					lgr.InfoContext(ctx, "Unable to get message owner for reaction notification")
+				} else {
+					err = rabbitmqNotificationEventsPublisher.Publish(ctx, s.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+						EventType: dto.EventTypeReactionDeleted,
+						ReactionEvent: &dto.ReactionEvent{
+							Reaction:  reaction,
+							MessageId: s.MessageId,
+						},
+						UserId: s.AdditionalData.BehalfUserId,
+						ChatId: s.ChatId,
+					})
+					if err != nil {
+						lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+					}
 				}
 			}
 		}

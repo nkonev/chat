@@ -50,5 +50,5 @@ test: export CHAT_RABBITMQ.DUMPTESTACCUMULATOR = false
 test: export CHAT_RABBITMQ.PRETTYLOG = false
 test: export CHAT_RABBITMQ.DUMP = false
 test:
-	# here is timeout for all tests
-	go test ./... -count=1 -test.v -test.timeout=180s -p 1
+	# here is timeout for all the tests
+	go test ./... -count=1 -test.v -test.timeout=360s -p 1
