@@ -724,22 +724,24 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 		if behalfUserDto == nil {
 			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", "user_id", event.AdditionalData.BehalfUserId)
 		} else {
-			err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
-				EventType: dto.EventTypeReplyAdded,
-				UserId:    *newRepliedUserId,
-				ChatId:    event.MessageCommoned.ChatId,
-				ReplyNotification: &dto.ReplyDto{
-					MessageId:        event.MessageCommoned.Id,
-					ChatId:           event.MessageCommoned.ChatId,
-					ReplyableMessage: newWithoutAnyHtml,
-				},
-				ByUserId:  behalfUserDto.Id,
-				ByLogin:   behalfUserDto.Login,
-				ByAvatar:  behalfUserDto.Avatar,
-				ChatTitle: chatNotificationTitle,
-			})
-			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			if *newRepliedUserId != event.AdditionalData.BehalfUserId { // skip myself
+				err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+					EventType: dto.EventTypeReplyAdded,
+					UserId:    *newRepliedUserId,
+					ChatId:    event.MessageCommoned.ChatId,
+					ReplyNotification: &dto.ReplyDto{
+						MessageId:        event.MessageCommoned.Id,
+						ChatId:           event.MessageCommoned.ChatId,
+						ReplyableMessage: newWithoutAnyHtml,
+					},
+					ByUserId:  behalfUserDto.Id,
+					ByLogin:   behalfUserDto.Login,
+					ByAvatar:  behalfUserDto.Avatar,
+					ChatTitle: chatNotificationTitle,
+				})
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
 			}
 		}
 	}
@@ -944,22 +946,24 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		if behalfUserDto == nil {
 			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", "user_id", event.AdditionalData.BehalfUserId)
 		} else {
-			err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
-				EventType: dto.EventTypeReplyAdded,
-				UserId:    *addedRepliedUserId,
-				ChatId:    event.MessageCommoned.ChatId,
-				ReplyNotification: &dto.ReplyDto{
-					MessageId:        event.MessageCommoned.Id,
-					ChatId:           event.MessageCommoned.ChatId,
-					ReplyableMessage: newWithoutAnyHtml,
-				},
-				ByUserId:  behalfUserDto.Id,
-				ByLogin:   behalfUserDto.Login,
-				ByAvatar:  behalfUserDto.Avatar,
-				ChatTitle: chatNotificationTitle,
-			})
-			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			if *addedRepliedUserId != event.AdditionalData.BehalfUserId { // skip myself
+				err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+					EventType: dto.EventTypeReplyAdded,
+					UserId:    *addedRepliedUserId,
+					ChatId:    event.MessageCommoned.ChatId,
+					ReplyNotification: &dto.ReplyDto{
+						MessageId:        event.MessageCommoned.Id,
+						ChatId:           event.MessageCommoned.ChatId,
+						ReplyableMessage: newWithoutAnyHtml,
+					},
+					ByUserId:  behalfUserDto.Id,
+					ByLogin:   behalfUserDto.Login,
+					ByAvatar:  behalfUserDto.Avatar,
+					ChatTitle: chatNotificationTitle,
+				})
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
 			}
 		}
 	}
