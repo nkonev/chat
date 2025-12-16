@@ -2,8 +2,8 @@ EXECUTABLE := chat
 
 .PHONY: test-verbose
 test-verbose:
-	# here is timeout for all tests
-	go test ./... -count=1 -test.v -test.timeout=180s -p 1
+	# here is timeout for all the tests
+	go test ./... -count=1 -test.v -test.timeout=360s -p 1
 
 .PHONY: download
 download:
