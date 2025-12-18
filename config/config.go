@@ -179,6 +179,18 @@ type RabbitMQConfig struct {
 	PrettyLog bool
 }
 
+type CleanChatsOfDeletedUserTask struct {
+	Enabled           bool
+	Cron              string
+	BatchChats        int32
+	BatchParticipants int32
+	Expiration        time.Duration
+}
+
+type TaskConfig struct {
+	CleanChatsOfDeletedUserTask CleanChatsOfDeletedUserTask
+}
+
 type AppConfig struct {
 	Kafka       KafkaConfig
 	Otlp        OtlpConfig
@@ -193,6 +205,7 @@ type AppConfig struct {
 	Blog        BlogConfig
 	FrontendUrl string
 	RabbitMQ    RabbitMQConfig
+	Schedulers  TaskConfig
 }
 
 //go:embed config

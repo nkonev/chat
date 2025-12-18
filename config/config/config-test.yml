@@ -107,3 +107,11 @@ rabbitmq:
   dumpTestAccumulator: true
   prettyLog: true
   dump: true
+
+schedulers:
+  cleanChatsOfDeletedUserTask:
+    enabled: true
+    cron: "0 * * * * *"
+    batchChats: 20
+    batchParticipants: 20
+    expiration: "30m"
