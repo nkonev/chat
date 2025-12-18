@@ -80,6 +80,7 @@ aaa:
     getUsers: "/internal/user/list"
     searchUsers: "/internal/user/search"
     getUserOnlines: "/internal/user/online"
+    getUserExists: "/internal/user/exist"
 
 frontendUrl: "http://localhost:8081"
 
@@ -106,3 +107,19 @@ rabbitmq:
   url: "amqp://videoChat:videoChatPazZw0rd@127.0.0.1:36672"
   prettyLog: true
   dump: true
+
+redis:
+  address: :36379
+  password: ""
+  db: 5
+  maxRetries: 10000
+
+schedulers:
+  cleanAbandonedChatsTask:
+    enabled: true
+    cron: "0 * * * * *"
+    expiration: "30m"
+  cleanDeletedUsersDataTask:
+    enabled: true
+    cron: "30 * * * * *"
+    expiration: "30m"

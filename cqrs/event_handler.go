@@ -169,17 +169,17 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 	}
 
 	if event.GetParticipantsType == GetParticipantsTypeNormal {
-		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving, adt)
+		return m.handleParticipantRemoved(ctx, event.AdditionalData, event.ParticipantIds, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving, adt, event.WereRemovedUsersFromAaa)
 	} else if event.GetParticipantsType == GetParticipantsTypeAllInChatExcepting { // delete chat
 		return m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, event.AllParticipantIdsExcepting, func(participantIdsPortion []int64) error {
-			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving, adt)
+			return m.handleParticipantRemoved(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.AdditionalData.BehalfUserId, event.IsLeaving, isChatRemoving, adt, event.WereRemovedUsersFromAaa)
 		})
 	} else {
 		return fmt.Errorf("Unknown event.GetParticipantsType = %v", event.GetParticipantsType)
 	}
 }
 
-func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isChatRemoving bool, adt dto.ChatAuthorizationData) error {
+func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isChatRemoving bool, adt dto.ChatAuthorizationData, wereRemovedUsersFromAaa bool) error {
 	userIds := participantIds
 
 	eventType := dto.EventTypeChatDeleted
@@ -267,7 +267,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 		}
 	}
 
-	errp := m.commonProjection.OnParticipantRemoved(ctx, additionalData, userIds, chatId, behalfUserId, isLeaving, isChatRemoving)
+	errp := m.commonProjection.OnParticipantRemoved(ctx, userIds, chatId, isChatRemoving, wereRemovedUsersFromAaa)
 	if errp != nil {
 		return errp
 	}

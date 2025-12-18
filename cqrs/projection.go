@@ -176,22 +176,3 @@ func (m *CommonProjection) SetXactFastForwardSequenceLock(ctx context.Context, t
 	_, err := tx.ExecContext(ctx, "select pg_advisory_xact_lock($1, $2)", lockIdKey1, lockIdKey2)
 	return err
 }
-
-func (m *CommonProjection) OnProjectionsTruncated(ctx context.Context, event *ProjectionsTruncated) error {
-	err := db.RunResetDatabase(m.db, m.cfg)
-	if err != nil {
-		return fmt.Errorf("Error during resetting: %w", err)
-	}
-
-	err = db.RunMigrations(m.db, m.cfg)
-	if err != nil {
-		return fmt.Errorf("Error during migrating: %w", err)
-	}
-
-	err = m.SetIsTruncatingCompleted(ctx)
-	if err != nil {
-		return fmt.Errorf("Error during set IsTruncatingCompleted: %w", err)
-	}
-
-	return nil
-}

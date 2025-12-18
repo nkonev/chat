@@ -135,6 +135,7 @@ type AaaUrlConfig struct {
 	Base           string
 	GetUsers       string
 	GetUserOnlines string
+	GetUserExists  string
 	SearchUsers    string
 }
 
@@ -179,6 +180,30 @@ type RabbitMQConfig struct {
 	PrettyLog bool
 }
 
+type CleanAbandonedChatsTask struct {
+	Enabled    bool
+	Cron       string
+	Expiration time.Duration
+}
+
+type CleanDeletedUsersDataTask struct {
+	Enabled    bool
+	Cron       string
+	Expiration time.Duration
+}
+
+type TaskConfig struct {
+	CleanAbandonedChatsTask   CleanAbandonedChatsTask
+	CleanDeletedUsersDataTask CleanDeletedUsersDataTask
+}
+
+type RedisConfig struct {
+	Address    string
+	Password   string
+	Db         int
+	MaxRetries int
+}
+
 type AppConfig struct {
 	Kafka       KafkaConfig
 	Otlp        OtlpConfig
@@ -193,6 +218,8 @@ type AppConfig struct {
 	Blog        BlogConfig
 	FrontendUrl string
 	RabbitMQ    RabbitMQConfig
+	Schedulers  TaskConfig
+	Redis       RedisConfig
 }
 
 //go:embed config

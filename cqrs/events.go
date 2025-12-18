@@ -98,6 +98,7 @@ type ParticipantDeleted struct {
 	ChatId                     int64               `json:"chatId"`
 	IsLeaving                  bool                `json:"isLeaving"`
 	IsChatRemoving             bool                `json:"isChatRemoving"`
+	WereRemovedUsersFromAaa    bool                `json:"wereRemovedUsersFromAaa"`
 }
 
 type ParticipantChanged struct {
@@ -284,6 +285,10 @@ type MessageReactionFlipped struct {
 	Reaction       string          `json:"reaction"`
 }
 
+type TechnicalAbandonedChatRemoved struct {
+	ChatId int64 `json:"chatId"`
+}
+
 func GenerateMessageAdditionalData(correlationId *string, behalfUserId int64) *AdditionalData {
 	return &AdditionalData{
 		CreatedAt:     time.Now().UTC(),
@@ -356,6 +361,10 @@ func (s *MessageReactionFlipped) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
+func (s *TechnicalAbandonedChatRemoved) GetPartitionKey() string {
+	return utils.ToString(s.ChatId)
+}
+
 func (s *ChatCreated) Name() string {
 	return "chatCreated"
 }
@@ -418,4 +427,8 @@ func (s *MessageDeleted) Name() string {
 
 func (s *MessageReactionFlipped) Name() string {
 	return "messageReactionFlipped"
+}
+
+func (s *TechnicalAbandonedChatRemoved) Name() string {
+	return "technicalAbandonedChatRemoved"
 }

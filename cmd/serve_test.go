@@ -16,6 +16,7 @@ import (
 	"go-cqrs-chat-example/listener"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/producer"
+	"go-cqrs-chat-example/tasks"
 	"go-cqrs-chat-example/utils"
 	"go.uber.org/fx"
 	"net/http"
@@ -3995,7 +3996,7 @@ func TestEventSendingOnUserProfileChange(t *testing.T) {
 	})
 }
 
-func TestDeleteFromDb(t *testing.T) {
+func TestDeleteLeftoversFromDb(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
@@ -4180,5 +4181,214 @@ func TestDeleteFromDb(t *testing.T) {
 		messageExists33, err := m.IsMessageExists(ctx, dba, chat3Id, message3Id)
 		require.NoError(t, err, "error in checking message")
 		assert.False(t, messageExists33)
+	})
+}
+
+func TestCleanDeletedUsersData(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		dba *db.DB,
+		aaaRestClient client.AaaRestClient,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
+		cleanService *tasks.CleanDeletedUserDataService,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+		mockAaaClient.EXPECT().CheckAreUsersExists(mock.Anything, mock.Anything).Return([]dto.UserExists{{
+			Exists: true,
+			UserId: user1,
+		}, {
+			Exists: false,
+			UserId: user2,
+		}}, nil) // not exists
+
+		const chat1Name = "new chat 1"
+		const chat2Name = "new chat 2"
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		chat2Id, err := testRestClient.CreateChat(ctx, user2, chat2Name)
+		require.NoError(t, err, "error in creating chat")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForChatExists(lgr, m, dba, chat2Id, user2, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		const messageText1 = "message 1"
+		const messageText2 = "message 2"
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, messageText1)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat1Id, message1Id, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		message2Id, err := testRestClient.CreateMessage(ctx, user2, chat2Id, messageText2)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat1Id, message2Id, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		testOutputEventsAccumulator.Clean()
+
+		cuv11before, err := m.IsChatUserViewExists(ctx, dba, chat1Id, user1)
+		require.NoError(t, err, "error in checking chat user view")
+		require.True(t, cuv11before)
+
+		cuv21before, err := m.IsChatUserViewExists(ctx, dba, chat1Id, user2)
+		require.NoError(t, err, "error in checking chat user view")
+		require.True(t, cuv21before)
+
+		cuv22before, err := m.IsChatUserViewExists(ctx, dba, chat2Id, user2)
+		require.NoError(t, err, "error in checking chat user view")
+		require.True(t, cuv22before)
+
+		cp21before, err := m.IsParticipantExists(ctx, dba, chat1Id, user2)
+		require.NoError(t, err, "error in checking chat participant")
+		require.True(t, cp21before)
+
+		cp22before, err := m.IsParticipantExists(ctx, dba, chat2Id, user2)
+		require.NoError(t, err, "error in checking chat participant")
+		require.True(t, cp22before)
+
+		urm2before, err := m.AreHasUnreadMessagesExists(ctx, dba, user2)
+		require.NoError(t, err, "error in checking unread messages")
+		require.True(t, urm2before)
+
+		// do cleanup
+		cleanService.DoJob(ctx)
+
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeChatEdited &&
+					e.UserId == user1 &&
+					e.ChatNotification.ChatViewDto.Id == chat1Id &&
+					e.ChatNotification.ChatViewDto.Title == chat1Name &&
+					len(e.ChatNotification.Participants) == 1 && // in case race condition it's going to fail
+					e.ChatNotification.Participants[0].Id == user1 &&
+					e.ChatNotification.Participants[0].Login == user1Login
+			},
+		}))
+
+		cuv11after, err := m.IsChatUserViewExists(ctx, dba, chat1Id, user1)
+		require.NoError(t, err, "error in checking chat user view")
+		require.True(t, cuv11after)
+
+		cuv21after, err := m.IsChatUserViewExists(ctx, dba, chat1Id, user2)
+		require.NoError(t, err, "error in checking chat user view")
+		require.False(t, cuv21after)
+
+		cuv22after, err := m.IsChatUserViewExists(ctx, dba, chat2Id, user2)
+		require.NoError(t, err, "error in checking chat user view")
+		require.False(t, cuv22after)
+
+		cp21after, err := m.IsParticipantExists(ctx, dba, chat1Id, user2)
+		require.NoError(t, err, "error in checking chat participant")
+		require.False(t, cp21after)
+
+		cp22after, err := m.IsParticipantExists(ctx, dba, chat2Id, user2)
+		require.NoError(t, err, "error in checking chat participant")
+		require.False(t, cp22after)
+
+		urm2after, err := m.AreHasUnreadMessagesExists(ctx, dba, user2)
+		require.NoError(t, err, "error in checking unread messages")
+		require.False(t, urm2after)
+	})
+}
+
+func TestCleanAbandonedChats(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		dba *db.DB,
+		aaaRestClient client.AaaRestClient,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
+		cleanService *tasks.CleanAnandonedChatsService,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user1Login = "admin1"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1}, nil)
+
+		const chat1Name = "new chat 1"
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		require.NoError(t, err, "error in creating chat")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		const messageText1 = "message 1"
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, messageText1)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat1Id, message1Id, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		err = m.UnsafeDeleteParticipantForTest(ctx, dba, chat1Id, user1)
+		require.NoError(t, err, "error in deleting chat")
+
+		existsC1before, err := m.IsChatExists(ctx, dba, chat1Id)
+		require.NoError(t, err, "error in checking chat common")
+		assert.True(t, existsC1before)
+
+		testOutputEventsAccumulator.Clean()
+
+		// do cleanup
+		cleanService.DoJob(ctx)
+
+		waitForChatNotExists(lgr, m, dba, chat1Id, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		existsC1after, err := m.IsChatExists(ctx, dba, chat1Id)
+		require.NoError(t, err, "error in checking existence")
+		require.False(t, existsC1after)
 	})
 }

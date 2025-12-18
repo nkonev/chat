@@ -1591,6 +1591,15 @@ func (m *EnrichingProjection) getParticipantsRead(ctx context.Context, co db.Com
 	return list, nil
 }
 
+func (m *CommonProjection) AreHasUnreadMessagesExists(ctx context.Context, co db.CommonOperations, userId int64) (bool, error) {
+	var t bool
+	err := sqlscan.Get(ctx, co, &t, "select exists(select u.* from has_unread_messages u where u.user_id = $1)", userId)
+	if err != nil {
+		return false, err
+	}
+	return t, nil
+}
+
 // see also cqrs/event_handler.go
 func (m *EnrichingProjection) parseMentionUserIdsFromMessageHtml(ctx context.Context, msg string) ([]int64, bool, bool) {
 	ret := []int64{}

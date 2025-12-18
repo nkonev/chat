@@ -831,6 +831,41 @@ func CanResendMessage(chatCanResend bool, isParticipant bool) bool {
 	return chatCanResend && isParticipant
 }
 
+func (m *CommonProjection) IterateOverAllChats(ctx context.Context, co db.CommonOperations, consumer func(chatIdsPortion []int64) error) error {
+	shouldContinue := true
+	var lastError error
+	for page := int64(0); shouldContinue; page++ {
+		offset := utils.GetOffset(page, utils.DefaultSize)
+
+		list := []int64{}
+
+		sqlArgs := []any{utils.DefaultSize, offset}
+		sqlQuery := `
+			SELECT id FROM chat_common ORDER BY id LIMIT $1 OFFSET $2
+		`
+		err := sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			lastError = err
+			break
+		}
+		if len(list) == 0 {
+			return nil
+		}
+		if len(list) < utils.DefaultSize {
+			shouldContinue = false
+		}
+
+		err = consumer(list)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			lastError = err
+			break
+		}
+	}
+	return lastError
+}
+
 func (m *CommonProjection) GetChatDataForAuthorization(ctx context.Context, co db.CommonOperations, userId, chatId int64) (dto.ChatAuthorizationData, error) {
 	d := dto.ChatAuthorizationData{}
 	err := sqlscan.Get(ctx, co, &d, `

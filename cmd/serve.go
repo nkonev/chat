@@ -14,6 +14,7 @@ import (
 	"go-cqrs-chat-example/rabbitmq"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/services"
+	"go-cqrs-chat-example/tasks"
 	"go-cqrs-chat-example/type_registry"
 	"log/slog"
 	"os"
@@ -81,6 +82,13 @@ func RunServe(args []string) {
 			listener.CreateRabbitInternalEventsListener,
 			listener.CreateRabbitAaaUserProfileUpdateListener,
 			type_registry.NewTypeRegistryInstance,
+			tasks.RedisV9,
+			tasks.RedisLocker,
+			tasks.Scheduler,
+			tasks.CleanAbandonedChatsScheduler,
+			tasks.CleanDeletedUserDataScheduler,
+			tasks.NewCleanAbandonedChatsService,
+			tasks.NewCleanDeletedUserDataService,
 		),
 		fx.Invoke(
 			db.RunMigrations,
@@ -91,6 +99,7 @@ func RunServe(args []string) {
 			kafka.WaitForAllEventsProcessed,
 			cqrs.RunSequenceFastforwarder,
 			producer.EnableOutputEvents,
+			tasks.RunScheduler,
 			handlers.RunHttpServer,
 		),
 	)

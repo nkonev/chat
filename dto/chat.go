@@ -164,3 +164,8 @@ type ChatInfoForNotification struct {
 	ChatName   string  `db:"title"`
 	ChatAvatar *string `db:"avatar"`
 }
+
+type ChatParticipant struct {
+	ChatId int64 `db:"chat_id"`
+	UserId int64 `db:"user_id"`
+}

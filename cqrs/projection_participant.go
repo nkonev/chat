@@ -90,7 +90,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	return nil
 }
 
-func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isRemoveAllParticipants bool) error {
+func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participantIds []int64, chatId int64, isRemoveAllParticipantsFromChat, wereRemovedUsersFromAaa bool) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		chatExists, err := m.checkChatExists(ctx, tx, chatId)
 		if err != nil {
@@ -102,29 +102,38 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalD
 		}
 
 		_, err = tx.ExecContext(ctx, `
-		delete from chat_participant where chat_id = $2 and user_id = any($1)
-	`, participantIds, chatId)
+			delete from chat_participant where chat_id = $2 and user_id = any($1)
+		`, participantIds, chatId)
 		if err != nil {
 			return err
 		}
 
 		_, err = tx.ExecContext(ctx, `
-		delete from chat_user_view where user_id = any($1) and id = $2
-	`, participantIds, chatId)
+			delete from chat_user_view where user_id = any($1) and id = $2
+		`, participantIds, chatId)
 		if err != nil {
 			return err
 		}
 
-		if !isRemoveAllParticipants { // an optimization for chat deletion
+		if !isRemoveAllParticipantsFromChat { // an optimization for chat deletion
 			err = m.updateViewableParticipants(ctx, tx, chatId)
 			if err != nil {
 				return err
 			}
 		}
 
-		err = m.updateHasUnreads(ctx, tx, participantIds)
-		if err != nil {
-			return err
+		if !wereRemovedUsersFromAaa {
+			err = m.updateHasUnreads(ctx, tx, participantIds)
+			if err != nil {
+				return err
+			}
+		} else {
+			_, err = tx.ExecContext(ctx, `
+				delete from has_unread_messages where user_id = any($1)
+			`, participantIds)
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -157,7 +166,7 @@ func (m *CommonProjection) updateViewableParticipants(ctx context.Context, co db
 		input_data as (
 			select 
 				(select count from chat_participant_count) as participants_count, 
-				(select array_agg(user_id) from chat_participants_last_n) as participant_ids
+				(select coalesce(array_agg(user_id), cast(array[] as bigint[])) from chat_participants_last_n) as participant_ids
 		)
 		update chat_common cc
 		SET 
@@ -196,6 +205,20 @@ func (m *CommonProjection) ParticipantsExistence(ctx context.Context, co db.Comm
 		return nil, err
 	}
 	return list, nil
+}
+
+func (m *CommonProjection) IsParticipantExists(ctx context.Context, co db.CommonOperations, chatId, userId int64) (bool, error) {
+	var t bool
+	err := sqlscan.Get(ctx, co, &t, "select exists(select cp.* from chat_participant cp where cp.user_id = $1 and cp.chat_id = $2)", userId, chatId)
+	if err != nil {
+		return false, err
+	}
+	return t, nil
+}
+
+func (m *CommonProjection) UnsafeDeleteParticipantForTest(ctx context.Context, co db.CommonOperations, chatId, userId int64) error {
+	_, err := co.ExecContext(ctx, "delete from chat_participant where chat_id = $1 and user_id = $2", chatId, userId)
+	return err
 }
 
 // output: behalfUserId:[]*dto.UserViewEnrichedDto
@@ -624,6 +647,65 @@ func (m *CommonProjection) IterateOverParticipantsChatIds(ctx context.Context, c
 	return lastError
 }
 
+func (m *CommonProjection) IterateOverAllParticipants(ctx context.Context, co db.CommonOperations, consumer func(chatParticipants []dto.ChatParticipant) error) error {
+	shouldContinue := true
+	var lastError error
+	for page := int64(0); shouldContinue; page++ {
+		offset := utils.GetOffset(page, utils.DefaultSize)
+
+		list := []dto.ChatParticipant{}
+
+		sqlArgs := []any{utils.DefaultSize, offset}
+		sqlQuery := `
+			SELECT 
+				chat_id,
+				user_id
+			FROM chat_participant
+			ORDER BY user_id, create_date_time asc
+			LIMIT $1 OFFSET $2
+		`
+		err := sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			lastError = err
+			break
+		}
+		if len(list) == 0 {
+			return nil
+		}
+		if len(list) < utils.DefaultSize {
+			shouldContinue = false
+		}
+
+		err = consumer(list)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			lastError = err
+			break
+		}
+	}
+	return lastError
+}
+
+func (m *CommonProjection) HasParticipants(ctx context.Context, co db.CommonOperations, chatIds []int64) (map[int64]bool, error) {
+	response := map[int64]bool{}
+	for _, chatId := range chatIds {
+		response[chatId] = false
+	}
+
+	lst := []int64{}
+	err := sqlscan.Select(ctx, co, &lst, "SELECT DISTINCT(chat_id) FROM chat_participant WHERE chat_id = ANY ($1)", chatIds)
+	if err != nil {
+		return response, err
+	}
+
+	for _, chatId := range lst {
+		response[chatId] = true
+	}
+
+	return response, nil
+}
+
 func (m *CommonProjection) IterateOverCoChattedParticipantIds(ctx context.Context, co db.CommonOperations, participantId int64, consumer func(participantIdsPortion []int64) error) error {
 	shouldContinue := true
 	var lastError error
@@ -944,6 +1026,10 @@ func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatI
 
 func CanRemoveParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat, isLeaving, isParticipant bool, userId int64, isChatDeleting bool) bool {
 	if isChatDeleting {
+		return true
+	}
+
+	if behalfUserId == dto.SystemUserCleaner {
 		return true
 	}
 
