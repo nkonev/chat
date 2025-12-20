@@ -45,57 +45,57 @@ func (srv *CleanChatsOfDeletedUserService) doJob(ctx context.Context) {
 }
 
 func (srv *CleanChatsOfDeletedUserService) processChats(c context.Context) {
-	srv.lgr.WithTracing(c).Infof("Starting cleaning chats of deleted user job")
+	srv.lgr.InfoContext(c, "Starting cleaning chats of deleted user job")
 
-	err := db.Transact(c, srv.dbR, func(tx *db.Tx) error {
+	errOuter := db.Transact(c, srv.dbR, func(tx *db.Tx) error {
 		return tx.IterateOverAllParticipantIds(c, func(participantIds []int64) error {
 			existResponse, err := srv.restClient.CheckAreUsersExists(c, participantIds)
 			if err != nil {
-				srv.lgr.WithTracing(c).Errorf("Got error getting existResponse %v", err)
+				srv.lgr.ErrorContext(c, "Got error getting existResponse", "err", err)
 				return nil
 			}
 			if existResponse == nil {
-				srv.lgr.WithTracing(c).Errorf("Got null getting existResponse %v", err)
+				srv.lgr.ErrorContext(c, "Got null getting existResponse", "err", err)
 				return nil
 			}
 
 			for _, userExists := range *existResponse {
 				if !userExists.Exists {
 					// remove message_read
-					srv.lgr.WithTracing(c).Infof("Deleteing message read for user %v", userExists.UserId)
+					srv.lgr.InfoContext(c, "Deleting message read for user", "user_id", userExists.UserId)
 					err = tx.DeleteAllMessageRead(c, userExists.UserId)
 					if err != nil {
-						srv.lgr.WithTracing(c).Errorf("Got error DeleteMessageRead %v", err)
+						srv.lgr.ErrorContext(c, "Got error delete message read", "err", err)
 					}
 					// remove from chat_participants
-					srv.lgr.WithTracing(c).Infof("Deleteing patricipance for user %v", userExists.UserId)
+					srv.lgr.InfoContext(c, "Deleting participance for user", "user_id", userExists.UserId)
 					err = tx.DeleteUserAsAParticipantFromAllChats(c, userExists.UserId)
 					if err != nil {
-						srv.lgr.WithTracing(c).Errorf("Got error DeleteMessageRead %v", err)
+						srv.lgr.ErrorContext(c, "Got error delete participance", "err", err)
 					}
-					srv.lgr.WithTracing(c).Infof("Deleteing pinned chats for user %v", userExists.UserId)
+					srv.lgr.InfoContext(c, "Deleting pinned chats for user", "user_id", userExists.UserId)
 					err = tx.DeleteChatsPinned(c, userExists.UserId)
 					if err != nil {
-						srv.lgr.WithTracing(c).Errorf("Got error DeleteChatsPinned %v", err)
+						srv.lgr.ErrorContext(c, "Got error delete chat pinned", "err", err)
 					}
-					srv.lgr.WithTracing(c).Infof("Deleteing notification settings for user %v", userExists.UserId)
+					srv.lgr.WithTracing(c).Infof("Deleting notification settings for user", "user_id", userExists.UserId)
 					err = tx.DeleteAllChatParticipantNotification(c, userExists.UserId)
 					if err != nil {
-						srv.lgr.WithTracing(c).Errorf("Got error DeleteMessageRead %v", err)
+						srv.lgr.ErrorContext(c, "Got error delete notification settings", "err", err)
 					}
 				}
 			}
 			return nil
 		})
 	})
-	if err != nil {
-		srv.lgr.WithTracing(c).Errorf("Got error during remove an user leftovers %v", err)
+	if errOuter != nil {
+		srv.lgr.ErrorContext(c, "Got error during remove an user leftovers", "err", errOuter)
 	}
 
 	// batch by chats // ... order by id
 	var hasMoreChats = true
-	for chatPage := 0; hasMoreChats; chatPage++ {
-		err := db.Transact(c, srv.dbR, func(tx *db.Tx) error {
+	for chatPage := int64(0); hasMoreChats; chatPage++ {
+		errOuter = db.Transact(c, srv.dbR, func(tx *db.Tx) error {
 			chatIds, err := tx.GetChatIds(c, utils.DefaultSize, utils.GetOffset(chatPage, utils.DefaultSize))
 			if err != nil {
 				return err
@@ -104,7 +104,7 @@ func (srv *CleanChatsOfDeletedUserService) processChats(c context.Context) {
 
 			hasParticipantsMap, err := tx.HasParticipants(c, chatIds)
 			if err != nil {
-				srv.lgr.WithTracing(c).Errorf("Got error HasParticipants %v", err)
+				srv.lgr.ErrorContext(c, "Got error HasParticipants", "err", err)
 				return nil
 			}
 
@@ -112,23 +112,23 @@ func (srv *CleanChatsOfDeletedUserService) processChats(c context.Context) {
 				// if chat has 0 participants - then remove chat
 				hasParticipants := hasParticipantsMap[chatId]
 				if !hasParticipants {
-					srv.lgr.WithTracing(c).Infof("Deleteing chat %v because it does not have participants", chatId)
+					srv.lgr.InfoContext(c, "Deleting chat because it does not have participants", "chat_id", chatId)
 					err = tx.DeleteChat(c, chatId)
 					if err != nil {
-						srv.lgr.WithTracing(c).Errorf("Got error DeleteChat %v", err)
+						srv.lgr.ErrorContext(c, "Got error DeleteChat", "err", err)
 						continue
 					}
 				}
 			}
 			return nil
 		})
-		if err != nil {
-			srv.lgr.WithTracing(c).Errorf("Got error in the portion, chatPage %v, error %v", chatPage, err)
+		if errOuter != nil {
+			srv.lgr.ErrorContext(c, "Got error in the portion", "page", chatPage, "err", errOuter)
 		}
 
 	}
 
-	srv.lgr.WithTracing(c).Infof("End of cleaning chats of deleted user job")
+	srv.lgr.InfoContext(c, "End of cleaning chats of deleted user job")
 }
 
 func (srv *CleanChatsOfDeletedUserService) spanStarter(ctx context.Context) (context.Context, any) {
