@@ -1336,7 +1336,7 @@ func TestReplyMessage(t *testing.T) {
 	})
 }
 
-func TestMentionEditMessage(t *testing.T) {
+func TestMentionNotification(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
@@ -1392,187 +1392,139 @@ func TestMentionEditMessage(t *testing.T) {
 		chat1OfUser2 := user2ChatsNew[0]
 		assert.Equal(t, chat1Name, chat1OfUser2.Title)
 
-		const message1Text = "Just say hello"
+		t.Run("edit_message", func(t *testing.T) {
+			const message1Text = "Just say hello"
 
-		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
-		require.NoError(t, err, "error in creating message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+			message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+			require.NoError(t, err, "error in creating message")
+			require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		testOutputEventsAccumulator.Clean()
-		testNotificationEventsAccumulator.Clean()
+			t.Run("add_mention", func(t *testing.T) {
+				testOutputEventsAccumulator.Clean()
+				testNotificationEventsAccumulator.Clean()
 
-		// edit and add the mention
-		var message1TextNew = fmt.Sprintf(`<p>Hello <a href="/user/%d" data-type="mention" class="mention" data-id="%d" data-label="%s" data-mention-suggestion-char="@">@%s</a> </p>`, user2, user2, user2Login, user2Login)
+				// edit and add the mention
+				var message1TextNew = fmt.Sprintf(`<p>Hello <a href="/user/%d" data-type="mention" class="mention" data-id="%d" data-label="%s" data-mention-suggestion-char="@">@%s</a> </p>`, user2, user2, user2Login, user2Login)
 
-		err = testRestClient.EditMessage(ctx, user1, chat1Id, message1Id, message1TextNew)
-		require.NoError(t, err, "error in resending message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+				err = testRestClient.EditMessage(ctx, user1, chat1Id, message1Id, message1TextNew)
+				require.NoError(t, err, "error in resending message")
+				require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == dto.EventTypeMessageEdited &&
-					e.UserId == user2 &&
-					e.ChatId == chat1Id &&
-					e.MessageNotification.Id == message1Id &&
-					strings.Contains(e.MessageNotification.Content, "Hello") && strings.Contains(e.MessageNotification.Content, "@"+user2Login) &&
-					e.MessageNotification.Owner.Id == user1 &&
-					e.MessageNotification.Owner.Login == user1Login
-			},
-		}))
+				require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+					func(ee any) bool {
+						e, ok := ee.(*dto.ChatEvent)
+						return ok && e.EventType == dto.EventTypeMessageEdited &&
+							e.UserId == user2 &&
+							e.ChatId == chat1Id &&
+							e.MessageNotification.Id == message1Id &&
+							strings.Contains(e.MessageNotification.Content, "Hello") && strings.Contains(e.MessageNotification.Content, "@"+user2Login) &&
+							e.MessageNotification.Owner.Id == user1 &&
+							e.MessageNotification.Owner.Login == user1Login
+					},
+				}))
 
-		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.NotificationEvent)
-				return ok && e.EventType == dto.EventTypeMentionAdded &&
-					e.UserId == user2 &&
-					e.ChatId == chat1Id &&
-					e.MentionNotification.Id == message1Id &&
-					strings.Contains(e.MentionNotification.Text, "Hello") && strings.Contains(e.MentionNotification.Text, "@"+user2Login)
-			},
-		}))
+				require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+					func(ee any) bool {
+						e, ok := ee.(*dto.NotificationEvent)
+						return ok && e.EventType == dto.EventTypeMentionAdded &&
+							e.UserId == user2 &&
+							e.ChatId == chat1Id &&
+							e.MentionNotification.Id == message1Id &&
+							strings.Contains(e.MentionNotification.Text, "Hello") && strings.Contains(e.MentionNotification.Text, "@"+user2Login)
+					},
+				}))
+			})
 
-		testOutputEventsAccumulator.Clean()
-		testNotificationEventsAccumulator.Clean()
+			t.Run("remove_mention", func(t *testing.T) {
+				testOutputEventsAccumulator.Clean()
+				testNotificationEventsAccumulator.Clean()
 
-		// edit and remove the mention
-		err = testRestClient.EditMessage(ctx, user1, chat1Id, message1Id, message1Text)
-		require.NoError(t, err, "error in resending message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+				// edit and remove the mention
+				err = testRestClient.EditMessage(ctx, user1, chat1Id, message1Id, message1Text)
+				require.NoError(t, err, "error in resending message")
+				require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == dto.EventTypeMessageEdited &&
-					e.UserId == user2 &&
-					e.ChatId == chat1Id &&
-					e.MessageNotification.Id == message1Id &&
-					e.MessageNotification.Content == message1Text &&
-					e.MessageNotification.Owner.Id == user1 &&
-					e.MessageNotification.Owner.Login == user1Login
-			},
-		}))
+				require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+					func(ee any) bool {
+						e, ok := ee.(*dto.ChatEvent)
+						return ok && e.EventType == dto.EventTypeMessageEdited &&
+							e.UserId == user2 &&
+							e.ChatId == chat1Id &&
+							e.MessageNotification.Id == message1Id &&
+							e.MessageNotification.Content == message1Text &&
+							e.MessageNotification.Owner.Id == user1 &&
+							e.MessageNotification.Owner.Login == user1Login
+					},
+				}))
 
-		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.NotificationEvent)
-				return ok && e.EventType == dto.EventTypeMentionDeleted &&
-					e.UserId == user2 &&
-					e.ChatId == chat1Id &&
-					e.MentionNotification.Id == message1Id
-			},
-		}))
+				require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+					func(ee any) bool {
+						e, ok := ee.(*dto.NotificationEvent)
+						return ok && e.EventType == dto.EventTypeMentionDeleted &&
+							e.UserId == user2 &&
+							e.ChatId == chat1Id &&
+							e.MentionNotification.Id == message1Id
+					},
+				}))
+			})
+		})
+
+		t.Run("read_message", func(t *testing.T) {
+			testOutputEventsAccumulator.Clean()
+			testNotificationEventsAccumulator.Clean()
+
+			var message2Text = fmt.Sprintf(`<p>Hello <a href="/user/%d" data-type="mention" class="mention" data-id="%d" data-label="%s" data-mention-suggestion-char="@">@%s</a> </p>`, user2, user2, user2Login, user2Login)
+
+			message2Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text)
+			require.NoError(t, err, "error in creating message")
+			require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+			require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypeMessageCreated &&
+						e.UserId == user2 &&
+						e.ChatId == chat1Id &&
+						e.MessageNotification.Id == message2Id &&
+						strings.Contains(e.MessageNotification.Content, "Hello") && strings.Contains(e.MessageNotification.Content, "@"+user2Login) &&
+						e.MessageNotification.Owner.Id == user1 &&
+						e.MessageNotification.Owner.Login == user1Login
+				},
+			}))
+
+			require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.NotificationEvent)
+					return ok && e.EventType == dto.EventTypeMentionAdded &&
+						e.UserId == user2 &&
+						e.ChatId == chat1Id &&
+						e.MentionNotification.Id == message2Id &&
+						strings.Contains(e.MentionNotification.Text, "Hello") && strings.Contains(e.MentionNotification.Text, "@"+user2Login)
+				},
+			}))
+
+			testOutputEventsAccumulator.Clean()
+			testNotificationEventsAccumulator.Clean()
+
+			// read the message
+			err = testRestClient.ReadMessage(ctx, user2, chat1Id, message2Id)
+			require.NoError(t, err, "error in reading message")
+			require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+			require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.NotificationEvent)
+					return ok && e.EventType == dto.EventTypeMentionDeleted &&
+						e.UserId == user2 &&
+						e.ChatId == chat1Id &&
+						e.MentionNotification.Id == message2Id
+				},
+			}))
+		})
 	})
 }
 
-func TestMentionCreateAndReadMessage(t *testing.T) {
-	startAppFull(t, func(
-		lgr *logger.LoggerWrapper,
-		cfg *config.AppConfig,
-		testRestClient *client.TestRestClient,
-		saramaClient sarama.Client,
-		m *cqrs.CommonProjection,
-		aaaRestClient client.AaaRestClient,
-		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
-		testNotificationEventsAccumulator *listener.TestNotificationEventAccumulator,
-		lc fx.Lifecycle,
-	) {
-		const user1 int64 = 1
-		const user2 int64 = 2
-		const user1Login = "admin1"
-		const user2Login = "admin2"
-
-		mockUser1 := dto.User{
-			Id:               user1,
-			Login:            user1Login,
-			Avatar:           nil,
-			ShortInfo:        nil,
-			LoginColor:       nil,
-			LastSeenDateTime: nil,
-			AdditionalData:   nil,
-		}
-
-		mockUser2 := dto.User{
-			Id:               user2,
-			Login:            user2Login,
-			Avatar:           nil,
-			ShortInfo:        nil,
-			LoginColor:       nil,
-			LastSeenDateTime: nil,
-			AdditionalData:   nil,
-		}
-
-		const chat1Name = "new chat 1"
-
-		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
-		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
-
-		ctx := context.Background()
-
-		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
-		require.NoError(t, err, "error in creating chat")
-		assert.True(t, chat1Id > 0)
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
-		// assert user 2 sees chat 1
-		user2ChatsNew, _, err := testRestClient.GetChats(ctx, user2)
-		require.NoError(t, err, "error in getting chats")
-		assert.Equal(t, 1, len(user2ChatsNew))
-		chat1OfUser2 := user2ChatsNew[0]
-		assert.Equal(t, chat1Name, chat1OfUser2.Title)
-
-		var message1Text = fmt.Sprintf(`<p>Hello <a href="/user/%d" data-type="mention" class="mention" data-id="%d" data-label="%s" data-mention-suggestion-char="@">@%s</a> </p>`, user2, user2, user2Login, user2Login)
-
-		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
-		require.NoError(t, err, "error in creating message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
-		// assert there is message edit with the new embed content
-		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == dto.EventTypeMessageCreated &&
-					e.UserId == user2 &&
-					e.ChatId == chat1Id &&
-					e.MessageNotification.Id == message1Id &&
-					strings.Contains(e.MessageNotification.Content, "Hello") && strings.Contains(e.MessageNotification.Content, "@"+user2Login) &&
-					e.MessageNotification.Owner.Id == user1 &&
-					e.MessageNotification.Owner.Login == user1Login
-			},
-		}))
-
-		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.NotificationEvent)
-				return ok && e.EventType == dto.EventTypeMentionAdded &&
-					e.UserId == user2 &&
-					e.ChatId == chat1Id &&
-					e.MentionNotification.Id == message1Id &&
-					strings.Contains(e.MentionNotification.Text, "Hello") && strings.Contains(e.MentionNotification.Text, "@"+user2Login)
-			},
-		}))
-
-		testOutputEventsAccumulator.Clean()
-		testNotificationEventsAccumulator.Clean()
-
-		// read the message
-		err = testRestClient.ReadMessage(ctx, user2, chat1Id, message1Id)
-		require.NoError(t, err, "error in reading message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
-		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.NotificationEvent)
-				return ok && e.EventType == dto.EventTypeMentionDeleted &&
-					e.UserId == user2 &&
-					e.ChatId == chat1Id &&
-					e.MentionNotification.Id == message1Id
-			},
-		}))
-	})
-}
-
-func TestReplyEditAndReadMessage(t *testing.T) {
+func TestReplyNotification(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
@@ -1632,46 +1584,49 @@ func TestReplyEditAndReadMessage(t *testing.T) {
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		testOutputEventsAccumulator.Clean()
-		testNotificationEventsAccumulator.Clean()
+		t.Run("edit_message", func(t *testing.T) {
+			testOutputEventsAccumulator.Clean()
+			testNotificationEventsAccumulator.Clean()
 
-		const message2TextNew = "It is a reply new2"
-		err = testRestClient.EditMessage(ctx, user2, chat1Id, message2Id, message2TextNew, client.NewMessageCreateOptionReply(message1Id))
-		require.NoError(t, err, "error in resending message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+			const message2TextNew = "It is a reply new2"
+			err = testRestClient.EditMessage(ctx, user2, chat1Id, message2Id, message2TextNew, client.NewMessageCreateOptionReply(message1Id))
+			require.NoError(t, err, "error in resending message")
+			require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.NotificationEvent)
-				return ok && e.EventType == dto.EventTypeReplyAdded &&
-					e.UserId == user1 &&
-					e.ChatId == chat1Id &&
-					e.ReplyNotification.MessageId == message2Id &&
-					e.ReplyNotification.ReplyableMessage == message2TextNew
-			},
-		}))
+			require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.NotificationEvent)
+					return ok && e.EventType == dto.EventTypeReplyAdded &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.ReplyNotification.MessageId == message2Id &&
+						e.ReplyNotification.ReplyableMessage == message2TextNew
+				},
+			}))
+		})
 
-		testOutputEventsAccumulator.Clean()
-		testNotificationEventsAccumulator.Clean()
+		t.Run("read_message", func(t *testing.T) {
+			testOutputEventsAccumulator.Clean()
+			testNotificationEventsAccumulator.Clean()
 
-		// read the message
-		err = testRestClient.ReadMessage(ctx, user1, chat1Id, message2Id)
-		require.NoError(t, err, "error in reading message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+			err = testRestClient.ReadMessage(ctx, user1, chat1Id, message2Id)
+			require.NoError(t, err, "error in reading message")
+			require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.NotificationEvent)
-				return ok && e.EventType == dto.EventTypeReplyDeleted &&
-					e.UserId == user1 &&
-					e.ChatId == chat1Id &&
-					e.ReplyNotification.MessageId == message2Id
-			},
-		}))
+			require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.NotificationEvent)
+					return ok && e.EventType == dto.EventTypeReplyDeleted &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.ReplyNotification.MessageId == message2Id
+				},
+			}))
+		})
 	})
 }
 
-func TestReplyEditAndReactionMessage(t *testing.T) {
+func TestReactionNotification(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
@@ -1726,50 +1681,54 @@ func TestReplyEditAndReactionMessage(t *testing.T) {
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		testOutputEventsAccumulator.Clean()
-		testNotificationEventsAccumulator.Clean()
-
 		const reaction = "😀"
 
-		// user adds the reaction
-		err = testRestClient.Reaction(ctx, user2, chat1Id, message1Id, reaction)
-		require.NoError(t, err, "error in reacting on message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		t.Run("reaction_add", func(t *testing.T) {
+			testOutputEventsAccumulator.Clean()
+			testNotificationEventsAccumulator.Clean()
 
-		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.NotificationEvent)
-				return ok && e.EventType == dto.EventTypeReactionAdded &&
-					e.UserId == user1 &&
-					e.ChatId == chat1Id &&
-					e.ReactionEvent.Reaction == reaction &&
-					e.ReactionEvent.MessageId == message1Id &&
-					e.ReactionEvent.UserId == user2
-			},
-		}))
+			// user adds the reaction
+			err = testRestClient.Reaction(ctx, user2, chat1Id, message1Id, reaction)
+			require.NoError(t, err, "error in reacting on message")
+			require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		testOutputEventsAccumulator.Clean()
-		testNotificationEventsAccumulator.Clean()
+			require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.NotificationEvent)
+					return ok && e.EventType == dto.EventTypeReactionAdded &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.ReactionEvent.Reaction == reaction &&
+						e.ReactionEvent.MessageId == message1Id &&
+						e.ReactionEvent.UserId == user2
+				},
+			}))
+		})
 
-		// read the message
-		err = testRestClient.ReadMessage(ctx, user1, chat1Id, message1Id)
-		require.NoError(t, err, "error in reading message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		t.Run("read_message", func(t *testing.T) {
+			testOutputEventsAccumulator.Clean()
+			testNotificationEventsAccumulator.Clean()
 
-		require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.NotificationEvent)
-				return ok && e.EventType == dto.EventTypeReactionDeleted &&
-					e.UserId == user1 &&
-					e.ChatId == chat1Id &&
-					e.ReactionEvent.Reaction == reaction &&
-					e.ReactionEvent.MessageId == message1Id
-			},
-		}))
+			// read the message
+			err = testRestClient.ReadMessage(ctx, user1, chat1Id, message1Id)
+			require.NoError(t, err, "error in reading message")
+			require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+			require.NoError(t, testNotificationEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.NotificationEvent)
+					return ok && e.EventType == dto.EventTypeReactionDeleted &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.ReactionEvent.Reaction == reaction &&
+						e.ReactionEvent.MessageId == message1Id
+				},
+			}))
+		})
 	})
 }
 
-func TestMessageCreateAndReadInBrowserNotification(t *testing.T) {
+func TestBrowserNotification(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
@@ -1818,58 +1777,63 @@ func TestMessageCreateAndReadInBrowserNotification(t *testing.T) {
 		assert.True(t, chat1Id > 0)
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-		const message1Text = "Hi there"
+		var message1Id int64
 
-		testOutputEventsAccumulator.Clean()
-		testNotificationEventsAccumulator.Clean()
+		t.Run("message_create", func(t *testing.T) {
+			const message1Text = "Hi there"
 
-		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
-		require.NoError(t, err, "error in creating message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+			testOutputEventsAccumulator.Clean()
+			testNotificationEventsAccumulator.Clean()
 
-		// assert there is message edit with the new embed content
-		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.ChatEvent)
-				return ok && e.EventType == dto.EventTypeMessageCreated &&
-					e.UserId == user2 &&
-					e.ChatId == chat1Id &&
-					e.MessageNotification.Id == message1Id &&
-					e.MessageNotification.Content == message1Text &&
-					e.MessageNotification.Owner.Id == user1 &&
-					e.MessageNotification.Owner.Login == user1Login
-			},
+			message1Id, err = testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+			require.NoError(t, err, "error in creating message")
+			require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
-			func(ee any) bool {
-				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == dto.EventTypeMessageBrowserNotificationAdd &&
-					e.UserId == user2 &&
-					e.BrowserNotification.ChatId == chat1Id &&
-					e.BrowserNotification.ChatName == chat1Name &&
-					e.BrowserNotification.MessageId == message1Id &&
-					e.BrowserNotification.MessageText == message1Text &&
-					e.BrowserNotification.OwnerId == user1 &&
-					e.BrowserNotification.OwnerLogin == user1Login
-			},
-		}))
+			require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypeMessageCreated &&
+						e.UserId == user2 &&
+						e.ChatId == chat1Id &&
+						e.MessageNotification.Id == message1Id &&
+						e.MessageNotification.Content == message1Text &&
+						e.MessageNotification.Owner.Id == user1 &&
+						e.MessageNotification.Owner.Login == user1Login
+				},
 
-		testOutputEventsAccumulator.Clean()
-		testNotificationEventsAccumulator.Clean()
+				func(ee any) bool {
+					e, ok := ee.(*dto.GlobalUserEvent)
+					return ok && e.EventType == dto.EventTypeMessageBrowserNotificationAdd &&
+						e.UserId == user2 &&
+						e.BrowserNotification.ChatId == chat1Id &&
+						e.BrowserNotification.ChatName == chat1Name &&
+						e.BrowserNotification.MessageId == message1Id &&
+						e.BrowserNotification.MessageText == message1Text &&
+						e.BrowserNotification.OwnerId == user1 &&
+						e.BrowserNotification.OwnerLogin == user1Login
+				},
+			}))
+		})
 
-		// read the message
-		err = testRestClient.ReadMessage(ctx, user2, chat1Id, message1Id)
-		require.NoError(t, err, "error in reading message")
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		t.Run("message_read", func(t *testing.T) {
+			testOutputEventsAccumulator.Clean()
+			testNotificationEventsAccumulator.Clean()
 
-		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
-			func(ee any) bool {
-				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == dto.EventTypeMessageBrowserNotificationDelete &&
-					e.UserId == user2 &&
-					e.BrowserNotification.ChatId == chat1Id &&
-					e.BrowserNotification.MessageId == message1Id
-			},
-		}))
+			// read the message
+			err = testRestClient.ReadMessage(ctx, user2, chat1Id, message1Id)
+			require.NoError(t, err, "error in reading message")
+			require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+			require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, true, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.GlobalUserEvent)
+					return ok && e.EventType == dto.EventTypeMessageBrowserNotificationDelete &&
+						e.UserId == user2 &&
+						e.BrowserNotification.ChatId == chat1Id &&
+						e.BrowserNotification.MessageId == message1Id
+				},
+			}))
+		})
 	})
 }
 
