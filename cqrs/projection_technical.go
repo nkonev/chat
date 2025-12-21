@@ -25,14 +25,6 @@ func (m *CommonProjection) OnTechnicalProjectionsTruncated(ctx context.Context, 
 	return nil
 }
 
-func (m *CommonProjection) OnTechnicalContentOfDeletedUserRemoved(ctx context.Context, event *TechnicalContentOfDeletedUserRemoved) error {
-	// TODO remove message_read
-	// remove from chat_participants
-	// remove pinned chats
-	// remove notification_settings
-	return nil
-}
-
 func (m *CommonProjection) OnTechnicalAbandonedChatRemoved(ctx context.Context, event *TechnicalAbandonedChatRemoved) error {
 	has, err := m.HasParticipants(ctx, m.db, []int64{event.ChatId})
 	if err != nil {

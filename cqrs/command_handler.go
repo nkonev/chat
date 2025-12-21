@@ -1199,7 +1199,32 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInter
 }
 
 func (s *TechnicalRemoveContentOfDeletedUser) Handle(ctx context.Context, eventBus EventBusInterface) error {
-	return eventBus.Publish(ctx, &TechnicalContentOfDeletedUserRemoved{UserId: s.UserId, ChatId: s.ChatId})
+	pa := &ParticipantDeleted{
+		AdditionalData:          GenerateMessageAdditionalData(nil, dto.SystemUserCleaner),
+		ParticipantIds:          []int64{s.UserId},
+		GetParticipantsType:     GetParticipantsTypeNormal,
+		ChatId:                  s.ChatId,
+		WereRemovedUsersFromAaa: true,
+	}
+	err := eventBus.Publish(ctx, pa)
+	if err != nil {
+		return err
+	}
+
+	ui := &ChatViewRefreshed{
+		AdditionalData:             GenerateMessageAdditionalData(nil, dto.SystemUserCleaner),
+		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
+		AllParticipantIdsExcepting: []int64{s.UserId},
+		ChatId:                     s.ChatId,
+		ChatAction:                 ChatActionRefresh,
+	}
+
+	errInner := eventBus.Publish(ctx, ui)
+	if errInner != nil {
+		return errInner
+	}
+
+	return nil
 }
 
 func (s *TechnicalRemoveAbandonedChat) Handle(ctx context.Context, eventBus EventBusInterface) error {

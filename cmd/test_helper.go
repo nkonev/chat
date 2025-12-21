@@ -16,6 +16,7 @@ import (
 	"go-cqrs-chat-example/rabbitmq"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/services"
+	"go-cqrs-chat-example/tasks"
 	"go-cqrs-chat-example/type_registry"
 	"log/slog"
 	"os"
@@ -136,6 +137,7 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 			listener.CreateRabbitInternalEventsListener,
 			listener.CreateRabbitAaaUserProfileUpdateListener,
 			type_registry.NewTypeRegistryInstance,
+			tasks.NewCleanChatsOfDeletedUserService,
 		),
 		fx.Invoke(
 			cqrs.RunCqrsRouter,

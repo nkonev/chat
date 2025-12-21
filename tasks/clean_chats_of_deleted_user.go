@@ -29,7 +29,7 @@ func CleanChatsOfDeletedUserScheduler(
 	lgr.Info("Created CleanChatsOfDeletedUserScheduler with cron", "cron", str, dcron.SlogKeyTaskName, CleanChatsOfDeletedUserSchedulerKey)
 
 	job := dcron.NewJob(CleanChatsOfDeletedUserSchedulerKey, str, func(ctx context.Context) error {
-		service.doJob(ctx)
+		service.DoJob(ctx)
 		return nil
 	}, dcron.WithTracing(service.spanStarter, service.spanFinisher))
 
@@ -45,7 +45,7 @@ type CleanChatsOfDeletedUserService struct {
 	co         *cqrs.CommonProjection
 }
 
-func (srv *CleanChatsOfDeletedUserService) doJob(ctx context.Context) {
+func (srv *CleanChatsOfDeletedUserService) DoJob(ctx context.Context) {
 	srv.processChats(ctx)
 }
 
@@ -78,7 +78,8 @@ func (srv *CleanChatsOfDeletedUserService) processChats(c context.Context) {
 			}
 
 			if !ue.Exists {
-				cmd := cqrs.TechnicalRemoveContentOfDeletedUser{
+				srv.lgr.InfoContext(c, "Deleting participant because it does not exists in aaa", "user_id", ue.UserId)
+				cmd := cqrs.TechnicalRemoveContentOfDeletedUser{ // ~ DeleteParticipant
 					UserId: cp.UserId,
 					ChatId: cp.ChatId,
 				}

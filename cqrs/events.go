@@ -98,6 +98,7 @@ type ParticipantDeleted struct {
 	ChatId                     int64               `json:"chatId"`
 	IsLeaving                  bool                `json:"isLeaving"`
 	IsChatRemoving             bool                `json:"isChatRemoving"`
+	WereRemovedUsersFromAaa    bool                `json:"wereRemovedUsersFromAaa"`
 }
 
 type ParticipantChanged struct {
@@ -284,11 +285,6 @@ type MessageReactionFlipped struct {
 	Reaction       string          `json:"reaction"`
 }
 
-type TechnicalContentOfDeletedUserRemoved struct {
-	UserId int64 `json:"userId"`
-	ChatId int64 `json:"chatId"`
-}
-
 type TechnicalAbandonedChatRemoved struct {
 	ChatId int64 `json:"chatId"`
 }
@@ -365,10 +361,6 @@ func (s *MessageReactionFlipped) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
-func (s *TechnicalContentOfDeletedUserRemoved) GetPartitionKey() string {
-	return utils.ToString(s.ChatId)
-}
-
 func (s *TechnicalAbandonedChatRemoved) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
@@ -435,10 +427,6 @@ func (s *MessageDeleted) Name() string {
 
 func (s *MessageReactionFlipped) Name() string {
 	return "messageReactionFlipped"
-}
-
-func (s *TechnicalContentOfDeletedUserRemoved) Name() string {
-	return "technicalContentOfDeletedUserRemoved"
 }
 
 func (s *TechnicalAbandonedChatRemoved) Name() string {

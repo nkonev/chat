@@ -90,7 +90,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	return nil
 }
 
-func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, behalfUserId int64, isLeaving bool, isRemoveAllParticipants bool) error {
+func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participantIds []int64, chatId int64, isRemoveAllParticipantsFromChat, wereRemovedUsersFromAaa bool) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		chatExists, err := m.checkChatExists(ctx, tx, chatId)
 		if err != nil {
@@ -102,29 +102,38 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, additionalD
 		}
 
 		_, err = tx.ExecContext(ctx, `
-		delete from chat_participant where chat_id = $2 and user_id = any($1)
-	`, participantIds, chatId)
+			delete from chat_participant where chat_id = $2 and user_id = any($1)
+		`, participantIds, chatId)
 		if err != nil {
 			return err
 		}
 
 		_, err = tx.ExecContext(ctx, `
-		delete from chat_user_view where user_id = any($1) and id = $2
-	`, participantIds, chatId)
+			delete from chat_user_view where user_id = any($1) and id = $2
+		`, participantIds, chatId)
 		if err != nil {
 			return err
 		}
 
-		if !isRemoveAllParticipants { // an optimization for chat deletion
+		if !isRemoveAllParticipantsFromChat { // an optimization for chat deletion
 			err = m.updateViewableParticipants(ctx, tx, chatId)
 			if err != nil {
 				return err
 			}
 		}
 
-		err = m.updateHasUnreads(ctx, tx, participantIds)
-		if err != nil {
-			return err
+		if !wereRemovedUsersFromAaa {
+			err = m.updateHasUnreads(ctx, tx, participantIds)
+			if err != nil {
+				return err
+			}
+		} else {
+			_, err = tx.ExecContext(ctx, `
+				delete from has_unread_messages where user_id = any($1)
+			`, participantIds)
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -196,6 +205,15 @@ func (m *CommonProjection) ParticipantsExistence(ctx context.Context, co db.Comm
 		return nil, err
 	}
 	return list, nil
+}
+
+func (m *CommonProjection) IsParticipantExists(ctx context.Context, co db.CommonOperations, chatId, userId int64) (bool, error) {
+	var t bool
+	err := sqlscan.Get(ctx, co, &t, "select exists(select cp.* from chat_participant cp where cp.user_id = $1 and cp.chat_id = $2)", userId, chatId)
+	if err != nil {
+		return false, err
+	}
+	return t, nil
 }
 
 // output: behalfUserId:[]*dto.UserViewEnrichedDto
@@ -1003,6 +1021,10 @@ func CanAddParticipant(admin, tetATet, isJoining, chatIsAvailableToSearch, chatI
 
 func CanRemoveParticipant(behalfUserId int64, behalfIsChatAdmin bool, isTetATetChat, isLeaving, isParticipant bool, userId int64, isChatDeleting bool) bool {
 	if isChatDeleting {
+		return true
+	}
+
+	if behalfUserId == dto.SystemUserCleaner {
 		return true
 	}
 

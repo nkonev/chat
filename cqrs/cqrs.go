@@ -261,7 +261,6 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageRemoved),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageReactionFlipped),
 		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalProjectionsTruncated),
-		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalContentOfDeletedUserRemoved),
 		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalAbandonedChatRemoved),
 	)
 	if err != nil {

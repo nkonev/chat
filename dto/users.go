@@ -13,6 +13,8 @@ const HereUsersLogin = "here"
 
 const ROLE_ADMIN = "ROLE_ADMIN"
 
+const SystemUserCleaner = -1000
+
 type User struct {
 	Id               int64           `json:"id"`
 	Login            string          `json:"login"`
