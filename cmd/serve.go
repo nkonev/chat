@@ -85,8 +85,10 @@ func RunServe(args []string) {
 			tasks.RedisV9,
 			tasks.RedisLocker,
 			tasks.Scheduler,
-			tasks.CleanChatsOfDeletedUserScheduler,
-			tasks.NewCleanChatsOfDeletedUserService,
+			tasks.CleanAbandonedChatsScheduler,
+			tasks.CleanDeletedUserDataScheduler,
+			tasks.NewCleanAbandonedChatsService,
+			tasks.NewCleanDeletedUserDataService,
 		),
 		fx.Invoke(
 			db.RunMigrations,

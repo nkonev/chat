@@ -216,6 +216,11 @@ func (m *CommonProjection) IsParticipantExists(ctx context.Context, co db.Common
 	return t, nil
 }
 
+func (m *CommonProjection) UnsafeDeleteParticipantForTest(ctx context.Context, co db.CommonOperations, chatId, userId int64) error {
+	_, err := co.ExecContext(ctx, "delete from chat_participant where chat_id = $1 and user_id = $2", chatId, userId)
+	return err
+}
+
 // output: behalfUserId:[]*dto.UserViewEnrichedDto
 // note: the map is not sorted  by Go's definition
 func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behalfUserIds []int64, chatId int64, size int32, offset int64, searchString string, needCount bool, userIds []int64) (map[int64][]*dto.UserViewEnrichedDto, int64, error) {

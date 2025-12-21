@@ -14,29 +14,29 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const CleanChatsOfDeletedUserSchedulerKey = "cleanChatsOfDeletedUserTask"
+const CleanDeletedUserDataSchedulerKey = "cleanDeletedUserDataTask"
 
-type CleanChatsOfDeletedUserTask struct {
+type CleanDeletedUserDataTask struct {
 	dcron.Job
 }
 
-func CleanChatsOfDeletedUserScheduler(
+func CleanDeletedUserDataScheduler(
 	lgr *logger.LoggerWrapper,
-	service *CleanChatsOfDeletedUserService,
+	service *CleanDeletedUserDataService,
 	cfg *config.AppConfig,
-) *CleanChatsOfDeletedUserTask {
-	var str = cfg.Schedulers.CleanChatsOfDeletedUserTask.Cron
-	lgr.Info("Created CleanChatsOfDeletedUserScheduler with cron", "cron", str, dcron.SlogKeyTaskName, CleanChatsOfDeletedUserSchedulerKey)
+) *CleanDeletedUserDataTask {
+	var str = cfg.Schedulers.CleanDeletedUsersDataTask.Cron
+	lgr.Info("Created CleanDeletedUserDataScheduler with cron", "cron", str, dcron.SlogKeyTaskName, CleanDeletedUserDataSchedulerKey)
 
-	job := dcron.NewJob(CleanChatsOfDeletedUserSchedulerKey, str, func(ctx context.Context) error {
+	job := dcron.NewJob(CleanDeletedUserDataSchedulerKey, str, func(ctx context.Context) error {
 		service.DoJob(ctx)
 		return nil
 	}, dcron.WithTracing(service.spanStarter, service.spanFinisher))
 
-	return &CleanChatsOfDeletedUserTask{job}
+	return &CleanDeletedUserDataTask{job}
 }
 
-type CleanChatsOfDeletedUserService struct {
+type CleanDeletedUserDataService struct {
 	restClient client.AaaRestClient
 	tracer     trace.Tracer
 	dbR        *db.DB
@@ -45,12 +45,12 @@ type CleanChatsOfDeletedUserService struct {
 	co         *cqrs.CommonProjection
 }
 
-func (srv *CleanChatsOfDeletedUserService) DoJob(ctx context.Context) {
+func (srv *CleanDeletedUserDataService) DoJob(ctx context.Context) {
 	srv.processChats(ctx)
 }
 
-func (srv *CleanChatsOfDeletedUserService) processChats(c context.Context) {
-	srv.lgr.InfoContext(c, "Starting cleaning chats of deleted user job")
+func (srv *CleanDeletedUserDataService) processChats(c context.Context) {
+	srv.lgr.InfoContext(c, "Starting cleaning deleted users data job")
 
 	errOuter := srv.co.IterateOverAllParticipants(c, srv.dbR, func(chatParticipants []dto.ChatParticipant) error {
 		userIdMap := map[int64]struct{}{}
@@ -97,53 +97,26 @@ func (srv *CleanChatsOfDeletedUserService) processChats(c context.Context) {
 		srv.lgr.ErrorContext(c, "error during removing content of deleted user: %w", errOuter)
 	}
 
-	errOuter = srv.co.IterateOverAllChats(c, srv.dbR, func(chatIdsPortion []int64) error {
-		hasParticipantsMap, err := srv.co.HasParticipants(c, srv.dbR, chatIdsPortion) // will re-check on the projection side after kafka
-		if err != nil {
-			srv.lgr.ErrorContext(c, "Got error HasParticipants", "err", err)
-			return nil
-		}
-
-		for _, ch := range chatIdsPortion {
-			hasParticipants := hasParticipantsMap[ch]
-
-			if !hasParticipants {
-				srv.lgr.InfoContext(c, "Deleting chat because it does not have participants", "chat_id", ch)
-				cmd := cqrs.TechnicalRemoveAbandonedChat{
-					ChatId: ch,
-				}
-				err = cmd.Handle(c, srv.eventBus)
-				if err != nil {
-					srv.lgr.ErrorContext(c, "error during removing abandoned chats: %w", err)
-				}
-			}
-		}
-		return nil
-	})
-	if errOuter != nil {
-		srv.lgr.ErrorContext(c, "error during removing abandoned chats: %w", errOuter)
-	}
-
-	srv.lgr.InfoContext(c, "End of cleaning chats of deleted user job")
+	srv.lgr.InfoContext(c, "End of cleaning deleted users data job")
 }
 
-func (srv *CleanChatsOfDeletedUserService) spanStarter(ctx context.Context) (context.Context, any) {
-	return srv.tracer.Start(ctx, "scheduler.cleanChatsOfDeletedUser")
+func (srv *CleanDeletedUserDataService) spanStarter(ctx context.Context) (context.Context, any) {
+	return srv.tracer.Start(ctx, "scheduler.cleanDeletedUsersData")
 }
 
-func (srv *CleanChatsOfDeletedUserService) spanFinisher(ctx context.Context, span any) {
+func (srv *CleanDeletedUserDataService) spanFinisher(ctx context.Context, span any) {
 	span.(trace.Span).End()
 }
 
-func NewCleanChatsOfDeletedUserService(
+func NewCleanDeletedUserDataService(
 	lgr *logger.LoggerWrapper,
 	chatClient client.AaaRestClient,
 	dbR *db.DB,
 	eventBus *cqrs.PartitionAwareEventBus,
 	co *cqrs.CommonProjection,
-) *CleanChatsOfDeletedUserService {
-	trcr := otel.Tracer("scheduler/clean-chats-of-deleted-user")
-	return &CleanChatsOfDeletedUserService{
+) *CleanDeletedUserDataService {
+	trcr := otel.Tracer("scheduler/clean-deleted-users-data")
+	return &CleanDeletedUserDataService{
 		restClient: chatClient,
 		tracer:     trcr,
 		dbR:        dbR,

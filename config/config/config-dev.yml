@@ -115,9 +115,11 @@ redis:
   maxRetries: 10000
 
 schedulers:
-  cleanChatsOfDeletedUserTask:
+  cleanAbandonedChatsTask:
     enabled: true
     cron: "0 * * * * *"
-    batchChats: 20
-    batchParticipants: 20
+    expiration: "30m"
+  cleanDeletedUsersDataTask:
+    enabled: true
+    cron: "30 * * * * *"
     expiration: "30m"

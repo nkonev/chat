@@ -4184,7 +4184,7 @@ func TestDeleteLeftoversFromDb(t *testing.T) {
 	})
 }
 
-func TestDeleteOfDeletedUser(t *testing.T) {
+func TestCleanDeletedUsersData(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,
 		cfg *config.AppConfig,
@@ -4194,7 +4194,7 @@ func TestDeleteOfDeletedUser(t *testing.T) {
 		dba *db.DB,
 		aaaRestClient client.AaaRestClient,
 		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
-		cleanService *tasks.CleanChatsOfDeletedUserService,
+		cleanService *tasks.CleanDeletedUserDataService,
 		lc fx.Lifecycle,
 	) {
 		const user1 int64 = 1
@@ -4325,5 +4325,70 @@ func TestDeleteOfDeletedUser(t *testing.T) {
 		urm2after, err := m.AreHasUnreadMessagesExists(ctx, dba, user2)
 		require.NoError(t, err, "error in checking unread messages")
 		require.False(t, urm2after)
+	})
+}
+
+func TestCleanAbandonedChats(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		m *cqrs.CommonProjection,
+		dba *db.DB,
+		aaaRestClient client.AaaRestClient,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
+		cleanService *tasks.CleanAnandonedChatsService,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user1Login = "admin1"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1}, nil)
+
+		const chat1Name = "new chat 1"
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name)
+		require.NoError(t, err, "error in creating chat")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		const messageText1 = "message 1"
+
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, messageText1)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat1Id, message1Id, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		err = m.UnsafeDeleteParticipantForTest(ctx, dba, chat1Id, user1)
+		require.NoError(t, err, "error in deleting chat")
+
+		existsC1before, err := m.IsChatExists(ctx, dba, chat1Id)
+		require.NoError(t, err, "error in checking chat common")
+		assert.True(t, existsC1before)
+
+		testOutputEventsAccumulator.Clean()
+
+		// do cleanup
+		cleanService.DoJob(ctx)
+
+		waitForChatNotExists(lgr, m, dba, chat1Id, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		existsC1after, err := m.IsChatExists(ctx, dba, chat1Id)
+		require.NoError(t, err, "error in checking existence")
+		require.False(t, existsC1after)
 	})
 }

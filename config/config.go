@@ -180,16 +180,21 @@ type RabbitMQConfig struct {
 	PrettyLog bool
 }
 
-type CleanChatsOfDeletedUserTask struct {
-	Enabled           bool
-	Cron              string
-	BatchChats        int32
-	BatchParticipants int32
-	Expiration        time.Duration
+type CleanAbandonedChatsTask struct {
+	Enabled    bool
+	Cron       string
+	Expiration time.Duration
+}
+
+type CleanDeletedUsersDataTask struct {
+	Enabled    bool
+	Cron       string
+	Expiration time.Duration
 }
 
 type TaskConfig struct {
-	CleanChatsOfDeletedUserTask CleanChatsOfDeletedUserTask
+	CleanAbandonedChatsTask   CleanAbandonedChatsTask
+	CleanDeletedUsersDataTask CleanDeletedUsersDataTask
 }
 
 type RedisConfig struct {

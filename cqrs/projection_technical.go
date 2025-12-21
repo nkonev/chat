@@ -36,6 +36,10 @@ func (m *CommonProjection) OnTechnicalAbandonedChatRemoved(ctx context.Context, 
 		return nil
 	}
 
-	// TODO remove chat
+	_, err = m.db.ExecContext(ctx, "delete from chat_common where id = $1", event.ChatId)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

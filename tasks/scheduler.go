@@ -12,13 +12,14 @@ func RunScheduler(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	scheduler *dcron.Cron,
-	ct *CleanChatsOfDeletedUserTask,
+	ct *CleanAbandonedChatsTask,
+	cd *CleanDeletedUserDataTask,
 	lc fx.Lifecycle,
 ) error {
 	scheduler.Start()
 	lgr.Info("Scheduler started")
 
-	if cfg.Schedulers.CleanChatsOfDeletedUserTask.Enabled {
+	if cfg.Schedulers.CleanAbandonedChatsTask.Enabled {
 		lgr.Info("Adding task " + ct.Key() + " to scheduler")
 		err := scheduler.AddJobs(ct)
 		if err != nil {
@@ -26,6 +27,16 @@ func RunScheduler(
 		}
 	} else {
 		lgr.Info("Task " + ct.Key() + " is disabled")
+	}
+
+	if cfg.Schedulers.CleanDeletedUsersDataTask.Enabled {
+		lgr.Info("Adding task " + cd.Key() + " to scheduler")
+		err := scheduler.AddJobs(cd)
+		if err != nil {
+			return err
+		}
+	} else {
+		lgr.Info("Task " + cd.Key() + " is disabled")
 	}
 
 	lc.Append(fx.Hook{

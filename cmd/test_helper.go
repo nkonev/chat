@@ -137,7 +137,8 @@ func runTestFunc(lgr *logger.LoggerWrapper, cfg *config.AppConfig, t *testing.T,
 			listener.CreateRabbitInternalEventsListener,
 			listener.CreateRabbitAaaUserProfileUpdateListener,
 			type_registry.NewTypeRegistryInstance,
-			tasks.NewCleanChatsOfDeletedUserService,
+			tasks.NewCleanAbandonedChatsService,
+			tasks.NewCleanDeletedUserDataService,
 		),
 		fx.Invoke(
 			cqrs.RunCqrsRouter,
@@ -233,4 +234,27 @@ func waitForChatExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.CommonP
 		panic("Cannot await for chat will appear")
 	}
 	lgr.Info("chat appeared")
+}
+
+func waitForChatNotExists(lgr *logger.LoggerWrapper, commonProjection *cqrs.CommonProjection, dba *db.DB, chatId int64, sleepBeforePolling time.Duration, maxAttempts int) {
+	ctx := context.Background()
+
+	i := 0
+	success := false
+	for ; i <= maxAttempts; i++ {
+
+		exists, err := commonProjection.IsChatExists(ctx, dba, chatId)
+		if err != nil || exists {
+			lgr.Info("Awaiting while chat disappear")
+			time.Sleep(sleepBeforePolling)
+			continue
+		} else {
+			success = true
+			break
+		}
+	}
+	if !success {
+		panic("Cannot await for chat will disappear")
+	}
+	lgr.Info("chat disappeared")
 }
