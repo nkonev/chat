@@ -166,7 +166,7 @@ func (m *CommonProjection) updateViewableParticipants(ctx context.Context, co db
 		input_data as (
 			select 
 				(select count from chat_participant_count) as participants_count, 
-				(select array_agg(user_id) from chat_participants_last_n) as participant_ids
+				(select coalesce(array_agg(user_id), cast(array[] as bigint[])) from chat_participants_last_n) as participant_ids
 		)
 		update chat_common cc
 		SET 

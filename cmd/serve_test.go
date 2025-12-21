@@ -4233,23 +4233,58 @@ func TestDeleteOfDeletedUser(t *testing.T) {
 		}}, nil) // not exists
 
 		const chat1Name = "new chat 1"
+		const chat2Name = "new chat 2"
 
 		ctx := context.Background()
 
 		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
 		require.NoError(t, err, "error in creating chat")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
-
 		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
 
+		chat2Id, err := testRestClient.CreateChat(ctx, user2, chat2Name)
+		require.NoError(t, err, "error in creating chat")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForChatExists(lgr, m, dba, chat2Id, user2, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
 		const messageText1 = "message 1"
+		const messageText2 = "message 2"
 
 		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, messageText1)
 		require.NoError(t, err, "error in creating message")
 		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 		waitForMessageExists(lgr, m, dba, chat1Id, message1Id, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
 
+		message2Id, err := testRestClient.CreateMessage(ctx, user2, chat2Id, messageText2)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		waitForMessageExists(lgr, m, dba, chat1Id, message2Id, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
 		testOutputEventsAccumulator.Clean()
+
+		cuv11before, err := m.IsChatUserViewExists(ctx, dba, chat1Id, user1)
+		require.NoError(t, err, "error in checking chat user view")
+		require.True(t, cuv11before)
+
+		cuv21before, err := m.IsChatUserViewExists(ctx, dba, chat1Id, user2)
+		require.NoError(t, err, "error in checking chat user view")
+		require.True(t, cuv21before)
+
+		cuv22before, err := m.IsChatUserViewExists(ctx, dba, chat2Id, user2)
+		require.NoError(t, err, "error in checking chat user view")
+		require.True(t, cuv22before)
+
+		cp21before, err := m.IsParticipantExists(ctx, dba, chat1Id, user2)
+		require.NoError(t, err, "error in checking chat participant")
+		require.True(t, cp21before)
+
+		cp22before, err := m.IsParticipantExists(ctx, dba, chat2Id, user2)
+		require.NoError(t, err, "error in checking chat participant")
+		require.True(t, cp22before)
+
+		urm2before, err := m.AreHasUnreadMessagesExists(ctx, dba, user2)
+		require.NoError(t, err, "error in checking unread messages")
+		require.True(t, urm2before)
 
 		// do cleanup
 		cleanService.DoJob(ctx)
@@ -4267,16 +4302,28 @@ func TestDeleteOfDeletedUser(t *testing.T) {
 			},
 		}))
 
-		cuv2, err := m.IsChatUserViewExists(ctx, dba, chat1Id, user2)
+		cuv11after, err := m.IsChatUserViewExists(ctx, dba, chat1Id, user1)
 		require.NoError(t, err, "error in checking chat user view")
-		require.False(t, cuv2)
+		require.True(t, cuv11after)
 
-		cp2, err := m.IsParticipantExists(ctx, dba, chat1Id, user2)
+		cuv21after, err := m.IsChatUserViewExists(ctx, dba, chat1Id, user2)
+		require.NoError(t, err, "error in checking chat user view")
+		require.False(t, cuv21after)
+
+		cuv22after, err := m.IsChatUserViewExists(ctx, dba, chat2Id, user2)
+		require.NoError(t, err, "error in checking chat user view")
+		require.False(t, cuv22after)
+
+		cp21after, err := m.IsParticipantExists(ctx, dba, chat1Id, user2)
 		require.NoError(t, err, "error in checking chat participant")
-		require.False(t, cp2)
+		require.False(t, cp21after)
 
-		urm2, err := m.AreHasUnreadMessagesExists(ctx, dba, user2)
+		cp22after, err := m.IsParticipantExists(ctx, dba, chat2Id, user2)
+		require.NoError(t, err, "error in checking chat participant")
+		require.False(t, cp22after)
+
+		urm2after, err := m.AreHasUnreadMessagesExists(ctx, dba, user2)
 		require.NoError(t, err, "error in checking unread messages")
-		require.False(t, urm2)
+		require.False(t, urm2after)
 	})
 }

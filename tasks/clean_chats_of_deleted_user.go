@@ -78,7 +78,7 @@ func (srv *CleanChatsOfDeletedUserService) processChats(c context.Context) {
 			}
 
 			if !ue.Exists {
-				srv.lgr.InfoContext(c, "Deleting participant because it does not exists in aaa", "user_id", ue.UserId)
+				srv.lgr.InfoContext(c, "Deleting participant because it does not exists in aaa", "user_id", ue.UserId, "chat_id", cp.ChatId)
 				cmd := cqrs.TechnicalRemoveContentOfDeletedUser{ // ~ DeleteParticipant
 					UserId: cp.UserId,
 					ChatId: cp.ChatId,
