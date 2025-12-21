@@ -26,7 +26,7 @@ func CleanChatsOfDeletedUserScheduler(
 	cfg *config.AppConfig,
 ) *CleanChatsOfDeletedUserTask {
 	var str = cfg.Schedulers.CleanChatsOfDeletedUserTask.Cron
-	lgr.Info("Created CleanChatsOfDeletedUserScheduler with cron", "cron", str)
+	lgr.Info("Created CleanChatsOfDeletedUserScheduler with cron", "cron", str, dcron.SlogKeyTaskName, CleanChatsOfDeletedUserSchedulerKey)
 
 	job := dcron.NewJob(CleanChatsOfDeletedUserSchedulerKey, str, func(ctx context.Context) error {
 		service.doJob(ctx)
