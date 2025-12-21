@@ -67,14 +67,14 @@ func (srv *CleanAnandonedChatsService) processChats(c context.Context) {
 				}
 				err = cmd.Handle(c, srv.eventBus)
 				if err != nil {
-					srv.lgr.ErrorContext(c, "error during removing abandoned chats: %w", err)
+					srv.lgr.ErrorContext(c, "error during removing abandoned chats", "err", err)
 				}
 			}
 		}
 		return nil
 	})
 	if errOuter != nil {
-		srv.lgr.ErrorContext(c, "error during removing abandoned chats: %w", errOuter)
+		srv.lgr.ErrorContext(c, "error during removing abandoned chats", "err", errOuter)
 	}
 
 	srv.lgr.InfoContext(c, "End of cleaning abandoned chats job")

@@ -86,7 +86,7 @@ func (srv *CleanDeletedUserDataService) processChats(c context.Context) {
 
 				err = cmd.Handle(c, srv.eventBus)
 				if err != nil {
-					srv.lgr.ErrorContext(c, "error during removing content of deleted user: %w", err)
+					srv.lgr.ErrorContext(c, "error during removing content of deleted user", "err", err)
 				}
 			}
 		}
@@ -94,7 +94,7 @@ func (srv *CleanDeletedUserDataService) processChats(c context.Context) {
 		return nil
 	})
 	if errOuter != nil {
-		srv.lgr.ErrorContext(c, "error during removing content of deleted user: %w", errOuter)
+		srv.lgr.ErrorContext(c, "error during removing content of deleted user", "err", errOuter)
 	}
 
 	srv.lgr.InfoContext(c, "End of cleaning deleted users data job")

@@ -119,12 +119,8 @@ schedulers:
   cleanAbandonedChatsTask:
     enabled: true
     cron: "0 * * * * *"
-    batchChats: 20
-    batchParticipants: 20
     expiration: "30m"
   cleanDeletedUsersDataTask:
     enabled: true
     cron: "30 * * * * *"
-    batchChats: 20
-    batchParticipants: 20
     expiration: "30m"
