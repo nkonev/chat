@@ -1,0 +1,49 @@
+package cqrs
+
+import (
+	"context"
+	"fmt"
+	"go-cqrs-chat-example/db"
+)
+
+func (m *CommonProjection) OnTechnicalProjectionsTruncated(ctx context.Context, event *ProjectionsTruncated) error {
+	err := db.RunResetDatabase(m.db, m.cfg)
+	if err != nil {
+		return fmt.Errorf("Error during resetting: %w", err)
+	}
+
+	err = db.RunMigrations(m.db, m.cfg)
+	if err != nil {
+		return fmt.Errorf("Error during migrating: %w", err)
+	}
+
+	err = m.SetIsTruncatingCompleted(ctx)
+	if err != nil {
+		return fmt.Errorf("Error during set IsTruncatingCompleted: %w", err)
+	}
+
+	return nil
+}
+
+func (m *CommonProjection) OnTechnicalContentOfDeletedUserRemoved(ctx context.Context, event *TechnicalContentOfDeletedUserRemoved) error {
+	// TODO remove message_read
+	// remove from chat_participants
+	// remove pinned chats
+	// remove notification_settings
+	return nil
+}
+
+func (m *CommonProjection) OnTechnicalAbandonedChatRemoved(ctx context.Context, event *TechnicalAbandonedChatRemoved) error {
+	has, err := m.HasParticipants(ctx, m.db, []int64{event.ChatId})
+	if err != nil {
+		return err
+	}
+
+	if has[event.ChatId] {
+		m.lgr.InfoContext(ctx, "Actually this chat has participants, skipping", "chat_id", event.ChatId) // to prevent race condition when sheduler found an empty chat because the ParticipantAdd event still wasn't processed
+		return nil
+	}
+
+	// TODO remove chat
+	return nil
+}

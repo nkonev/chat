@@ -86,3 +86,12 @@ type UserAccountEventChanged struct {
 	User      *User  `json:"user"`
 	EventType string `json:"eventType"`
 }
+
+type UserExists struct {
+	Exists bool  `json:"exists"`
+	UserId int64 `json:"userId"`
+}
+
+func (u UserExists) GetId() int64 {
+	return u.UserId
+}

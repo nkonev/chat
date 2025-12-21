@@ -624,6 +624,65 @@ func (m *CommonProjection) IterateOverParticipantsChatIds(ctx context.Context, c
 	return lastError
 }
 
+func (m *CommonProjection) IterateOverAllParticipants(ctx context.Context, co db.CommonOperations, consumer func(chatParticipants []dto.ChatParticipant) error) error {
+	shouldContinue := true
+	var lastError error
+	for page := int64(0); shouldContinue; page++ {
+		offset := utils.GetOffset(page, utils.DefaultSize)
+
+		list := []dto.ChatParticipant{}
+
+		sqlArgs := []any{utils.DefaultSize, offset}
+		sqlQuery := `
+			SELECT 
+				chat_id,
+				user_id
+			FROM chat_participant
+			ORDER BY user_id, create_date_time asc
+			LIMIT $1 OFFSET $2
+		`
+		err := sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			lastError = err
+			break
+		}
+		if len(list) == 0 {
+			return nil
+		}
+		if len(list) < utils.DefaultSize {
+			shouldContinue = false
+		}
+
+		err = consumer(list)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			lastError = err
+			break
+		}
+	}
+	return lastError
+}
+
+func (m *CommonProjection) HasParticipants(ctx context.Context, co db.CommonOperations, chatIds []int64) (map[int64]bool, error) {
+	response := map[int64]bool{}
+	for _, chatId := range chatIds {
+		response[chatId] = false
+	}
+
+	lst := []int64{}
+	err := sqlscan.Select(ctx, co, &lst, "SELECT DISTINCT(chat_id) FROM chat_participant WHERE chat_id = ANY ($1)", chatIds)
+	if err != nil {
+		return response, err
+	}
+
+	for _, chatId := range lst {
+		response[chatId] = true
+	}
+
+	return response, nil
+}
+
 func (m *CommonProjection) IterateOverCoChattedParticipantIds(ctx context.Context, co db.CommonOperations, participantId int64, consumer func(participantIdsPortion []int64) error) error {
 	shouldContinue := true
 	var lastError error

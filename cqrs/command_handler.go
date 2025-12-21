@@ -264,6 +264,15 @@ type MessageReactionFlip struct {
 	Reaction       string
 }
 
+type TechnicalRemoveContentOfDeletedUser struct {
+	UserId int64
+	ChatId int64 // only to make partition key
+}
+
+type TechnicalRemoveAbandonedChat struct {
+	ChatId int64
+}
+
 func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *sanitizer.StripTagsPolicy, cfg *config.AppConfig) (int64, error) {
 	var copyCommand *ChatCreate
 	err := reprint.FromTo(&sp, &copyCommand)
@@ -1187,6 +1196,14 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInter
 	}
 
 	return nil
+}
+
+func (s *TechnicalRemoveContentOfDeletedUser) Handle(ctx context.Context, eventBus EventBusInterface) error {
+	return eventBus.Publish(ctx, &TechnicalContentOfDeletedUserRemoved{UserId: s.UserId, ChatId: s.ChatId})
+}
+
+func (s *TechnicalRemoveAbandonedChat) Handle(ctx context.Context, eventBus EventBusInterface) error {
+	return eventBus.Publish(ctx, &TechnicalAbandonedChatRemoved{ChatId: s.ChatId})
 }
 
 func buildEmbedRequestFromMessage(ctx context.Context, dba *db.DB, commonProjection *CommonProjection, chatId int64, messageId int64) (*EmbedMessage, bool, error) {

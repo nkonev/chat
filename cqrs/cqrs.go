@@ -53,7 +53,7 @@ func ConfigurePublisher(
 	kafkaProducerConfig := sarama.NewConfig()
 	kafkaProducerConfig.Producer.Retry.Max = cfg.Kafka.Producer.RetryMax
 	kafkaProducerConfig.Producer.Return.Successes = cfg.Kafka.Producer.ReturnSuccess
-	kafkaProducerConfig.Version = sarama.V4_0_0_0
+	kafkaProducerConfig.Version = sarama.V4_1_0_0
 	kafkaProducerConfig.Metadata.Retry.Backoff = cfg.Kafka.Producer.RetryBackoff
 	kafkaProducerConfig.ClientID = cfg.Kafka.Producer.ClientId
 
@@ -209,7 +209,7 @@ func ConfigureEventProcessor(
 ) (*cqrs.EventGroupProcessor, error) {
 	kafkaConsumerConfig := sarama.NewConfig()
 	kafkaConsumerConfig.Consumer.Return.Errors = cfg.Kafka.Consumer.ReturnErrors
-	kafkaConsumerConfig.Version = sarama.V4_0_0_0
+	kafkaConsumerConfig.Version = sarama.V4_1_0_0
 	kafkaConsumerConfig.ClientID = cfg.Kafka.Consumer.ClientId
 	kafkaConsumerConfig.Consumer.Offsets.Initial = sarama.OffsetOldest // need for to work after import
 	kafkaConsumerConfig.Consumer.Offsets.AutoCommit.Interval = cfg.Kafka.Consumer.OffsetCommitInterval
@@ -260,7 +260,9 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageBlogPostMade),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageRemoved),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageReactionFlipped),
-		cqrs.NewGroupEventHandler(commonProjection.OnProjectionsTruncated),
+		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalProjectionsTruncated),
+		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalContentOfDeletedUserRemoved),
+		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalAbandonedChatRemoved),
 	)
 	if err != nil {
 		return nil, err

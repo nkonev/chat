@@ -39,6 +39,74 @@ func (_m *MockAaaRestClient) EXPECT() *MockAaaRestClient_Expecter {
 	return &MockAaaRestClient_Expecter{mock: &_m.Mock}
 }
 
+// CheckAreUsersExists provides a mock function for the type MockAaaRestClient
+func (_mock *MockAaaRestClient) CheckAreUsersExists(ctx context.Context, userIds []int64) ([]dto.UserExists, error) {
+	ret := _mock.Called(ctx, userIds)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CheckAreUsersExists")
+	}
+
+	var r0 []dto.UserExists
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []int64) ([]dto.UserExists, error)); ok {
+		return returnFunc(ctx, userIds)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []int64) []dto.UserExists); ok {
+		r0 = returnFunc(ctx, userIds)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]dto.UserExists)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []int64) error); ok {
+		r1 = returnFunc(ctx, userIds)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAaaRestClient_CheckAreUsersExists_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CheckAreUsersExists'
+type MockAaaRestClient_CheckAreUsersExists_Call struct {
+	*mock.Call
+}
+
+// CheckAreUsersExists is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userIds []int64
+func (_e *MockAaaRestClient_Expecter) CheckAreUsersExists(ctx interface{}, userIds interface{}) *MockAaaRestClient_CheckAreUsersExists_Call {
+	return &MockAaaRestClient_CheckAreUsersExists_Call{Call: _e.mock.On("CheckAreUsersExists", ctx, userIds)}
+}
+
+func (_c *MockAaaRestClient_CheckAreUsersExists_Call) Run(run func(ctx context.Context, userIds []int64)) *MockAaaRestClient_CheckAreUsersExists_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []int64
+		if args[1] != nil {
+			arg1 = args[1].([]int64)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAaaRestClient_CheckAreUsersExists_Call) Return(userExistss []dto.UserExists, err error) *MockAaaRestClient_CheckAreUsersExists_Call {
+	_c.Call.Return(userExistss, err)
+	return _c
+}
+
+func (_c *MockAaaRestClient_CheckAreUsersExists_Call) RunAndReturn(run func(ctx context.Context, userIds []int64) ([]dto.UserExists, error)) *MockAaaRestClient_CheckAreUsersExists_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetOnlines provides a mock function for the type MockAaaRestClient
 func (_mock *MockAaaRestClient) GetOnlines(ctx context.Context, userIds []int64) ([]*dto.UserOnline, error) {
 	ret := _mock.Called(ctx, userIds)
