@@ -29,7 +29,10 @@ func CleanAbandonedChatsScheduler(
 	job := dcron.NewJob(CleanAbandonedChatsSchedulerKey, str, func(ctx context.Context) error {
 		service.DoJob(ctx)
 		return nil
-	}, dcron.WithTracing(service.spanStarter, service.spanFinisher))
+	},
+		dcron.WithTracing(service.spanStarter, service.spanFinisher),
+		dcron.WithJobSettings(cfg.Schedulers.CleanAbandonedChatsTask.Expiration),
+	)
 
 	return &CleanAbandonedChatsTask{job}
 }

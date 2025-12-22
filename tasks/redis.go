@@ -2,7 +2,6 @@ package tasks
 
 import (
 	"context"
-	"errors"
 	"github.com/nkonev/dcron"
 	redisV9 "github.com/redis/go-redis/v9"
 	"go-cqrs-chat-example/config"
@@ -33,16 +32,11 @@ type RedisLock struct {
 	cfg    *config.TaskConfig
 }
 
-func (m *RedisLock) Lock(ctx context.Context, key, value string) bool {
-	var exp time.Duration
-
-	switch key {
-	case CleanAbandonedChatsSchedulerKey:
-		exp = m.cfg.CleanAbandonedChatsTask.Expiration
-	case CleanDeletedUserDataSchedulerKey:
-		exp = m.cfg.CleanDeletedUsersDataTask.Expiration
-	default:
-		panic(errors.New("not set expiring duration"))
+func (m *RedisLock) Lock(ctx context.Context, jobSetting any, key, value string) bool {
+	exp := jobSetting.(time.Duration)
+	if exp == 0 {
+		m.lgr.ErrorContext(ctx, "bad zero expiration", dcron.SlogKeyTaskName, key)
+		return false
 	}
 
 	locked, err := m.client.SetNX(ctx, key, value, exp).Result()
@@ -54,7 +48,7 @@ func (m *RedisLock) Lock(ctx context.Context, key, value string) bool {
 	return locked
 }
 
-func (m *RedisLock) Unlock(ctx context.Context, key, value string) {
+func (m *RedisLock) Unlock(ctx context.Context, jobSetting any, key, value string) {
 	m.client.Del(ctx, key)
 }
 

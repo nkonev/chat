@@ -16,7 +16,7 @@ require (
 	github.com/jackc/pgtype v1.14.4
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/microcosm-cc/bluemonday v1.0.3
-	github.com/nkonev/dcron v1.7.10
+	github.com/nkonev/dcron v1.7.11
 	github.com/nkonev/watermill-opentelemetry v0.1.11
 	github.com/qdm12/reprint v0.0.0-20200326205758-722754a53494
 	github.com/redis/go-redis/v9 v9.6.1

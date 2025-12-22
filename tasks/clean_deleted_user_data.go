@@ -31,7 +31,10 @@ func CleanDeletedUserDataScheduler(
 	job := dcron.NewJob(CleanDeletedUserDataSchedulerKey, str, func(ctx context.Context) error {
 		service.DoJob(ctx)
 		return nil
-	}, dcron.WithTracing(service.spanStarter, service.spanFinisher))
+	},
+		dcron.WithTracing(service.spanStarter, service.spanFinisher),
+		dcron.WithJobSettings(cfg.Schedulers.CleanDeletedUsersDataTask.Expiration),
+	)
 
 	return &CleanDeletedUserDataTask{job}
 }
