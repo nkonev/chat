@@ -32,8 +32,8 @@ type RedisLock struct {
 	cfg    *config.TaskConfig
 }
 
-func (m *RedisLock) Lock(ctx context.Context, jobSetting any, key, value string) bool {
-	exp := jobSetting.(time.Duration)
+func (m *RedisLock) Lock(ctx context.Context, jobSettings any, key, value string) bool {
+	exp := jobSettings.(time.Duration)
 	if exp == 0 {
 		m.lgr.ErrorContext(ctx, "bad zero expiration", dcron.SlogKeyTaskName, key)
 		return false
