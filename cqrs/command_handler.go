@@ -11,8 +11,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	validation "github.com/go-ozzo/ozzo-validation/v4"
-	"github.com/qdm12/reprint"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -21,6 +19,9 @@ import (
 	"go-cqrs-chat-example/sanitizer"
 	"slices"
 	"time"
+
+	validation "github.com/go-ozzo/ozzo-validation/v4"
+	"github.com/qdm12/reprint"
 )
 
 const minChatNameLen = 1
@@ -229,6 +230,13 @@ type MessageDelete struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	MessageId      int64
+}
+
+type MessagePin struct {
+	AdditionalData *AdditionalData
+	ChatId         int64
+	MessageId      int64
+	Pin            bool
 }
 
 type ChatPin struct {
@@ -1164,6 +1172,30 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 		}
 		return nil
 	}
+	return nil
+}
+
+func (s *MessagePin) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
+	if err != nil {
+		return err
+	}
+
+	if !CanPinMessage(adt.ChatCanPinMessage, adt.IsChatAdmin) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to pin the message in chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+	}
+
+	cp := &MessagePinned{
+		AdditionalData: s.AdditionalData,
+		ChatId:         s.ChatId,
+		MessageId:      s.MessageId,
+		Pinned:         s.Pin,
+	}
+	err = eventBus.Publish(ctx, cp)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

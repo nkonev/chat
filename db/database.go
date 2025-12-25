@@ -6,20 +6,21 @@ import (
 	"database/sql/driver"
 	"embed"
 	"fmt"
+	"go-cqrs-chat-example/config"
+	"go-cqrs-chat-example/logger"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/XSAM/otelsql"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/httpfs"
 	pgxStd "github.com/jackc/pgx/v4/stdlib"
 	proxy "github.com/shogo82148/go-sql-proxy"
-	"go-cqrs-chat-example/config"
-	"go-cqrs-chat-example/logger"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"go.uber.org/fx"
-	"net/http"
-	"strings"
-	"time"
 )
 
 func makeLoggingDriver(cfg *config.AppConfig, lgr *logger.LoggerWrapper) driver.Driver {
@@ -84,6 +85,7 @@ type Tx struct {
 	lgr *logger.LoggerWrapper
 }
 
+// Transactional and non- operations
 type CommonOperations interface {
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
@@ -129,6 +131,8 @@ func (tx *Tx) SafeRollback() {
 	}
 }
 
+// Performs txFunc transactionally with the result.
+// Deliberately doesn't support "nesting" to keep the code simple - to have only one place with TransactWithResult().
 func TransactWithResult[T any](ctx context.Context, db *DB, txFunc func(*Tx) (T, error)) (ret T, err error) {
 	tx, err := db.Begin(ctx, db.lgr)
 	if err != nil {
@@ -148,6 +152,8 @@ func TransactWithResult[T any](ctx context.Context, db *DB, txFunc func(*Tx) (T,
 	return ret, err
 }
 
+// Performs txFunc transactionally without any result.
+// Deliberately doesn't support "nesting" to keep the code simple - to have only one place with Transact().
 func Transact(ctx context.Context, db *DB, txFunc func(*Tx) error) (err error) {
 	tx, err := db.Begin(ctx, db.lgr)
 	if err != nil {
@@ -256,6 +262,7 @@ func (db *DB) Reset(mc config.MigrationConfig) error {
 	
 	drop table if exists chat_common;
 	drop table if exists chat_participant;
+	drop table if exists message_pinned;
 	drop table if exists message_reaction;
 	drop table if exists message;
 	drop table if exists chat_user_view;

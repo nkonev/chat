@@ -5,9 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/georgysavva/scany/v2/sqlscan"
-	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -18,6 +15,10 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/georgysavva/scany/v2/sqlscan"
+	"github.com/jackc/pgtype"
 )
 
 func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageCreated) error {
@@ -65,28 +66,54 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 	return errOuter
 }
 
-func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+func (m *CommonProjection) isMessagePinned(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
+	var isMessagePinned bool
+	err := sqlscan.Get(ctx, co, &isMessagePinned, "select exists (select * from message_pinned where chat_id = $1 and message_id = $2)", chatId, messageId)
+	if err != nil {
+		return false, err
+	}
+
+	return isMessagePinned, nil
+}
+
+func (m *CommonProjection) isMessagePromoted(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
+
+	var isMessagePromoted bool
+	err := sqlscan.Get(ctx, co, &isMessagePromoted, "select exists (select * from message_pinned where chat_id = $1 and message_id = $2 and promoted = true)", chatId, messageId)
+	if err != nil {
+		return false, err
+	}
+
+	return isMessagePromoted, nil
+}
+
+func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) (bool, error) {
+	pinned, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (bool, error) {
 
 		chatExists, err := m.checkChatExists(ctx, tx, event.MessageCommoned.ChatId)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if !chatExists {
 			m.lgr.InfoContext(ctx, "Skipping MessageCreated because there is no chat", "chat_id", event.MessageCommoned.ChatId)
-			return nil
+			return false, nil
 		}
 
 		messageBlogPost, err := m.isMessageBlogPost(ctx, tx, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
 		if err != nil {
-			return err
+			return false, err
+		}
+
+		isMessagePinned, err := m.isMessagePinned(ctx, tx, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
+		if err != nil {
+			return false, err
 		}
 
 		var embed pgtype.JSONB
 		if event.MessageCommoned.Embed != nil {
 			err = embed.Set(event.MessageCommoned.Embed)
 			if err != nil {
-				return err
+				return false, err
 			}
 		} else {
 			embed.Status = pgtype.Null
@@ -102,13 +129,28 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			where chat_id = $2 and id = $1 
 		`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, event.MessageCommoned.Content, embed, event.AdditionalData.CreatedAt, event.MessageCommoned.FileItemUuid)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		if messageBlogPost {
 			_, err = m.refreshBlog(ctx, tx, event.MessageCommoned.ChatId, event.AdditionalData.CreatedAt, nil)
 			if err != nil {
-				return err
+				return false, err
+			}
+		}
+
+		if isMessagePinned {
+			previewTxt := m.createMessagePinnedText(event.MessageCommoned.Content)
+
+			_, err = tx.ExecContext(ctx, `
+			update message_pinned
+			set	
+			    preview = $3
+				, update_date_time = $4
+			where chat_id = $2 and message_id = $1 
+		`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, previewTxt, event.AdditionalData.CreatedAt)
+			if err != nil {
+				return false, err
 			}
 		}
 
@@ -118,10 +160,10 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			"chat_id", event.MessageCommoned.ChatId,
 			"message_id", event.MessageCommoned.Id,
 		)
-		return nil
+		return isMessagePinned, nil
 	})
 
-	return errOuter
+	return pinned, errOuter
 }
 
 func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx context.Context, tx *db.Tx, participantIds []int64, chatId int64) error {
@@ -132,32 +174,71 @@ func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx conte
 	return nil
 }
 
-func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageDeleted) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageDeleted) (bool, *int64, *int64, error) {
+	type txDto struct {
+		promotedMessageId *int64
+		pinnedCount       *int64
+		wasMessagePinned  bool
+	}
+	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*txDto, error) {
+		var pinnedCount int64
+		var promotedMessageId *int64
 
 		messageBlogPost, err := m.isMessageBlogPost(ctx, tx, event.ChatId, event.MessageId)
 		if err != nil {
-			return err
+			return nil, err
+		}
+
+		wasMessagePinned, err := m.isMessagePinned(ctx, tx, event.ChatId, event.MessageId)
+		if err != nil {
+			return nil, err
+		}
+
+		var wasPromoted bool
+		if wasMessagePinned {
+			wasPromoted, err = m.isMessagePromoted(ctx, tx, event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		_, err = tx.ExecContext(ctx, `
 			delete from message where (id, chat_id) = ($1, $2)
 		`, event.MessageId, event.ChatId)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if messageBlogPost {
 			_, err = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt, nil)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 
-		return nil
+		if wasMessagePinned {
+			if wasPromoted {
+				promotedMessageId, err = m.tryNominatePreviousToPromote(ctx, tx, event.ChatId)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			var errc error
+			pinnedCount, errc = m.GetPinnedMessageCount(ctx, tx, event.ChatId)
+			if errc != nil {
+				return nil, errc
+			}
+		}
+
+		return &txDto{
+			pinnedCount:       &pinnedCount,
+			promotedMessageId: promotedMessageId,
+			wasMessagePinned:  wasMessagePinned,
+		}, nil
 	})
 	if errOuter != nil {
-		return errOuter
+		return false, nil, nil, errOuter
 	}
 
 	m.lgr.InfoContext(ctx,
@@ -166,7 +247,367 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 		"chat_id", event.ChatId,
 	)
 
+	return res.wasMessagePinned, res.promotedMessageId, res.pinnedCount, nil
+}
+
+func (m *CommonProjection) setMessagePinned(ctx context.Context, tx *db.Tx, chatId, messageId int64, pinned bool) error {
+	_, err := tx.ExecContext(ctx, `update message set pinned = $3 where chat_id = $1 and id = $2`, chatId, messageId, pinned)
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *dto.PinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool, messageOwnerUsersMap map[int64]*dto.User) *dto.PinnedMessageDto {
+
+	res := dto.PinnedMessageDto{
+		Id:             pinnedMessage.Id,
+		Text:           pinnedMessage.Text,
+		ChatId:         pinnedMessage.ChatId,
+		OwnerId:        pinnedMessage.OwnerId,
+		Owner:          messageOwnerUsersMap[pinnedMessage.OwnerId],
+		PinnedPromoted: pinnedMessage.Promoted,
+		CreateDateTime: pinnedMessage.CreateDateTime,
+		CanPin:         CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin),
+	}
+
+	return &res
+}
+
+func (m *EnrichingProjection) GetPinnedPromotedMessage(ctx context.Context, chatId, behalfUserId int64) (*dto.PinnedMessageDto, bool, error) {
+	type resDto struct {
+		promoted        *dto.PinnedMessageDto
+		notAParticipant bool
+	}
+
+	res, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*resDto, error) {
+		participant, err := m.cp.IsParticipant(ctx, tx, behalfUserId, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		if !participant {
+			return &resDto{
+				notAParticipant: true,
+			}, nil
+		}
+
+		type promotedDto struct {
+			MessageId int64 `db:"message_id"`
+			OwnerId   int64 `db:"owner_id"`
+		}
+
+		var promoted promotedDto
+		var promotedP *promotedDto
+		err = sqlscan.Get(ctx, tx, &promoted, "select message_id, owner_id from message_pinned where chat_id = $1 and promoted = true order by create_date_time desc limit 1", chatId)
+		if errors.Is(err, sql.ErrNoRows) {
+			// there were no rows, but otherwise no error occurred
+		} else if err != nil {
+			return nil, err
+		} else {
+			// ok
+			promotedP = &promoted
+		}
+
+		var pr *dto.PinnedMessageDto
+		if promotedP != nil {
+			users, err := m.aaaRestClient.GetUsers(ctx, []int64{promotedP.OwnerId})
+			if err != nil {
+				m.lgr.WarnContext(ctx, "unable to get users", "err", err)
+			}
+
+			usersMap := utils.ToMap(users)
+
+			enricheds, err := m.GetPinnedMessageEnriched(ctx, tx, chatId, promotedP.MessageId, []int64{behalfUserId}, usersMap)
+			if err != nil {
+				return nil, err
+			}
+
+			pr = enricheds[behalfUserId]
+		}
+
+		return &resDto{
+			promoted: pr,
+		}, nil
+	})
+	if errOuter != nil {
+		return nil, false, errOuter
+	}
+
+	return res.promoted, res.notAParticipant, nil
+}
+
+func (m *EnrichingProjection) GetPinnedMessages(ctx context.Context, chatId, userId, offset int64, size int32) ([]dto.PinnedMessageDto, int64, error) {
+	type txRes struct {
+		list  []dto.PinnedMessageDto
+		count int64
+	}
+	res, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*txRes, error) {
+		rs := txRes{
+			list:  []dto.PinnedMessageDto{},
+			count: 0,
+		}
+
+		participant, err := m.cp.IsParticipant(ctx, tx, userId, chatId)
+		if err != nil {
+			return nil, err
+		}
+		if !participant {
+			return nil, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", userId, chatId))
+		}
+
+		pinnedMessages, err := m.cp.GetPinnedMessages(ctx, tx, chatId, offset, size)
+		if err != nil {
+			return nil, err
+		}
+
+		cb, err := m.cp.GetChatBasic(ctx, tx, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		if cb == nil {
+			m.lgr.InfoContext(ctx, "chat is not found", "chat_id", chatId)
+			return &rs, nil
+		}
+
+		areAdmins, err := m.cp.getAreAdminsOfUserIds(ctx, tx, []int64{userId}, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		messageOwners := map[int64]struct{}{}
+		for _, msg := range pinnedMessages {
+			messageOwners[msg.OwnerId] = struct{}{}
+		}
+
+		messageOwnerUsers, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdStructToSlice(messageOwners))
+		if err != nil {
+			m.lgr.WarnContext(ctx, "unable to get users", "err", err)
+		}
+
+		messageOwnerUsersMap := utils.ToMap(messageOwnerUsers)
+
+		for _, pm := range pinnedMessages {
+			pinnedEnriched := m.enrichMessagePinned(ctx, &pm, cb.RegularParticipantCanPinMessage, areAdmins[userId], messageOwnerUsersMap)
+			rs.list = append(rs.list, *pinnedEnriched)
+		}
+
+		cnt, err := m.cp.GetPinnedMessageCount(ctx, tx, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		rs.count = cnt
+
+		return &rs, nil
+	})
+
+	if errOuter != nil {
+		return nil, 0, errOuter
+	}
+
+	return res.list, res.count, nil
+}
+
+func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64, behalfUserIds []int64, messageOwnerUsersMap map[int64]*dto.User) (map[int64]*dto.PinnedMessageDto, error) {
+	pinned, err := m.cp.GetPinnedMessage(ctx, co, chatId, messageId)
+	if err != nil {
+		return nil, err
+	}
+	if pinned != nil {
+		areAdmins, err := m.cp.getAreAdminsOfUserIds(ctx, co, behalfUserIds, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		cb, err := m.cp.GetChatBasic(ctx, co, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		resMap := map[int64]*dto.PinnedMessageDto{}
+
+		if cb != nil {
+			for _, participantId := range behalfUserIds {
+				pinnedEnriched := m.enrichMessagePinned(ctx, pinned, cb.RegularParticipantCanPinMessage, areAdmins[participantId], messageOwnerUsersMap)
+				resMap[participantId] = pinnedEnriched
+			}
+		} else {
+			m.lgr.ErrorContext(ctx, "Chat isn't found", "chat_id", chatId)
+		}
+
+		return resMap, nil
+	} else {
+		return nil, nil
+	}
+}
+
+const pinnedMessageCols = `
+		message_id
+		,chat_id
+		,owner_id
+		,create_date_time
+		,preview
+		,promoted
+`
+
+func (m *CommonProjection) GetPinnedMessage(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.PinnedMessage, error) {
+	var pm dto.PinnedMessage
+	err := sqlscan.Get(ctx, co, &pm, fmt.Sprintf(`
+	select 
+		%s
+	from message_pinned 
+	where chat_id = $1 and message_id = $2
+	`, pinnedMessageCols), chatId, messageId)
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+	} else if err != nil {
+		return nil, err
+	}
+
+	return &pm, nil
+}
+
+func (m *CommonProjection) GetPinnedMessages(ctx context.Context, co db.CommonOperations, chatId int64, offset int64, size int32) ([]dto.PinnedMessage, error) {
+	var pm = []dto.PinnedMessage{}
+
+	err := sqlscan.Select(ctx, co, &pm, fmt.Sprintf(`
+	select 
+		%s
+	from message_pinned 
+	where chat_id = $1 
+	order by create_date_time desc, promoted desc
+	limit $2 offset $3
+	`, pinnedMessageCols),
+		chatId, size, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return pm, nil
+}
+
+func (m *CommonProjection) GetPinnedMessageCount(ctx context.Context, co db.CommonOperations, chatId int64) (int64, error) {
+	var count int64
+	err := sqlscan.Get(ctx, co, &count, "select count (*) from message_pinned where chat_id = $1", chatId)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (m *CommonProjection) createMessagePinnedText(content string) string {
+	return preview.CreateMessagePreviewWithoutLogin(m.stripTags, m.cfg.Message.PreviewMaxTextSize, m.stripTags.Sanitize(content))
+}
+
+func (m *CommonProjection) tryNominatePreviousToPromote(ctx context.Context, co db.CommonOperations, chatId int64) (*int64, error) {
+
+	var previousPinned *int64
+	err := sqlscan.Get(ctx, co, &previousPinned, "select message_id from message_pinned where chat_id = $1 order by create_date_time desc limit 1", chatId)
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+	} else if err != nil {
+		return nil, err
+	}
+
+	if previousPinned != nil {
+		_, err := co.ExecContext(ctx, "update message_pinned set promoted = true where chat_id = $1 and message_id = $2", chatId, *previousPinned)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return previousPinned, nil
+}
+
+func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePinned) (*int64, int64, error) {
+	type resDto struct {
+		count             int64
+		promotedMessageId *int64
+	}
+	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*resDto, error) {
+		var pinnedCount int64
+		var promotedMessageId *int64
+		if event.Pinned {
+			mb, err := m.GetMessageBasic(ctx, tx, event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
+
+			if mb != nil {
+				previewTxt := m.createMessagePinnedText(mb.Content)
+
+				_, err = tx.ExecContext(ctx, `
+					insert into message_pinned (chat_id, message_id, owner_id, create_date_time, update_date_time, preview, promoted)
+					values ($1, $2, $3, $4, $5, $6, true)
+					on conflict (chat_id, message_id) do update set
+					preview = excluded.preview
+					,promoted = excluded.promoted
+					,update_date_time = excluded.update_date_time
+				`,
+					event.ChatId, event.MessageId, mb.OwnerId, event.AdditionalData.CreatedAt, event.AdditionalData.CreatedAt, previewTxt)
+				if err != nil {
+					return nil, err
+				}
+
+				// set pinned
+				err = m.setMessagePinned(ctx, tx, event.ChatId, event.MessageId, true)
+				if err != nil {
+					return nil, err
+				}
+
+				// unpromote previous
+				_, err = tx.ExecContext(ctx, `update message_pinned set promoted = false where chat_id = $1 and message_id != $2`, event.ChatId, event.MessageId)
+				if err != nil {
+					return nil, err
+				}
+
+				promotedMessageId = &event.MessageId
+			} else {
+				m.lgr.InfoContext(ctx, "Skipping pinning the mesage because it is not exists", "chat_id", event.ChatId, "message_id", event.MessageId)
+			}
+		} else {
+			// unpin
+			isPromoted, err := m.isMessagePromoted(ctx, tx, event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
+
+			_, err = tx.ExecContext(ctx, "delete from message_pinned where chat_id = $1 and message_id = $2", event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
+
+			// set pinned
+			err = m.setMessagePinned(ctx, tx, event.ChatId, event.MessageId, false)
+			if err != nil {
+				return nil, err
+			}
+
+			if isPromoted {
+				promotedMessageId, err = m.tryNominatePreviousToPromote(ctx, tx, event.ChatId)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		var errc error
+		pinnedCount, errc = m.GetPinnedMessageCount(ctx, tx, event.ChatId)
+		if errc != nil {
+			return nil, errc
+		}
+
+		return &resDto{
+			count:             pinnedCount,
+			promotedMessageId: promotedMessageId,
+		}, nil
+	})
+	if errOuter != nil {
+		return nil, 0, errOuter
+	}
+	return res.promotedMessageId, res.count, nil
 }
 
 func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId int64) error {
@@ -730,7 +1171,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		users, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdBoolToSlice(usersSet))
 		if err != nil {
-			m.lgr.WarnContext(ctx, "unable to get users")
+			m.lgr.WarnContext(ctx, "unable to get users", "err", err)
 		}
 
 		notAparticipant := false
@@ -974,8 +1415,9 @@ func enrichMessage(
 		UpdateDateTime: m.UpdateDateTime,
 		CreateDateTime: m.CreateDateTime,
 		Owner:          users[m.OwnerId],
-		UserId:         behalfUserId,
+		BehalfUserId:   behalfUserId,
 		FileItemUuid:   m.FileItemUuid,
+		Pinned:         m.Pinned,
 	}
 
 	chatsBehalfUser := chatsByUserIdByChatId[behalfUserId]
@@ -1090,6 +1532,7 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 			,coalesce(mm.owner_id, $4) as message_owner_id
 			,coalesce(mm.embed ->> 'embedMessageType', $5) as message_embed_type
 			,coalesce(mm.blog_post, false) as is_message_blog_post
+			,coalesce(cc.regular_participant_can_pin_message, false) as chat_can_pin_message
 			,b.id is not null as chat_is_blog
 		FROM provided pr
 		LEFT JOIN chat_info cc on pr.chat_id = cc.id
@@ -1101,6 +1544,8 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 	}
 	return d, nil
 }
+
+//func (m *CommonProjection) //
 
 func makeReactions(users map[int64]*dto.User, reactionsList []dto.ReactionDto) []dto.Reaction {
 	var convertedReactionsOfMessageToReturn = make([]dto.Reaction, 0, len(reactionsList))
@@ -1193,6 +1638,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		CreateDateTime time.Time    `db:"create_date_time"`
 		UpdateDateTime *time.Time   `db:"update_date_time"`
 		FileItemUuid   *string      `db:"file_item_uuid"`
+		Pinned         bool         `db:"pinned"`
 	}
 
 	if startingFromItemId != nil && messageId != nil {
@@ -1274,7 +1720,8 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 				m.embed,
 				m.create_date_time,
 			    m.update_date_time,
-			    m.file_item_uuid
+			    m.file_item_uuid,
+				m.pinned
 			from message m
 			where m.chat_id = $1 %s 
 			%s
@@ -1296,6 +1743,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 			CreateDateTime: mm.CreateDateTime,
 			UpdateDateTime: mm.UpdateDateTime,
 			FileItemUuid:   mm.FileItemUuid,
+			Pinned:         mm.Pinned,
 		}
 
 		embeddable, err := makeEmbedddable(mm.Embed)

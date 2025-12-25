@@ -3,24 +3,27 @@ package cqrs
 import (
 	"context"
 	"fmt"
+	"go-cqrs-chat-example/db"
+	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/sanitizer"
+	"go-cqrs-chat-example/utils"
+
 	"github.com/IBM/sarama"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v3/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/google/uuid"
-	"go-cqrs-chat-example/db"
-	"go-cqrs-chat-example/logger"
-	"go-cqrs-chat-example/utils"
+
+	"go-cqrs-chat-example/config"
+	"log/slog"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/ThreeDotsLabs/watermill/message"
 	wotel "github.com/nkonev/watermill-opentelemetry/pkg/opentelemetry"
-	"go-cqrs-chat-example/config"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/fx"
-	"log/slog"
-	"time"
 )
 
 func ConfigureKafkaMarshaller(
@@ -260,6 +263,7 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageBlogPostMade),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageRemoved),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageReactionFlipped),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessagePinned),
 		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalProjectionsTruncated),
 		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalAbandonedChatRemoved),
 	)
@@ -274,8 +278,9 @@ func ConfigureCommonProjection(
 	dba *db.DB,
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
+	stripTags *sanitizer.StripTagsPolicy,
 ) *CommonProjection {
-	return NewCommonProjection(dba, lgr, cfg)
+	return NewCommonProjection(dba, lgr, cfg, stripTags)
 }
 
 func SetIsNeedToFastForwardSequences(commonProjection *CommonProjection) error {

@@ -560,11 +560,6 @@ func (mc *MessageHandler) BroadcastMessage(g *gin.Context) {
 	return
 }
 
-func (mc *MessageHandler) PinPromoted(g *gin.Context) {
-	g.Status(http.StatusOK) // TODO implement pinned
-	return
-}
-
 func (mc *MessageHandler) MessagesFresh(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
@@ -742,6 +737,132 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 		}
 
 		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MakeMessageBlogPost command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.Status(http.StatusOK)
+}
+
+func (mc *MessageHandler) GetPinnedMessages(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
+	page := utils.FixPageString(g.Query(dto.PageParam))
+	offset := utils.GetOffset(page, size)
+
+	pm, cnt, err := mc.enrichingProjection.GetPinnedMessages(g.Request.Context(), chatId, userId, offset, size)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MakeMessageBlogPost command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, dto.PinnedMessagesWrapper{
+		Data:  pm,
+		Count: cnt,
+	})
+}
+
+func (mc *MessageHandler) GetPinnedPromotedMessage(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	pp, notAparticipant, err := mc.enrichingProjection.GetPinnedPromotedMessage(g.Request.Context(), chatId, userId)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking MessageFilter", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	if notAparticipant {
+		g.Status(http.StatusNoContent)
+		return
+	}
+
+	g.JSON(http.StatusOK, pp)
+	return
+}
+
+func (mc *MessageHandler) PinMessage(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	p := g.Query(dto.PinParam)
+
+	pin := utils.GetBoolean(p)
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mid := g.Param(dto.MessageIdParam)
+
+	messageId, err := utils.ParseInt64(mid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cc := cqrs.MessagePin{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		ChatId:         chatId,
+		MessageId:      messageId,
+		Pin:            pin,
+	}
+
+	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
+	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending ChatPin command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
