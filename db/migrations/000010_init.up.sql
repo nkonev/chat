@@ -75,6 +75,18 @@ CREATE unlogged TABLE message_reaction(
 -- https://docs.citusdata.com/en/v11.1/develop/api_udf.html#example
 SELECT create_distributed_table('message_reaction', 'chat_id', colocate_with => 'message');
 
+
+CREATE unlogged TABLE message_pinned(
+    message_id BIGINT NOT NULL,
+    chat_id BIGINT,
+    create_date_time timestamp not null,
+    preview text not null,
+    PRIMARY KEY (chat_id, message_id),
+    FOREIGN KEY (message_id, chat_id) REFERENCES message(id, chat_id) ON DELETE CASCADE
+);
+
+SELECT create_distributed_table('message_pinned', 'chat_id', colocate_with => 'message');
+
 create unlogged table chat_user_view(
     id bigint not null,
     pinned boolean not null default false,

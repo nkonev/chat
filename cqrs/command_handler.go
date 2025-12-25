@@ -231,6 +231,12 @@ type MessageDelete struct {
 	MessageId      int64
 }
 
+type MessagePin struct {
+	AdditionalData *AdditionalData
+	ChatId         int64
+	MessageId      int64
+}
+
 type ChatPin struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
@@ -1164,6 +1170,44 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 		}
 		return nil
 	}
+	return nil
+}
+
+// TODO also message edit - just change, messageDelete - to nominate another message to pinned
+func (s *MessagePin) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
+	if err != nil {
+		return err
+	}
+
+	if !CanPinMessage(adt.ChatCanPinMessage, adt.IsChatAdmin) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to pin the message in chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+	}
+
+	cp := &MessagePinned{
+		AdditionalData: s.AdditionalData,
+		ChatId:         s.ChatId,
+		MessageId:      s.MessageId,
+	}
+	err = eventBus.Publish(ctx, cp)
+	if err != nil {
+		return err
+	}
+
+	ui := &ChatViewRefreshed{
+		AdditionalData:             s.AdditionalData,
+		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
+		AllParticipantIdsExcepting: []int64{},
+		ChatId:                     s.ChatId,
+		UnreadMessagesAction:       UnreadMessagesActionRefresh,
+		LastMessageAction:          LastMessageActionRefresh,
+	}
+
+	errInner := eventBus.Publish(ctx, ui)
+	if errInner != nil {
+		return errInner
+	}
+
 	return nil
 }
 

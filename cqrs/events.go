@@ -278,6 +278,12 @@ type MessageDeleted struct {
 	MessageId      int64           `json:"messageId"`
 }
 
+type MessagePinned struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ChatId         int64           `json:"chatId"`
+	MessageId      int64           `json:"messageId"`
+}
+
 type MessageReactionFlipped struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`

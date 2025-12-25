@@ -312,6 +312,7 @@ type MessageAuthorizationData struct {
 	MessageOwnerId       int64  `db:"message_owner_id"`
 	HasEmbedMessage      bool   `db:"message_has_embed"`
 	EmbedMessageTypeSafe string `db:"message_embed_type"`
+	ChatCanPinMessage    bool   `db:"chat_can_pin_message"`
 }
 
 type MessageId struct {

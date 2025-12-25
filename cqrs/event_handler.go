@@ -20,7 +20,7 @@ import (
 
 // performs Authorization,
 // sending before events,
-// mutations via delegating to projection
+// mutations are made via delegating to projection
 // sending after events
 type EventHandler struct {
 	commonProjection                    *CommonProjection

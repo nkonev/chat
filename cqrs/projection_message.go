@@ -1090,6 +1090,7 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 			,coalesce(mm.owner_id, $4) as message_owner_id
 			,coalesce(mm.embed ->> 'embedMessageType', $5) as message_embed_type
 			,coalesce(mm.blog_post, false) as is_message_blog_post
+			,coalesce(cc.regular_participant_can_pin_message, false) as chat_can_pin_message
 			,b.id is not null as chat_is_blog
 		FROM provided pr
 		LEFT JOIN chat_info cc on pr.chat_id = cc.id
