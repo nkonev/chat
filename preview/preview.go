@@ -20,6 +20,11 @@ func CreateMessagePreviewWithoutLogin(cleanTagsPolicy *sanitizer.StripTagsPolicy
 
 func stripTagsAndCut(cleanTagsPolicy *sanitizer.StripTagsPolicy, sizeToCut int, text string) string {
 	tmp := cleanTagsPolicy.Sanitize(text)
+
+	if tmp == "" {
+		return tmp
+	}
+
 	runes := []rune(tmp)
 	textLen := len(runes)
 	size := utils.Min(sizeToCut, textLen)

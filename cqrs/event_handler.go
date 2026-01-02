@@ -1042,9 +1042,7 @@ func (m *EventHandler) getNotificationData(ctx context.Context, messageHtml stri
 	newMentionedUserIds, newHasHere, newHasAll := m.enrichingProjection.parseMentionUserIdsFromMessageHtml(ctx, newWithoutSourceTags)
 
 	newWithoutAnyHtml := m.stripAllTags.Sanitize(newWithoutSourceTags)
-	if newWithoutAnyHtml != "" {
-		newWithoutAnyHtml = preview.CreateMessagePreviewWithoutLogin(m.stripAllTags, m.cfg.Message.PreviewMaxTextSize, newWithoutAnyHtml)
-	}
+	newWithoutAnyHtml = preview.CreateMessagePreviewWithoutLogin(m.stripAllTags, m.cfg.Message.PreviewMaxTextSize, newWithoutAnyHtml)
 
 	var repliedUserId *int64
 	if em != nil {
@@ -1197,30 +1195,47 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 		return err
 	}
 
-	// TODO send promoted message delete event also
-	if promotedMessageId != nil {
-		// ret := dto.PinnedMessageDto{
-		// 	Id:             dbMessage.Id,
-		// 	Text:           dbMessage.Text,
-		// 	ChatId:         dbMessage.ChatId,
-		// 	OwnerId:        dbMessage.OwnerId,
-		// 	Owner:          user,
-		// 	PinnedPromoted: dbMessage.PinPromoted,
-		// 	CreateDateTime: dbMessage.CreateDateTime,
-		// }
-		// err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
-		// 	EventType: eventType,
-		// 	PromoteMessageNotification: &dto.PinnedMessageEvent{
-		// 		Message:    ret,
-		// 		TotalCount: count,
-		// 	},
-		// 	UserId: participantId,
-		// 	ChatId: event.ChatId,
-		// })
-		// if err != nil {
-		// 	m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
-		// }
+	// send unpromote current message event
+	if !event.Pinned {
+		err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+			EventType: eventType,
+			PromoteMessageNotification: &dto.PinnedMessageEvent{
+				Message: dto.PinnedMessageDto{
+					Id:     event.MessageId,
+					ChatId: event.ChatId,
+				},
+				TotalCount: count,
+			},
+			UserId: participantId,
+			ChatId: event.ChatId,
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+	}
 
+	// send promote current message event or send promote previous pinned message event
+	if promotedMessageId != nil {
+		err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+			EventType: eventType,
+			PromoteMessageNotification: &dto.PinnedMessageEvent{
+				Message: dto.PinnedMessageDto{
+					Id:             *promotedMessageId,
+					Text:           dbMessage.Text,
+					ChatId:         dbMessage.ChatId,
+					OwnerId:        dbMessage.OwnerId,
+					Owner:          user,
+					PinnedPromoted: dbMessage.PinPromoted,
+					CreateDateTime: dbMessage.CreateDateTime,
+				},
+				TotalCount: count,
+			},
+			UserId: participantId,
+			ChatId: event.ChatId,
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
 	}
 
 	return nil

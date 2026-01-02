@@ -55,6 +55,7 @@ create unlogged table message(
     embed jsonb,
     file_item_uuid varchar(36),
     published boolean not null default false,
+    pinned boolean not null default false,
     create_date_time timestamp not null,
     update_date_time timestamp,
     fts_all_content tsvector generated always as (to_tsvector('russian', strip_tags(coalesce(content, '')) || ' ' || strip_tags(coalesce(embed ->> 'embedMessageContent', '')))) stored,

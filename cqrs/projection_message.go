@@ -170,6 +170,14 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 	return nil
 }
 
+func (m *CommonProjection) setMessagePinned(ctx context.Context, tx *db.Tx, chatId, messageId int64, pinned bool) error {
+	_, err := tx.ExecContext(ctx, `update message set pinned = $3 where chat_id = $1 and id = $2`, chatId, messageId, pinned)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePinned) (*int64, error) {
 	promotedMessageIdOuter, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*int64, error) {
 		var promotedMessageId *int64
@@ -184,7 +192,8 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 				return nil, nil
 			}
 
-			preview := m.stripTags.Sanitize(mb.Content)
+			previewBase := m.stripTags.Sanitize(mb.Content)
+			previewTxt := preview.CreateMessagePreviewWithoutLogin(m.stripTags, m.cfg.Message.PreviewMaxTextSize, previewBase)
 
 			_, err = tx.ExecContext(ctx, `
 				insert into message_pinned (chat_id, message_id, owner_id, create_date_time, update_date_time, preview, promoted)
@@ -193,7 +202,13 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 				preview = excluded.preview
 				,update_date_time = excluded.update_date_time
 				`,
-				event.ChatId, event.MessageId, mb.OwnerId, event.AdditionalData.CreatedAt, event.AdditionalData.CreatedAt, preview)
+				event.ChatId, event.MessageId, mb.OwnerId, event.AdditionalData.CreatedAt, event.AdditionalData.CreatedAt, previewTxt)
+			if err != nil {
+				return nil, err
+			}
+
+			// set pinned
+			err = m.setMessagePinned(ctx, tx, event.ChatId, event.MessageId, true)
 			if err != nil {
 				return nil, err
 			}
@@ -208,6 +223,12 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 		} else {
 			// unpin
 			_, err := tx.ExecContext(ctx, "delete from message_pinned where chat_id = $1 and message_id = $2", event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
+
+			// set pinned
+			err = m.setMessagePinned(ctx, tx, event.ChatId, event.MessageId, false)
 			if err != nil {
 				return nil, err
 			}
