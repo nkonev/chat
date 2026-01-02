@@ -25,6 +25,7 @@ type MessageDto struct {
 	UpdateDateTime *time.Time
 	FileItemUuid   *string
 	BehalfUserId   int64 // behalf userId
+	Pinned         bool
 }
 
 type EmbedTyper struct {
@@ -102,6 +103,7 @@ type MessageViewEnrichedDto struct {
 	CreateDateTime time.Time             `json:"createDateTime"`
 	UpdateDateTime *time.Time            `json:"editDateTime"` // for sake compatibility
 	FileItemUuid   *string               `json:"fileItemUuid"`
+	Pinned         bool                  `json:"pinned"`
 
 	Owner     *User      `json:"owner"`
 	Reactions []Reaction `json:"reactions"`
@@ -114,7 +116,7 @@ type MessageViewEnrichedDto struct {
 
 	CanMakeBlogPost bool `json:"canMakeBlogPost"`
 
-	UserId int64 `json:"-"` // behalf user id
+	BehalfUserId int64 `json:"-"` // behalf user id
 }
 
 func (p *MessageViewEnrichedDto) GetEmbedTypeSafe() string {

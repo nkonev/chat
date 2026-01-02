@@ -696,7 +696,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 			// frontend event to add the message on the web page
 			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:           eventType,
-				UserId:              messageView.UserId,
+				UserId:              messageView.BehalfUserId,
 				ChatId:              event.MessageCommoned.ChatId,
 				MessageNotification: &messageView,
 			})
@@ -705,12 +705,12 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 			}
 
 			// notification about the new message (red dot)
-			if messageView.UserId != event.AdditionalData.BehalfUserId { // skip myself
+			if messageView.BehalfUserId != event.AdditionalData.BehalfUserId { // skip myself
 				if owner, ok := allPortionUsersMap[messageView.OwnerId]; !ok {
 					m.lgr.InfoContext(ctx, "Message owner isn't found", "user_id", messageView.OwnerId)
 				} else {
 					err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-						UserId:    messageView.UserId,
+						UserId:    messageView.BehalfUserId,
 						EventType: dto.EventTypeMessageBrowserNotificationAdd,
 						BrowserNotification: &dto.BrowserNotification{
 							ChatId:      messageView.ChatId,
@@ -922,7 +922,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		for _, messageView := range messageViews {
 			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:           eventType,
-				UserId:              messageView.UserId,
+				UserId:              messageView.BehalfUserId,
 				ChatId:              event.MessageCommoned.ChatId,
 				MessageNotification: &messageView,
 			})
@@ -1177,6 +1177,8 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 		eventType = dto.EventTypePinnedMessageUnpromote
 	}
 
+	eventTypeMessageEdit := dto.EventTypeMessageEdited
+
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
 	defer messageSpan.End()
 
@@ -1198,13 +1200,19 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 	// send unpromote current message event
 	if !event.Pinned {
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+			messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId, nil)
+			if errInn != nil {
+				return errInn
+			}
+
 			for _, participantId := range participantIdsPortion {
 				err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 					EventType: eventType,
 					PromoteMessageNotification: &dto.PinnedMessageEvent{
 						Message: dto.PinnedMessageDto{
-							Id:     event.MessageId,
-							ChatId: event.ChatId,
+							Id:             event.MessageId,
+							ChatId:         event.ChatId,
+							CreateDateTime: event.AdditionalData.CreatedAt, // to pass thru graphql
 						},
 						TotalCount: count,
 					},
@@ -1213,6 +1221,18 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 				})
 				if err != nil {
 					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
+			}
+
+			for _, messageView := range messageViews {
+				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+					EventType:           eventTypeMessageEdit,
+					UserId:              messageView.BehalfUserId,
+					ChatId:              event.ChatId,
+					MessageNotification: &messageView,
+				})
+				if errInn != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
 				}
 			}
 
@@ -1227,6 +1247,11 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 	// send promote current message event or send promote previous pinned message event
 	if promotedMessage != nil {
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+			messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId, nil)
+			if errInn != nil {
+				return errInn
+			}
+
 			for _, participantId := range participantIdsPortion {
 
 				err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
@@ -1243,14 +1268,24 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 				}
 			}
 
+			for _, messageView := range messageViews {
+				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+					EventType:           eventTypeMessageEdit,
+					UserId:              messageView.BehalfUserId,
+					ChatId:              event.ChatId,
+					MessageNotification: &messageView,
+				})
+				if errInn != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				}
+			}
+
 			return nil
 		})
 		if errOuter != nil {
 			return errOuter
 		}
 	}
-
-	// TODO fo both [!]event.Pinned send the MessageEdit
 
 	// TODO not related - prohibit on front send the new chat creation with an empty title or fix if somehow else
 
@@ -1383,7 +1418,7 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 			for _, messageView := range messageViews {
 				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 					EventType:           eventType,
-					UserId:              messageView.UserId,
+					UserId:              messageView.BehalfUserId,
 					ChatId:              event.ChatId,
 					MessageNotification: &messageView,
 				})
@@ -1410,7 +1445,7 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 		for _, messageView := range messageViews {
 			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:           eventType,
-				UserId:              messageView.UserId,
+				UserId:              messageView.BehalfUserId,
 				ChatId:              event.ChatId,
 				MessageNotification: &messageView,
 			})

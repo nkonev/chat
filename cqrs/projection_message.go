@@ -286,7 +286,9 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 
 			var previousPinned *int64
 			err = sqlscan.Get(ctx, tx, &previousPinned, "select message_id from message_pinned where chat_id = $1 order by create_date_time desc limit 1", event.ChatId)
-			if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				// there were no rows, but otherwise no error occurred
+			} else if err != nil {
 				return nil, err
 			}
 
@@ -1121,8 +1123,9 @@ func enrichMessage(
 		UpdateDateTime: m.UpdateDateTime,
 		CreateDateTime: m.CreateDateTime,
 		Owner:          users[m.OwnerId],
-		UserId:         behalfUserId,
+		BehalfUserId:   behalfUserId,
 		FileItemUuid:   m.FileItemUuid,
+		Pinned:         m.Pinned,
 	}
 
 	chatsBehalfUser := chatsByUserIdByChatId[behalfUserId]
@@ -1341,6 +1344,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		CreateDateTime time.Time    `db:"create_date_time"`
 		UpdateDateTime *time.Time   `db:"update_date_time"`
 		FileItemUuid   *string      `db:"file_item_uuid"`
+		Pinned         bool         `db:"pinned"`
 	}
 
 	if startingFromItemId != nil && messageId != nil {
@@ -1422,7 +1426,8 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 				m.embed,
 				m.create_date_time,
 			    m.update_date_time,
-			    m.file_item_uuid
+			    m.file_item_uuid,
+				m.pinned
 			from message m
 			where m.chat_id = $1 %s 
 			%s
@@ -1444,6 +1449,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 			CreateDateTime: mm.CreateDateTime,
 			UpdateDateTime: mm.UpdateDateTime,
 			FileItemUuid:   mm.FileItemUuid,
+			Pinned:         mm.Pinned,
 		}
 
 		embeddable, err := makeEmbedddable(mm.Embed)
