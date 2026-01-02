@@ -6,17 +6,18 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
-	"go.uber.org/fx"
 	"net/http"
 	"net/http/httputil"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+	"go.uber.org/fx"
 )
 
 const headerTraceId = "X-Traceid"
@@ -77,12 +78,14 @@ func CreateHttpRouter(
 	ginRouter.GET("/api/chat/:id/message/search", messageHandler.SearchMessages)
 	ginRouter.PUT("/api/chat/:id/message/:messageId/blog-post", messageHandler.MakeBlogPost)
 	ginRouter.PUT("/api/chat/:id/message/:messageId/reaction", messageHandler.ReactionMessage)
-	ginRouter.GET("/api/chat/:id/message/pin/promoted", messageHandler.PinPromoted)
 	ginRouter.POST("/api/chat/:id/message/fresh", messageHandler.MessagesFresh)
 	ginRouter.POST("/api/chat/:id/message/filter", messageHandler.MessagesFilter)
 	ginRouter.PUT("/api/chat/public/preview-without-html", messageHandler.MessagePreview)
 	ginRouter.GET("/api/chat/:id/mention/suggest", messageHandler.SearchForUsersToMention)
 	ginRouter.GET("/api/chat/:id/message/find-by-file-item-uuid/:fileItemUuid", messageHandler.FindMessageByFileItemUuid)
+	ginRouter.GET("/api/chat/:id/message/pin", messageHandler.GetPinnedMessages)
+	ginRouter.GET("/api/chat/:id/message/pin/promoted", messageHandler.GetPinnedPromotedMessage)
+	ginRouter.PUT("/api/chat/:id/message/:messageId/pin", messageHandler.PinMessage)
 
 	ginRouter.PUT("/api/chat/:id/typing", messageHandler.TypeMessage)
 	ginRouter.PUT("/api/chat/:id/broadcast", messageHandler.BroadcastMessage)

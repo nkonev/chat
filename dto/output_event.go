@@ -22,3 +22,6 @@ const EventTypeMessagesReload = "messages_reload"
 const EventTypeParticipantsReload = "participants_reload"
 
 const EventTypeChatNotificationSettingsChanged = "chat_notification_settings_changed"
+
+const EventTypePinnedMessagePromote = "pinned_message_promote"
+const EventTypePinnedMessageUnpromote = "pinned_message_unpromote"

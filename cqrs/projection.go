@@ -5,18 +5,20 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/sanitizer"
+
+	"github.com/georgysavva/scany/v2/sqlscan"
 )
 
 type CommonProjection struct {
-	db  *db.DB
-	lgr *logger.LoggerWrapper
-	cfg *config.AppConfig
+	db        *db.DB
+	lgr       *logger.LoggerWrapper
+	cfg       *config.AppConfig
+	stripTags *sanitizer.StripTagsPolicy
 }
 
 type EnrichingProjection struct {
@@ -29,11 +31,12 @@ type EnrichingProjection struct {
 	cfg                *config.AppConfig
 }
 
-func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppConfig) *CommonProjection {
+func NewCommonProjection(db *db.DB, lgr *logger.LoggerWrapper, cfg *config.AppConfig, stripTags *sanitizer.StripTagsPolicy) *CommonProjection {
 	return &CommonProjection{
-		db:  db,
-		lgr: lgr,
-		cfg: cfg,
+		db:        db,
+		lgr:       lgr,
+		cfg:       cfg,
+		stripTags: stripTags,
 	}
 }
 

@@ -12,10 +12,11 @@ import (
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"maps"
 	"slices"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // performs Authorization,
@@ -1165,6 +1166,61 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 	})
 	if errOuter != nil {
 		return errOuter
+	}
+
+	return nil
+}
+
+func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned) error {
+	var eventType string
+	if event.Pinned {
+		eventType = dto.EventTypePinnedMessagePromote
+	} else {
+		eventType = dto.EventTypePinnedMessageUnpromote
+	}
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
+	defer messageSpan.End()
+
+	adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId)
+	if err != nil {
+		return err
+	}
+
+	if !CanPinMessage(adt.ChatCanPinMessage, adt.IsChatAdmin) {
+		m.lgr.InfoContext(ctx, "Skipping OnChatEdited because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		return nil
+	}
+
+	promotedMessageId, err := m.commonProjection.OnMessagePinned(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	// TODO send promoted message delete event also
+	if promotedMessageId != nil {
+		// ret := dto.PinnedMessageDto{
+		// 	Id:             dbMessage.Id,
+		// 	Text:           dbMessage.Text,
+		// 	ChatId:         dbMessage.ChatId,
+		// 	OwnerId:        dbMessage.OwnerId,
+		// 	Owner:          user,
+		// 	PinnedPromoted: dbMessage.PinPromoted,
+		// 	CreateDateTime: dbMessage.CreateDateTime,
+		// }
+		// err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+		// 	EventType: eventType,
+		// 	PromoteMessageNotification: &dto.PinnedMessageEvent{
+		// 		Message:    ret,
+		// 		TotalCount: count,
+		// 	},
+		// 	UserId: participantId,
+		// 	ChatId: event.ChatId,
+		// })
+		// if err != nil {
+		// 	m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		// }
+
 	}
 
 	return nil

@@ -5,9 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/georgysavva/scany/v2/sqlscan"
-	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -18,6 +15,10 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/georgysavva/scany/v2/sqlscan"
+	"github.com/jackc/pgtype"
 )
 
 func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageCreated) error {
@@ -167,6 +168,71 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 	)
 
 	return nil
+}
+
+func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePinned) (*int64, error) {
+	promotedMessageIdOuter, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*int64, error) {
+		var promotedMessageId *int64
+		if event.Pinned {
+			mb, err := m.GetMessageBasic(ctx, tx, event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
+
+			if mb == nil {
+				m.lgr.InfoContext(ctx, "Skipping pinning the mesage because it is not exists", "chat_id", event.ChatId, "message_id", event.MessageId)
+				return nil, nil
+			}
+
+			preview := m.stripTags.Sanitize(mb.Content)
+
+			_, err = tx.ExecContext(ctx, `
+				insert into message_pinned (chat_id, message_id, owner_id, create_date_time, update_date_time, preview, promoted)
+				values ($1, $2, $3, $4, $5, $6, true)
+				on colflict (chat_id, message_id) do update set
+				preview = excluded.preview
+				,update_date_time = excluded.update_date_time
+				`,
+				event.ChatId, event.MessageId, mb.OwnerId, event.AdditionalData.CreatedAt, event.AdditionalData.CreatedAt, preview)
+			if err != nil {
+				return nil, err
+			}
+
+			// unpromote previous
+			_, err = tx.ExecContext(ctx, `update message_pinned set promoted = false where chat_id = $1 and message_id != $2`, event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
+
+			promotedMessageId = &event.MessageId
+		} else {
+			// unpin
+			_, err := tx.ExecContext(ctx, "delete from message_pinned where chat_id = $1 and message_id = $2", event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
+
+			var previousPinned *int64
+			err = sqlscan.Get(ctx, tx, &previousPinned, "select message_id from message_pinned where chat_id = $1 order by create_date_time desc limit 1", event.ChatId)
+			if err != nil {
+				return nil, err
+			}
+
+			if previousPinned != nil {
+				_, err := tx.ExecContext(ctx, "update message_pinned set promoted = true where chat_id = $1 and message_id = $2", event.ChatId, *previousPinned)
+				if err != nil {
+					return nil, err
+				}
+				promotedMessageId = previousPinned
+			}
+		}
+
+		return promotedMessageId, nil
+	})
+	if errOuter != nil {
+		return nil, errOuter
+	}
+	return promotedMessageIdOuter, nil
 }
 
 func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId int64) error {

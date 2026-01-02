@@ -11,8 +11,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	validation "github.com/go-ozzo/ozzo-validation/v4"
-	"github.com/qdm12/reprint"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -21,6 +19,9 @@ import (
 	"go-cqrs-chat-example/sanitizer"
 	"slices"
 	"time"
+
+	validation "github.com/go-ozzo/ozzo-validation/v4"
+	"github.com/qdm12/reprint"
 )
 
 const minChatNameLen = 1
@@ -235,6 +236,7 @@ type MessagePin struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
 	MessageId      int64
+	Pin            bool
 }
 
 type ChatPin struct {
@@ -1188,24 +1190,11 @@ func (s *MessagePin) Handle(ctx context.Context, eventBus EventBusInterface, dba
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
 		MessageId:      s.MessageId,
+		Pinned:         s.Pin,
 	}
 	err = eventBus.Publish(ctx, cp)
 	if err != nil {
 		return err
-	}
-
-	ui := &ChatViewRefreshed{
-		AdditionalData:             s.AdditionalData,
-		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
-		AllParticipantIdsExcepting: []int64{},
-		ChatId:                     s.ChatId,
-		UnreadMessagesAction:       UnreadMessagesActionRefresh,
-		LastMessageAction:          LastMessageActionRefresh,
-	}
-
-	errInner := eventBus.Publish(ctx, ui)
-	if errInner != nil {
-		return errInner
 	}
 
 	return nil
