@@ -4,12 +4,13 @@ import (
 	"context"
 	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/config"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 const LogFieldTraceId = "trace_id"
@@ -58,11 +59,6 @@ func NewLogger(consoleWriter io.Writer, cfg *config.AppConfig) *LoggerWrapper {
 			return slog.Attr{
 				Key:   "level",
 				Value: slog.StringValue(strings.ToLower(a.Value.String())),
-			}
-		} else if a.Key == "source" {
-			return slog.Attr{
-				Key:   "caller",
-				Value: a.Value,
 			}
 		} else {
 			return a
