@@ -1190,53 +1190,69 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 		return nil
 	}
 
-	promotedMessageId, err := m.commonProjection.OnMessagePinned(ctx, event)
+	promotedMessage, count, err := m.enrichingProjection.OnMessagePinned(ctx, event)
 	if err != nil {
 		return err
 	}
 
 	// send unpromote current message event
 	if !event.Pinned {
-		err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
-			EventType: eventType,
-			PromoteMessageNotification: &dto.PinnedMessageEvent{
-				Message: dto.PinnedMessageDto{
-					Id:     event.MessageId,
+		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+			for _, participantId := range participantIdsPortion {
+				err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+					EventType: eventType,
+					PromoteMessageNotification: &dto.PinnedMessageEvent{
+						Message: dto.PinnedMessageDto{
+							Id:     event.MessageId,
+							ChatId: event.ChatId,
+						},
+						TotalCount: count,
+					},
+					UserId: participantId,
 					ChatId: event.ChatId,
-				},
-				TotalCount: count,
-			},
-			UserId: participantId,
-			ChatId: event.ChatId,
+				})
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
+			}
+
+			return nil
 		})
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		if errOuter != nil {
+			return errOuter
 		}
+
 	}
 
 	// send promote current message event or send promote previous pinned message event
-	if promotedMessageId != nil {
-		err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
-			EventType: eventType,
-			PromoteMessageNotification: &dto.PinnedMessageEvent{
-				Message: dto.PinnedMessageDto{
-					Id:             *promotedMessageId,
-					Text:           dbMessage.Text,
-					ChatId:         dbMessage.ChatId,
-					OwnerId:        dbMessage.OwnerId,
-					Owner:          user,
-					PinnedPromoted: dbMessage.PinPromoted,
-					CreateDateTime: dbMessage.CreateDateTime,
-				},
-				TotalCount: count,
-			},
-			UserId: participantId,
-			ChatId: event.ChatId,
+	if promotedMessage != nil {
+		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+			for _, participantId := range participantIdsPortion {
+
+				err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+					EventType: eventType,
+					PromoteMessageNotification: &dto.PinnedMessageEvent{
+						Message:    *promotedMessage,
+						TotalCount: count,
+					},
+					UserId: participantId,
+					ChatId: event.ChatId,
+				})
+				if err != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
+			}
+
+			return nil
 		})
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		if errOuter != nil {
+			return errOuter
 		}
 	}
+
+	// TODO fo both [!]event.Pinned send the MessageEdit
+
+	// TODO not related - prohibit on front send the new chat creation with an empty title or fix if somehow else
 
 	return nil
 }
