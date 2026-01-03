@@ -930,7 +930,8 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 
 		var pinnedEnricheds = map[int64]*dto.PinnedMessageDto{}
 		if isPinned {
-			pinnedEnricheds, errInn = m.enrichingProjection.GetPinnedMessageEnriched(ctx, m.db, event.MessageCommoned.ChatId, event.MessageCommoned.Id, participantIdsPortion)
+			// allPortionUsersMap contains message owner
+			pinnedEnricheds, errInn = m.enrichingProjection.GetPinnedMessageEnriched(ctx, m.db, event.MessageCommoned.ChatId, event.MessageCommoned.Id, participantIdsPortion, allPortionUsersMap)
 			if errInn != nil {
 				return errInn
 			}
@@ -1284,12 +1285,15 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 	// send promote current message event or send promote previous pinned message event
 	if promotedMessageId != nil {
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-			messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, promotedMessageId, nil)
+			messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, promotedMessageId, nil)
 			if errInn != nil {
 				return errInn
 			}
 
-			enrichedsPinnedPromoted, errInn := m.enrichingProjection.GetPinnedMessageEnriched(ctx, m.db, event.ChatId, *promotedMessageId, participantIdsPortion)
+			// allPortionUsersMap contains message owner
+			allPortionUsersMap := utils.ToMap(allPortionUsers)
+
+			enrichedsPinnedPromoted, errInn := m.enrichingProjection.GetPinnedMessageEnriched(ctx, m.db, event.ChatId, *promotedMessageId, participantIdsPortion, allPortionUsersMap)
 			if errInn != nil {
 				return errInn
 			}

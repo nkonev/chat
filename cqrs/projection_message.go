@@ -199,13 +199,7 @@ func (m *CommonProjection) setMessagePinned(ctx context.Context, tx *db.Tx, chat
 	return nil
 }
 
-func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *pinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool) *dto.PinnedMessageDto {
-	users, err := m.aaaRestClient.GetUsers(ctx, []int64{pinnedMessage.OwnerId})
-	if err != nil {
-		m.lgr.WarnContext(ctx, "unable to get users")
-	}
-
-	usersMap := utils.ToMap(users)
+func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *pinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool, usersMap map[int64]*dto.User) *dto.PinnedMessageDto {
 
 	res := dto.PinnedMessageDto{
 		Id:             pinnedMessage.Id,
@@ -226,6 +220,7 @@ func (m *EnrichingProjection) GetPinnedPromotedMessage(ctx context.Context, chat
 		promoted        *dto.PinnedMessageDto
 		notAParticipant bool
 	}
+
 	res, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*resDto, error) {
 		participant, err := m.cp.IsParticipant(ctx, tx, behalfUserId, chatId)
 		if err != nil {
@@ -238,17 +233,33 @@ func (m *EnrichingProjection) GetPinnedPromotedMessage(ctx context.Context, chat
 			}, nil
 		}
 
-		var promotedMessageId *int64
-		err = sqlscan.Get(ctx, tx, &promotedMessageId, "select message_id from message_pinned where chat_id = $1 and promoted = true order by create_date_time desc limit 1", chatId)
+		type promotedDto struct {
+			MessageId int64 `db:"message_id"`
+			OwnerId   int64 `db:"owner_id"`
+		}
+
+		var promoted promotedDto
+		var promotedP *promotedDto
+		err = sqlscan.Get(ctx, tx, &promoted, "select message_id, owner_id from message_pinned where chat_id = $1 and promoted = true order by create_date_time desc limit 1", chatId)
 		if errors.Is(err, sql.ErrNoRows) {
 			// there were no rows, but otherwise no error occurred
 		} else if err != nil {
 			return nil, err
+		} else {
+			// ok
+			promotedP = &promoted
 		}
 
 		var pr *dto.PinnedMessageDto
-		if promotedMessageId != nil {
-			enricheds, err := m.GetPinnedMessageEnriched(ctx, tx, chatId, *promotedMessageId, []int64{behalfUserId})
+		if promotedP != nil {
+			users, err := m.aaaRestClient.GetUsers(ctx, []int64{promotedP.OwnerId})
+			if err != nil {
+				m.lgr.WarnContext(ctx, "unable to get users")
+			}
+
+			usersMap := utils.ToMap(users)
+
+			enricheds, err := m.GetPinnedMessageEnriched(ctx, tx, chatId, promotedP.MessageId, []int64{behalfUserId}, usersMap)
 			if err != nil {
 				return nil, err
 			}
@@ -276,7 +287,7 @@ type pinnedMessage struct {
 	Promoted       bool      `db:"promoted"`
 }
 
-func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64, behalfUserIds []int64) (map[int64]*dto.PinnedMessageDto, error) {
+func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64, behalfUserIds []int64, usersMap map[int64]*dto.User) (map[int64]*dto.PinnedMessageDto, error) {
 	pinned, err := m.cp.GetPinnedMessage(ctx, co, chatId, messageId)
 	if err != nil {
 		return nil, err
@@ -296,7 +307,7 @@ func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co d
 
 		if cb != nil {
 			for _, participantId := range behalfUserIds {
-				pinnedEnriched := m.enrichMessagePinned(ctx, pinned, cb.RegularParticipantCanPinMessage, areAdmins[participantId])
+				pinnedEnriched := m.enrichMessagePinned(ctx, pinned, cb.RegularParticipantCanPinMessage, areAdmins[participantId], usersMap)
 				resMap[participantId] = pinnedEnriched
 			}
 		} else {
