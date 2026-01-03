@@ -335,6 +335,26 @@ func (m *CommonProjection) createMessagePinnedText(content string) string {
 	return preview.CreateMessagePreviewWithoutLogin(m.stripTags, m.cfg.Message.PreviewMaxTextSize, m.stripTags.Sanitize(content))
 }
 
+func (m *CommonProjection) tryNominatePreviousToPromote(ctx context.Context, co db.CommonOperations, chatId int64) (*int64, error) {
+
+	var previousPinned *int64
+	err := sqlscan.Get(ctx, co, &previousPinned, "select message_id from message_pinned where chat_id = $1 order by create_date_time desc limit 1", chatId)
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+	} else if err != nil {
+		return nil, err
+	}
+
+	if previousPinned != nil {
+		_, err := co.ExecContext(ctx, "update message_pinned set promoted = true where chat_id = $1 and message_id = $2", chatId, *previousPinned)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return previousPinned, nil
+}
+
 func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePinned) (*pinnedMessage, int64, error) {
 	type resDto struct {
 		count           int64
@@ -394,22 +414,11 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 				return nil, err
 			}
 
-			var previousPinned *int64
-			err = sqlscan.Get(ctx, tx, &previousPinned, "select message_id from message_pinned where chat_id = $1 order by create_date_time desc limit 1", event.ChatId)
-			if errors.Is(err, sql.ErrNoRows) {
-				// there were no rows, but otherwise no error occurred
-			} else if err != nil {
+			promotedMessageId, err = m.tryNominatePreviousToPromote(ctx, tx, event.ChatId)
+			if err != nil {
 				return nil, err
 			}
 
-			if previousPinned != nil {
-				_, err := tx.ExecContext(ctx, "update message_pinned set promoted = true where chat_id = $1 and message_id = $2", event.ChatId, *previousPinned)
-				if err != nil {
-					return nil, err
-				}
-
-				promotedMessageId = previousPinned
-			}
 		}
 
 		if promotedMessageId != nil {
@@ -418,7 +427,6 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 			if err != nil {
 				return nil, err
 			}
-
 		}
 
 		count, err := m.GetPinnedMessageCount(ctx, tx, event.ChatId)
