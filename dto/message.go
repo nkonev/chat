@@ -317,6 +317,12 @@ type MessageAuthorizationData struct {
 	ChatCanPinMessage    bool   `db:"chat_can_pin_message"`
 }
 
+type MessagePinningData struct {
+	IsParticipant     bool `db:"is_chat_participant"`
+	IsChatAdmin       bool `db:"is_chat_admin"`
+	ChatCanPinMessage bool `db:"chat_can_pin_message"`
+}
+
 type MessageId struct {
 	MessageId int64 `json:"messageId"`
 }

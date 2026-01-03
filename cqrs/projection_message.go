@@ -199,21 +199,7 @@ func (m *CommonProjection) setMessagePinned(ctx context.Context, tx *db.Tx, chat
 	return nil
 }
 
-func (m *EnrichingProjection) OnMessagePinned(ctx context.Context, event *MessagePinned) (*dto.PinnedMessageDto, int64, error) {
-	promotedMessage, count, err := m.cp.OnMessagePinned(ctx, event)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	if promotedMessage != nil {
-		res := m.enrichMessagePinned(ctx, promotedMessage)
-		return res, count, nil
-	} else {
-		return nil, count, nil
-	}
-}
-
-func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *pinnedMessage) *dto.PinnedMessageDto {
+func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *pinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool) *dto.PinnedMessageDto {
 	users, err := m.aaaRestClient.GetUsers(ctx, []int64{pinnedMessage.OwnerId})
 	if err != nil {
 		m.lgr.WarnContext(ctx, "unable to get users")
@@ -229,6 +215,7 @@ func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMes
 		Owner:          usersMap[pinnedMessage.OwnerId],
 		PinnedPromoted: pinnedMessage.Promoted,
 		CreateDateTime: pinnedMessage.CreateDateTime,
+		CanPin:         CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin),
 	}
 
 	return &res
@@ -245,6 +232,12 @@ func (m *EnrichingProjection) GetPinnedPromotedMessage(ctx context.Context, chat
 			return nil, err
 		}
 
+		if !participant {
+			return &resDto{
+				notAParticipant: true,
+			}, nil
+		}
+
 		var promotedMessageId *int64
 		err = sqlscan.Get(ctx, tx, &promotedMessageId, "select message_id from message_pinned where chat_id = $1 and promoted = true order by create_date_time desc limit 1", chatId)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -255,40 +248,23 @@ func (m *EnrichingProjection) GetPinnedPromotedMessage(ctx context.Context, chat
 
 		var pr *dto.PinnedMessageDto
 		if promotedMessageId != nil {
-			pr, err = m.GetPinnedMessageEnriched(ctx, tx, chatId, *promotedMessageId)
+			enricheds, err := m.GetPinnedMessageEnriched(ctx, tx, chatId, *promotedMessageId, []int64{behalfUserId})
 			if err != nil {
 				return nil, err
 			}
+
+			pr = enricheds[behalfUserId]
 		}
 
-		if participant {
-			return &resDto{
-				promoted: pr,
-			}, nil
-		} else {
-			return &resDto{
-				notAParticipant: true,
-			}, nil
-		}
+		return &resDto{
+			promoted: pr,
+		}, nil
 	})
 	if errOuter != nil {
 		return nil, false, errOuter
 	}
 
 	return res.promoted, res.notAParticipant, nil
-}
-
-func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.PinnedMessageDto, error) {
-	pinned, err := m.cp.GetPinnedMessage(ctx, co, chatId, messageId)
-	if err != nil {
-		return nil, err
-	}
-	if pinned != nil {
-		res := m.enrichMessagePinned(ctx, pinned)
-		return res, nil
-	} else {
-		return nil, nil
-	}
 }
 
 type pinnedMessage struct {
@@ -298,6 +274,39 @@ type pinnedMessage struct {
 	CreateDateTime time.Time `db:"create_date_time"`
 	Text           string    `db:"preview"`
 	Promoted       bool      `db:"promoted"`
+}
+
+func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64, behalfUserIds []int64) (map[int64]*dto.PinnedMessageDto, error) {
+	pinned, err := m.cp.GetPinnedMessage(ctx, co, chatId, messageId)
+	if err != nil {
+		return nil, err
+	}
+	if pinned != nil {
+		areAdmins, err := m.cp.getAreAdminsOfUserIds(ctx, co, behalfUserIds, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		cb, err := m.cp.GetChatBasic(ctx, co, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		resMap := map[int64]*dto.PinnedMessageDto{}
+
+		if cb != nil {
+			for _, participantId := range behalfUserIds {
+				pinnedEnriched := m.enrichMessagePinned(ctx, pinned, cb.RegularParticipantCanPinMessage, areAdmins[participantId])
+				resMap[participantId] = pinnedEnriched
+			}
+		} else {
+			m.lgr.ErrorContext(ctx, "Chat isn't found", "chat_id", chatId)
+		}
+
+		return resMap, nil
+	} else {
+		return nil, nil
+	}
 }
 
 func (m *CommonProjection) GetPinnedMessage(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*pinnedMessage, error) {
@@ -355,15 +364,14 @@ func (m *CommonProjection) tryNominatePreviousToPromote(ctx context.Context, co 
 	return previousPinned, nil
 }
 
-func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePinned) (*pinnedMessage, int64, error) {
+func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePinned) (*int64, int64, error) {
 	type resDto struct {
-		count           int64
-		promotedMessage *pinnedMessage
+		count             int64
+		promotedMessageId *int64
 	}
 	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*resDto, error) {
 		var count int64
 		var promotedMessageId *int64
-		var promotedMessage *pinnedMessage
 		if event.Pinned {
 			mb, err := m.GetMessageBasic(ctx, tx, event.ChatId, event.MessageId)
 			if err != nil {
@@ -418,15 +426,6 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 			if err != nil {
 				return nil, err
 			}
-
-		}
-
-		if promotedMessageId != nil {
-			var err error
-			promotedMessage, err = m.GetPinnedMessage(ctx, tx, event.ChatId, *promotedMessageId)
-			if err != nil {
-				return nil, err
-			}
 		}
 
 		count, err := m.GetPinnedMessageCount(ctx, tx, event.ChatId)
@@ -435,14 +434,14 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 		}
 
 		return &resDto{
-			count:           count,
-			promotedMessage: promotedMessage,
+			count:             count,
+			promotedMessageId: promotedMessageId,
 		}, nil
 	})
 	if errOuter != nil {
 		return nil, 0, errOuter
 	}
-	return res.promotedMessage, res.count, nil
+	return res.promotedMessageId, res.count, nil
 }
 
 func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId int64) error {
@@ -1379,6 +1378,8 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 	}
 	return d, nil
 }
+
+//func (m *CommonProjection) //
 
 func makeReactions(users map[int64]*dto.User, reactionsList []dto.ReactionDto) []dto.Reaction {
 	var convertedReactionsOfMessageToReturn = make([]dto.Reaction, 0, len(reactionsList))
