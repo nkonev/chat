@@ -234,6 +234,50 @@ func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMes
 	return &res
 }
 
+func (m *EnrichingProjection) GetPinnedPromotedMessage(ctx context.Context, chatId, behalfUserId int64) (*dto.PinnedMessageDto, bool, error) {
+	type resDto struct {
+		promoted        *dto.PinnedMessageDto
+		notAParticipant bool
+	}
+	res, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*resDto, error) {
+		participant, err := m.cp.IsParticipant(ctx, tx, behalfUserId, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		var promotedMessageId *int64
+		err = sqlscan.Get(ctx, tx, &promotedMessageId, "select message_id from message_pinned where chat_id = $1 and promoted = true order by create_date_time desc limit 1", chatId)
+		if errors.Is(err, sql.ErrNoRows) {
+			// there were no rows, but otherwise no error occurred
+		} else if err != nil {
+			return nil, err
+		}
+
+		var pr *dto.PinnedMessageDto
+		if promotedMessageId != nil {
+			pr, err = m.GetPinnedMessageEnriched(ctx, tx, chatId, *promotedMessageId)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if participant {
+			return &resDto{
+				promoted: pr,
+			}, nil
+		} else {
+			return &resDto{
+				notAParticipant: true,
+			}, nil
+		}
+	})
+	if errOuter != nil {
+		return nil, false, errOuter
+	}
+
+	return res.promoted, res.notAParticipant, nil
+}
+
 func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.PinnedMessageDto, error) {
 	pinned, err := m.cp.GetPinnedMessage(ctx, co, chatId, messageId)
 	if err != nil {
@@ -292,11 +336,11 @@ func (m *CommonProjection) createMessagePinnedText(content string) string {
 }
 
 func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePinned) (*pinnedMessage, int64, error) {
-	type txRes struct {
+	type resDto struct {
 		count           int64
 		promotedMessage *pinnedMessage
 	}
-	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*txRes, error) {
+	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*resDto, error) {
 		var count int64
 		var promotedMessageId *int64
 		var promotedMessage *pinnedMessage
@@ -382,7 +426,7 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 			return nil, err
 		}
 
-		return &txRes{
+		return &resDto{
 			count:           count,
 			promotedMessage: promotedMessage,
 		}, nil

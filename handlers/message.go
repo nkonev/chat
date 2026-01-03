@@ -749,6 +749,40 @@ func (mc *MessageHandler) GetPinnedMessages(g *gin.Context) {
 }
 
 func (mc *MessageHandler) GetPinnedPromotedMessage(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	pp, notAparticipant, err := mc.enrichingProjection.GetPinnedPromotedMessage(g.Request.Context(), chatId, userId)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking MessageFilter", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	if notAparticipant {
+		g.Status(http.StatusNoContent)
+		return
+	}
+
+	g.JSON(http.StatusOK, pp)
+	return
 }
 
 func (mc *MessageHandler) PinMessage(g *gin.Context) {

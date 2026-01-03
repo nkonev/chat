@@ -1200,16 +1200,16 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 }
 
 func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned) error {
-	var eventType string
+	var eventTypeV string
 	if event.Pinned {
-		eventType = dto.EventTypePinnedMessagePromote
+		eventTypeV = dto.EventTypePinnedMessagePromote
 	} else {
-		eventType = dto.EventTypePinnedMessageUnpromote
+		eventTypeV = dto.EventTypePinnedMessageUnpromote
 	}
 
 	eventTypeMessageEdit := dto.EventTypeMessageEdited
 
-	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeV))
 	defer messageSpan.End()
 
 	adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId)
@@ -1237,7 +1237,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 
 			for _, participantId := range participantIdsPortion {
 				err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
-					EventType: eventType,
+					EventType: dto.EventTypePinnedMessageUnpromote,
 					PromoteMessageNotification: &dto.PinnedMessageEvent{
 						Message: dto.PinnedMessageDto{
 							Id:             event.MessageId,
@@ -1277,7 +1277,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 	// send promote current message event or send promote previous pinned message event
 	if promotedMessage != nil {
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-			messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId, nil)
+			messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &promotedMessage.Id, nil)
 			if errInn != nil {
 				return errInn
 			}
@@ -1285,7 +1285,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 			for _, participantId := range participantIdsPortion {
 
 				err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
-					EventType: eventType,
+					EventType: dto.EventTypePinnedMessagePromote,
 					PromoteMessageNotification: &dto.PinnedMessageEvent{
 						Message:    *promotedMessage,
 						TotalCount: pinnedCount,
