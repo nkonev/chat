@@ -854,7 +854,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 	oldMentionedUserIds, oldHasHere, oldHasAll, _, oldRepliedUserId := m.getNotificationData(ctx, messageBasicOld.GetContentOrEmpty(), messageBasicOld.GetEmbed())
 	oldMentionedUserIdsMap := utils.SliceToSetMapIdStruct(oldMentionedUserIds)
 
-	err = m.commonProjection.OnMessageEdited(ctx, event)
+	isPinned, err := m.commonProjection.OnMessageEdited(ctx, event)
 	if err != nil {
 		return err
 	}
@@ -910,6 +910,21 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 
 	var additionalUserIdToFetch []int64 = []int64{event.AdditionalData.BehalfUserId}
 
+	var pinned *dto.PinnedMessageDto
+	var pinnedCount int64
+
+	if isPinned {
+		pinned, err = m.enrichingProjection.GetPinnedMessageEnriched(ctx, m.db, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
+		if err != nil {
+			return err
+		}
+
+		pinnedCount, err = m.commonProjection.GetPinnedMessageCount(ctx, m.db, event.MessageCommoned.ChatId)
+		if err != nil {
+			return err
+		}
+	}
+
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.MessageCommoned.ChatId, nil, func(participantIdsPortion []int64) error {
 		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id, additionalUserIdToFetch)
 		if errInn != nil {
@@ -928,6 +943,21 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 			})
 			if errInn != nil {
 				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+			}
+
+			if isPinned {
+				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+					EventType: dto.EventTypePinnedMessageEdit,
+					PromoteMessageNotification: &dto.PinnedMessageEvent{
+						Message:    *pinned,
+						TotalCount: pinnedCount,
+					},
+					UserId: messageView.BehalfUserId,
+					ChatId: event.MessageCommoned.ChatId,
+				})
+				if errInn != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				}
 			}
 		}
 
@@ -1192,7 +1222,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 		return nil
 	}
 
-	promotedMessage, count, err := m.enrichingProjection.OnMessagePinned(ctx, event)
+	promotedMessage, pinnedCount, err := m.enrichingProjection.OnMessagePinned(ctx, event)
 	if err != nil {
 		return err
 	}
@@ -1214,7 +1244,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 							ChatId:         event.ChatId,
 							CreateDateTime: event.AdditionalData.CreatedAt, // to pass thru graphql
 						},
-						TotalCount: count,
+						TotalCount: pinnedCount,
 					},
 					UserId: participantId,
 					ChatId: event.ChatId,
@@ -1258,7 +1288,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 					EventType: eventType,
 					PromoteMessageNotification: &dto.PinnedMessageEvent{
 						Message:    *promotedMessage,
-						TotalCount: count,
+						TotalCount: pinnedCount,
 					},
 					UserId: participantId,
 					ChatId: event.ChatId,

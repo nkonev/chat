@@ -1175,7 +1175,7 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 	return nil
 }
 
-// TODO for messageEdit - to change pinned and promoted, for messageDelete - to nominate another message to pinned
+// TODO for messageDelete - to nominate another message to pinned
 func (s *MessagePin) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
 	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
 	if err != nil {

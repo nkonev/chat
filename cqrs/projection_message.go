@@ -66,28 +66,34 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 	return errOuter
 }
 
-func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) (bool, error) {
+	pinned, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (bool, error) {
 
 		chatExists, err := m.checkChatExists(ctx, tx, event.MessageCommoned.ChatId)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if !chatExists {
 			m.lgr.InfoContext(ctx, "Skipping MessageCreated because there is no chat", "chat_id", event.MessageCommoned.ChatId)
-			return nil
+			return false, nil
 		}
 
 		messageBlogPost, err := m.isMessageBlogPost(ctx, tx, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
 		if err != nil {
-			return err
+			return false, err
+		}
+
+		var isMessagePinned bool
+		err = sqlscan.Get(ctx, tx, &isMessagePinned, "select exists (select * from message_pinned where chat_id = $1 and message_id = $2)", event.MessageCommoned.ChatId, event.MessageCommoned.Id)
+		if err != nil {
+			return false, err
 		}
 
 		var embed pgtype.JSONB
 		if event.MessageCommoned.Embed != nil {
 			err = embed.Set(event.MessageCommoned.Embed)
 			if err != nil {
-				return err
+				return false, err
 			}
 		} else {
 			embed.Status = pgtype.Null
@@ -103,13 +109,28 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			where chat_id = $2 and id = $1 
 		`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, event.MessageCommoned.Content, embed, event.AdditionalData.CreatedAt, event.MessageCommoned.FileItemUuid)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		if messageBlogPost {
 			_, err = m.refreshBlog(ctx, tx, event.MessageCommoned.ChatId, event.AdditionalData.CreatedAt, nil)
 			if err != nil {
-				return err
+				return false, err
+			}
+		}
+
+		if isMessagePinned {
+			previewTxt := m.createMessagePinnedText(event.MessageCommoned.Content)
+
+			_, err = tx.ExecContext(ctx, `
+			update message_pinned
+			set	
+			    preview = $3
+				, update_date_time = $4
+			where chat_id = $2 and message_id = $1 
+		`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, previewTxt, event.AdditionalData.CreatedAt)
+			if err != nil {
+				return false, err
 			}
 		}
 
@@ -119,10 +140,10 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			"chat_id", event.MessageCommoned.ChatId,
 			"message_id", event.MessageCommoned.Id,
 		)
-		return nil
+		return isMessagePinned, nil
 	})
 
-	return errOuter
+	return pinned, errOuter
 }
 
 func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx context.Context, tx *db.Tx, participantIds []int64, chatId int64) error {
@@ -185,46 +206,100 @@ func (m *EnrichingProjection) OnMessagePinned(ctx context.Context, event *Messag
 	}
 
 	if promotedMessage != nil {
-		users, err := m.aaaRestClient.GetUsers(ctx, []int64{promotedMessage.OwnerId})
-		if err != nil {
-			m.lgr.WarnContext(ctx, "unable to get users")
-		}
-
-		usersMap := utils.ToMap(users)
-
-		res := dto.PinnedMessageDto{
-			Id:             promotedMessage.Id,
-			Text:           promotedMessage.Text,
-			ChatId:         promotedMessage.ChatId,
-			OwnerId:        promotedMessage.OwnerId,
-			Owner:          usersMap[promotedMessage.OwnerId],
-			PinnedPromoted: true,
-			CreateDateTime: promotedMessage.CreateDateTime,
-		}
-		return &res, count, nil
+		res := m.enrichMessagePinned(ctx, promotedMessage)
+		return res, count, nil
 	} else {
 		return nil, count, nil
 	}
 }
 
-type promotedMessage struct {
-	Id             int64
-	ChatId         int64
-	OwnerId        int64
-	CreateDateTime time.Time
-	Text           string
+func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *pinnedMessage) *dto.PinnedMessageDto {
+	users, err := m.aaaRestClient.GetUsers(ctx, []int64{pinnedMessage.OwnerId})
+	if err != nil {
+		m.lgr.WarnContext(ctx, "unable to get users")
+	}
+
+	usersMap := utils.ToMap(users)
+
+	res := dto.PinnedMessageDto{
+		Id:             pinnedMessage.Id,
+		Text:           pinnedMessage.Text,
+		ChatId:         pinnedMessage.ChatId,
+		OwnerId:        pinnedMessage.OwnerId,
+		Owner:          usersMap[pinnedMessage.OwnerId],
+		PinnedPromoted: pinnedMessage.Promoted,
+		CreateDateTime: pinnedMessage.CreateDateTime,
+	}
+
+	return &res
 }
 
-func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePinned) (*promotedMessage, int64, error) {
+func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.PinnedMessageDto, error) {
+	pinned, err := m.cp.GetPinnedMessage(ctx, co, chatId, messageId)
+	if err != nil {
+		return nil, err
+	}
+	if pinned != nil {
+		res := m.enrichMessagePinned(ctx, pinned)
+		return res, nil
+	} else {
+		return nil, nil
+	}
+}
+
+type pinnedMessage struct {
+	Id             int64     `db:"message_id"`
+	ChatId         int64     `db:"chat_id"`
+	OwnerId        int64     `db:"owner_id"`
+	CreateDateTime time.Time `db:"create_date_time"`
+	Text           string    `db:"preview"`
+	Promoted       bool      `db:"promoted"`
+}
+
+func (m *CommonProjection) GetPinnedMessage(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*pinnedMessage, error) {
+	var pm pinnedMessage
+	err := sqlscan.Get(ctx, co, &pm, `
+	select 
+		message_id
+		,chat_id
+		,owner_id
+		,create_date_time
+		,preview
+		,promoted
+	from message_pinned 
+	where chat_id = $1 and message_id = $2
+	`, chatId, messageId)
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+	} else if err != nil {
+		return nil, err
+	}
+
+	return &pm, nil
+}
+
+func (m *CommonProjection) GetPinnedMessageCount(ctx context.Context, co db.CommonOperations, chatId int64) (int64, error) {
+	var count int64
+	err := sqlscan.Get(ctx, co, &count, "select count (*) from message_pinned where chat_id = $1", chatId)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (m *CommonProjection) createMessagePinnedText(content string) string {
+	return preview.CreateMessagePreviewWithoutLogin(m.stripTags, m.cfg.Message.PreviewMaxTextSize, m.stripTags.Sanitize(content))
+}
+
+func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePinned) (*pinnedMessage, int64, error) {
 	type txRes struct {
-		promotedMessageId *int64
-		count             int64
-		promotedMessage   *promotedMessage
+		count           int64
+		promotedMessage *pinnedMessage
 	}
 	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*txRes, error) {
-		var promotedMessageId *int64
 		var count int64
-		var pm *promotedMessage
+		var promotedMessageId *int64
+		var promotedMessage *pinnedMessage
 		if event.Pinned {
 			mb, err := m.GetMessageBasic(ctx, tx, event.ChatId, event.MessageId)
 			if err != nil {
@@ -232,8 +307,7 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 			}
 
 			if mb != nil {
-				previewBase := m.stripTags.Sanitize(mb.Content)
-				previewTxt := preview.CreateMessagePreviewWithoutLogin(m.stripTags, m.cfg.Message.PreviewMaxTextSize, previewBase)
+				previewTxt := m.createMessagePinnedText(mb.Content)
 
 				_, err = tx.ExecContext(ctx, `
 					insert into message_pinned (chat_id, message_id, owner_id, create_date_time, update_date_time, preview, promoted)
@@ -260,14 +334,6 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 				}
 
 				promotedMessageId = &event.MessageId
-
-				pm = &promotedMessage{
-					Id:             event.MessageId,
-					ChatId:         event.ChatId,
-					OwnerId:        mb.OwnerId,
-					CreateDateTime: event.AdditionalData.CreatedAt,
-					Text:           previewTxt,
-				}
 			} else {
 				m.lgr.InfoContext(ctx, "Skipping pinning the mesage because it is not exists", "chat_id", event.ChatId, "message_id", event.MessageId)
 			}
@@ -297,19 +363,28 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 				if err != nil {
 					return nil, err
 				}
+
 				promotedMessageId = previousPinned
 			}
 		}
 
-		err := sqlscan.Get(ctx, tx, &count, "select count (*) from message_pinned where chat_id = $1", event.ChatId)
+		if promotedMessageId != nil {
+			var err error
+			promotedMessage, err = m.GetPinnedMessage(ctx, tx, event.ChatId, *promotedMessageId)
+			if err != nil {
+				return nil, err
+			}
+
+		}
+
+		count, err := m.GetPinnedMessageCount(ctx, tx, event.ChatId)
 		if err != nil {
 			return nil, err
 		}
 
 		return &txRes{
-			promotedMessageId: promotedMessageId,
-			count:             count,
-			promotedMessage:   pm,
+			count:           count,
+			promotedMessage: promotedMessage,
 		}, nil
 	})
 	if errOuter != nil {
