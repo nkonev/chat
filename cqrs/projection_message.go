@@ -199,14 +199,14 @@ func (m *CommonProjection) setMessagePinned(ctx context.Context, tx *db.Tx, chat
 	return nil
 }
 
-func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *pinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool, usersMap map[int64]*dto.User) *dto.PinnedMessageDto {
+func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *pinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool, messageOwnerUsersMap map[int64]*dto.User) *dto.PinnedMessageDto {
 
 	res := dto.PinnedMessageDto{
 		Id:             pinnedMessage.Id,
 		Text:           pinnedMessage.Text,
 		ChatId:         pinnedMessage.ChatId,
 		OwnerId:        pinnedMessage.OwnerId,
-		Owner:          usersMap[pinnedMessage.OwnerId],
+		Owner:          messageOwnerUsersMap[pinnedMessage.OwnerId],
 		PinnedPromoted: pinnedMessage.Promoted,
 		CreateDateTime: pinnedMessage.CreateDateTime,
 		CanPin:         CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin),
@@ -287,7 +287,7 @@ type pinnedMessage struct {
 	Promoted       bool      `db:"promoted"`
 }
 
-func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64, behalfUserIds []int64, usersMap map[int64]*dto.User) (map[int64]*dto.PinnedMessageDto, error) {
+func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64, behalfUserIds []int64, messageOwnerUsersMap map[int64]*dto.User) (map[int64]*dto.PinnedMessageDto, error) {
 	pinned, err := m.cp.GetPinnedMessage(ctx, co, chatId, messageId)
 	if err != nil {
 		return nil, err
@@ -307,7 +307,7 @@ func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co d
 
 		if cb != nil {
 			for _, participantId := range behalfUserIds {
-				pinnedEnriched := m.enrichMessagePinned(ctx, pinned, cb.RegularParticipantCanPinMessage, areAdmins[participantId], usersMap)
+				pinnedEnriched := m.enrichMessagePinned(ctx, pinned, cb.RegularParticipantCanPinMessage, areAdmins[participantId], messageOwnerUsersMap)
 				resMap[participantId] = pinnedEnriched
 			}
 		} else {
