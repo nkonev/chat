@@ -1296,8 +1296,6 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 		}
 	}
 
-	// TODO not related - prohibit on front send the new chat creation with an empty title or fix if somehow else
-
 	return nil
 }
 
