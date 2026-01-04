@@ -710,7 +710,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 				if owner, ok := allPortionUsersMap[messageView.OwnerId]; !ok {
 					m.lgr.InfoContext(ctx, "Message owner isn't found", "user_id", messageView.OwnerId)
 				} else {
-					err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+					errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 						UserId:    messageView.BehalfUserId,
 						EventType: dto.EventTypeMessageBrowserNotificationAdd,
 						BrowserNotification: &dto.BrowserNotification{
@@ -723,7 +723,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 							OwnerLogin:  owner.Login,
 						},
 					})
-					if err != nil {
+					if errInn != nil {
 						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
 					}
 				}
