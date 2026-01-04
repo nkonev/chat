@@ -66,6 +66,27 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 	return errOuter
 }
 
+func (m *CommonProjection) isMessagePinned(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
+	var isMessagePinned bool
+	err := sqlscan.Get(ctx, co, &isMessagePinned, "select exists (select * from message_pinned where chat_id = $1 and message_id = $2)", chatId, messageId)
+	if err != nil {
+		return false, err
+	}
+
+	return isMessagePinned, nil
+}
+
+func (m *CommonProjection) isMessagePromoted(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (bool, error) {
+
+	var isMessagePromoted bool
+	err := sqlscan.Get(ctx, co, &isMessagePromoted, "select exists (select * from message_pinned where chat_id = $1 and message_id = $2 and promoted = true)", chatId, messageId)
+	if err != nil {
+		return false, err
+	}
+
+	return isMessagePromoted, nil
+}
+
 func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) (bool, error) {
 	pinned, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (bool, error) {
 
@@ -83,8 +104,7 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			return false, err
 		}
 
-		var isMessagePinned bool
-		err = sqlscan.Get(ctx, tx, &isMessagePinned, "select exists (select * from message_pinned where chat_id = $1 and message_id = $2)", event.MessageCommoned.ChatId, event.MessageCommoned.Id)
+		isMessagePinned, err := m.isMessagePinned(ctx, tx, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
 		if err != nil {
 			return false, err
 		}
@@ -154,32 +174,71 @@ func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx conte
 	return nil
 }
 
-func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageDeleted) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageDeleted) (bool, *int64, *int64, error) {
+	type txDto struct {
+		promotedMessageId *int64
+		pinnedCount       *int64
+		wasMessagePinned  bool
+	}
+	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*txDto, error) {
+		var pinnedCount int64
+		var promotedMessageId *int64
 
 		messageBlogPost, err := m.isMessageBlogPost(ctx, tx, event.ChatId, event.MessageId)
 		if err != nil {
-			return err
+			return nil, err
+		}
+
+		wasMessagePinned, err := m.isMessagePinned(ctx, tx, event.ChatId, event.MessageId)
+		if err != nil {
+			return nil, err
+		}
+
+		var wasPromoted bool
+		if wasMessagePinned {
+			wasPromoted, err = m.isMessagePromoted(ctx, tx, event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		_, err = tx.ExecContext(ctx, `
 			delete from message where (id, chat_id) = ($1, $2)
 		`, event.MessageId, event.ChatId)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if messageBlogPost {
 			_, err = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt, nil)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 
-		return nil
+		if wasMessagePinned {
+			if wasPromoted {
+				promotedMessageId, err = m.tryNominatePreviousToPromote(ctx, tx, event.ChatId)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			var errc error
+			pinnedCount, errc = m.GetPinnedMessageCount(ctx, tx, event.ChatId)
+			if errc != nil {
+				return nil, errc
+			}
+		}
+
+		return &txDto{
+			pinnedCount:       &pinnedCount,
+			promotedMessageId: promotedMessageId,
+			wasMessagePinned:  wasMessagePinned,
+		}, nil
 	})
 	if errOuter != nil {
-		return errOuter
+		return false, nil, nil, errOuter
 	}
 
 	m.lgr.InfoContext(ctx,
@@ -188,7 +247,7 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 		"chat_id", event.ChatId,
 	)
 
-	return nil
+	return res.wasMessagePinned, res.promotedMessageId, res.pinnedCount, nil
 }
 
 func (m *CommonProjection) setMessagePinned(ctx context.Context, tx *db.Tx, chatId, messageId int64, pinned bool) error {
@@ -381,7 +440,7 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 		promotedMessageId *int64
 	}
 	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*resDto, error) {
-		var count int64
+		var pinnedCount int64
 		var promotedMessageId *int64
 		if event.Pinned {
 			mb, err := m.GetMessageBasic(ctx, tx, event.ChatId, event.MessageId)
@@ -422,7 +481,12 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 			}
 		} else {
 			// unpin
-			_, err := tx.ExecContext(ctx, "delete from message_pinned where chat_id = $1 and message_id = $2", event.ChatId, event.MessageId)
+			isPromoted, err := m.isMessagePromoted(ctx, tx, event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
+
+			_, err = tx.ExecContext(ctx, "delete from message_pinned where chat_id = $1 and message_id = $2", event.ChatId, event.MessageId)
 			if err != nil {
 				return nil, err
 			}
@@ -433,19 +497,22 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 				return nil, err
 			}
 
-			promotedMessageId, err = m.tryNominatePreviousToPromote(ctx, tx, event.ChatId)
-			if err != nil {
-				return nil, err
+			if isPromoted {
+				promotedMessageId, err = m.tryNominatePreviousToPromote(ctx, tx, event.ChatId)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 
-		count, err := m.GetPinnedMessageCount(ctx, tx, event.ChatId)
-		if err != nil {
-			return nil, err
+		var errc error
+		pinnedCount, errc = m.GetPinnedMessageCount(ctx, tx, event.ChatId)
+		if errc != nil {
+			return nil, errc
 		}
 
 		return &resDto{
-			count:             count,
+			count:             pinnedCount,
 			promotedMessageId: promotedMessageId,
 		}, nil
 	})

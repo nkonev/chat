@@ -14,6 +14,7 @@ import (
 	"go-cqrs-chat-example/utils"
 	"maps"
 	"slices"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -949,6 +950,9 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 			}
 
 			if isPinned {
+				// almost the same as sendPromotePinned() but
+				// the differense is that this particular method just sends pinneds, not pinned promoteds
+				// and here is different event - dto.EventTypePinnedMessageEdit
 				pinnedEnriched := pinnedEnricheds[messageView.BehalfUserId]
 				if pinnedEnriched != nil {
 					errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
@@ -1117,7 +1121,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 		return err
 	}
 
-	err = m.commonProjection.OnMessageRemoved(ctx, event)
+	wasPinned, promotedMessageId, pinnedCount, err := m.commonProjection.OnMessageRemoved(ctx, event)
 	if err != nil {
 		return err
 	}
@@ -1184,7 +1188,16 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 				}
 			}
 
-			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			// send unpromote/unpin
+			if wasPinned {
+				if pinnedCount != nil {
+					m.sendUnpromotePinned(ctx, participantIdsPortion, *pinnedCount, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt, event.AdditionalData.GetCorrelationId())
+				} else {
+					m.lgr.ErrorContext(ctx, "Wrong invariant - pinnedCount is nil while wasPinned is true")
+				}
+			}
+
+			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 				UserId:    participantId,
 				EventType: dto.EventTypeMessageBrowserNotificationDelete,
 				BrowserNotification: &dto.BrowserNotification{
@@ -1193,7 +1206,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 					OwnerId:   dto.NonExistentUser,
 				},
 			})
-			if err != nil {
+			if errInn != nil {
 				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
 			}
 		}
@@ -1202,6 +1215,17 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 	})
 	if errOuter != nil {
 		return errOuter
+	}
+
+	if promotedMessageId != nil {
+		if pinnedCount != nil {
+			errOuter = m.sendPromotePinned(ctx, event.ChatId, *promotedMessageId, *pinnedCount, event.AdditionalData.GetCorrelationId())
+			if errOuter != nil {
+				return errOuter
+			}
+		} else {
+			m.lgr.ErrorContext(ctx, "Wrong invariant - pinnedCount is nil while wasPinned is true")
+		}
 	}
 
 	return nil
@@ -1235,7 +1259,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 		return err
 	}
 
-	// send unpromote current message event
+	// send unpromote/unpin
 	if !event.Pinned {
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 			messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId, nil)
@@ -1243,24 +1267,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 				return errInn
 			}
 
-			for _, participantId := range participantIdsPortion {
-				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
-					EventType: dto.EventTypePinnedMessageUnpromote,
-					PromoteMessageNotification: &dto.PinnedMessageEvent{
-						Message: dto.PinnedMessageDto{
-							Id:             event.MessageId,
-							ChatId:         event.ChatId,
-							CreateDateTime: event.AdditionalData.CreatedAt, // to pass thru graphql
-						},
-						TotalCount: pinnedCount,
-					},
-					UserId: participantId,
-					ChatId: event.ChatId,
-				})
-				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
-				}
-			}
+			m.sendUnpromotePinned(ctx, participantIdsPortion, pinnedCount, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt, event.AdditionalData.GetCorrelationId())
 
 			for _, messageView := range messageViews {
 				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
@@ -1279,65 +1286,96 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 		if errOuter != nil {
 			return errOuter
 		}
-
 	}
 
 	// send promote current message event or send promote previous pinned message event
 	if promotedMessageId != nil {
-		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
-			messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, promotedMessageId, nil)
-			if errInn != nil {
-				return errInn
-			}
-
-			// allPortionUsersMap contains message owner
-			allPortionUsersMap := utils.ToMap(allPortionUsers)
-
-			enrichedsPinnedPromoted, errInn := m.enrichingProjection.GetPinnedMessageEnriched(ctx, m.db, event.ChatId, *promotedMessageId, participantIdsPortion, allPortionUsersMap)
-			if errInn != nil {
-				return errInn
-			}
-
-			for _, participantId := range participantIdsPortion {
-				promotedMessage := enrichedsPinnedPromoted[participantId]
-				if promotedMessage != nil {
-					errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
-						EventType: dto.EventTypePinnedMessagePromote,
-						PromoteMessageNotification: &dto.PinnedMessageEvent{
-							Message:    *promotedMessage,
-							TotalCount: pinnedCount,
-						},
-						UserId: participantId,
-						ChatId: event.ChatId,
-					})
-					if errInn != nil {
-						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
-					}
-				} else {
-					m.lgr.WarnContext(ctx, "Pinned promoted isn't found for the participant", "user_id", participantId)
-				}
-			}
-
-			for _, messageView := range messageViews {
-				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
-					EventType:           eventTypeMessageEdit,
-					UserId:              messageView.BehalfUserId,
-					ChatId:              event.ChatId,
-					MessageNotification: &messageView,
-				})
-				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
-				}
-			}
-
-			return nil
-		})
+		errOuter := m.sendPromotePinned(ctx, event.ChatId, *promotedMessageId, pinnedCount, event.AdditionalData.GetCorrelationId())
 		if errOuter != nil {
 			return errOuter
 		}
 	}
 
 	// TODO not related - prohibit on front send the new chat creation with an empty title or fix if somehow else
+
+	return nil
+}
+
+func (m *EventHandler) sendUnpromotePinned(ctx context.Context, participantIdsPortion []int64, pinnedCount int64, chatId, messageId int64, createdAt time.Time, correlationId *string) {
+	for _, participantId := range participantIdsPortion {
+		errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, correlationId, dto.ChatEvent{
+			EventType: dto.EventTypePinnedMessageUnpromote,
+			PromoteMessageNotification: &dto.PinnedMessageEvent{
+				Message: dto.PinnedMessageDto{
+					Id:             messageId,
+					ChatId:         chatId,
+					CreateDateTime: createdAt, // to pass thru graphql
+				},
+				TotalCount: pinnedCount,
+			},
+			UserId: participantId,
+			ChatId: chatId,
+		})
+		if errInn != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+		}
+	}
+}
+
+func (m *EventHandler) sendPromotePinned(ctx context.Context, chatId, promotedMessageId, pinnedCount int64, correlationId *string) error {
+	eventTypeMessageEdit := dto.EventTypeMessageEdited
+
+	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, chatId, nil, func(participantIdsPortion []int64) error {
+		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, chatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &promotedMessageId, nil)
+		if errInn != nil {
+			return errInn
+		}
+
+		// allPortionUsersMap contains message owner
+		allPortionUsersMap := utils.ToMap(allPortionUsers)
+
+		enrichedsPinnedPromoted, errInn := m.enrichingProjection.GetPinnedMessageEnriched(ctx, m.db, chatId, promotedMessageId, participantIdsPortion, allPortionUsersMap)
+		if errInn != nil {
+			return errInn
+		}
+
+		for _, participantId := range participantIdsPortion {
+			promotedMessage := enrichedsPinnedPromoted[participantId]
+			if promotedMessage != nil {
+				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, correlationId, dto.ChatEvent{
+					EventType: dto.EventTypePinnedMessagePromote,
+					PromoteMessageNotification: &dto.PinnedMessageEvent{
+						Message:    *promotedMessage,
+						TotalCount: pinnedCount,
+					},
+					UserId: participantId,
+					ChatId: chatId,
+				})
+				if errInn != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				}
+			} else {
+				m.lgr.WarnContext(ctx, "Pinned promoted isn't found for the participant", "user_id", participantId)
+			}
+		}
+
+		for _, messageView := range messageViews {
+			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, correlationId, dto.ChatEvent{
+				EventType:           eventTypeMessageEdit,
+				UserId:              messageView.BehalfUserId,
+				ChatId:              chatId,
+				MessageNotification: &messageView,
+			})
+			if errInn != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+			}
+		}
+
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
+	}
 
 	return nil
 }
