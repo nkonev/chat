@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"github.com/stretchr/testify/mock"
 	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
@@ -12,9 +11,12 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
+	"go-cqrs-chat-example/sanitizer"
 	"log/slog"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/mock"
 
 	"github.com/IBM/sarama"
 	"github.com/stretchr/testify/assert"
@@ -114,6 +116,7 @@ func TestReset(t *testing.T) {
 			db.ConfigureDatabase,
 			kafka.ConfigureKafkaAdmin,
 			cqrs.ConfigureCommonProjection,
+			sanitizer.CreateStripTags,
 		),
 		fx.Invoke(
 			db.RunResetDatabase,
