@@ -744,8 +744,42 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 	g.Status(http.StatusOK)
 }
 
-// TODO implement pinned
 func (mc *MessageHandler) GetPinnedMessages(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
+	page := utils.FixPageString(g.Query(dto.PageParam))
+	offset := utils.GetOffset(page, size)
+
+	pm, cnt, err := mc.enrichingProjection.GetPinnedMessages(g.Request.Context(), chatId, userId, offset, size)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MakeMessageBlogPost command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, dto.PinnedMessagesWrapper{
+		Data:  pm,
+		Count: cnt,
+	})
 }
 
 func (mc *MessageHandler) GetPinnedPromotedMessage(g *gin.Context) {

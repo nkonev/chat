@@ -258,7 +258,7 @@ func (m *CommonProjection) setMessagePinned(ctx context.Context, tx *db.Tx, chat
 	return nil
 }
 
-func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *pinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool, messageOwnerUsersMap map[int64]*dto.User) *dto.PinnedMessageDto {
+func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *dto.PinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool, messageOwnerUsersMap map[int64]*dto.User) *dto.PinnedMessageDto {
 
 	res := dto.PinnedMessageDto{
 		Id:             pinnedMessage.Id,
@@ -313,7 +313,7 @@ func (m *EnrichingProjection) GetPinnedPromotedMessage(ctx context.Context, chat
 		if promotedP != nil {
 			users, err := m.aaaRestClient.GetUsers(ctx, []int64{promotedP.OwnerId})
 			if err != nil {
-				m.lgr.WarnContext(ctx, "unable to get users")
+				m.lgr.WarnContext(ctx, "unable to get users", "err", err)
 			}
 
 			usersMap := utils.ToMap(users)
@@ -337,13 +337,77 @@ func (m *EnrichingProjection) GetPinnedPromotedMessage(ctx context.Context, chat
 	return res.promoted, res.notAParticipant, nil
 }
 
-type pinnedMessage struct {
-	Id             int64     `db:"message_id"`
-	ChatId         int64     `db:"chat_id"`
-	OwnerId        int64     `db:"owner_id"`
-	CreateDateTime time.Time `db:"create_date_time"`
-	Text           string    `db:"preview"`
-	Promoted       bool      `db:"promoted"`
+func (m *EnrichingProjection) GetPinnedMessages(ctx context.Context, chatId, userId, offset int64, size int32) ([]dto.PinnedMessageDto, int64, error) {
+	type txRes struct {
+		list  []dto.PinnedMessageDto
+		count int64
+	}
+	res, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*txRes, error) {
+		rs := txRes{
+			list:  []dto.PinnedMessageDto{},
+			count: 0,
+		}
+
+		participant, err := m.cp.IsParticipant(ctx, tx, userId, chatId)
+		if err != nil {
+			return nil, err
+		}
+		if !participant {
+			return nil, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", userId, chatId))
+		}
+
+		pinnedMessages, err := m.cp.GetPinnedMessages(ctx, tx, chatId, offset, size)
+		if err != nil {
+			return nil, err
+		}
+
+		cb, err := m.cp.GetChatBasic(ctx, tx, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		if cb == nil {
+			m.lgr.InfoContext(ctx, "chat is not found", "chat_id", chatId)
+			return &rs, nil
+		}
+
+		areAdmins, err := m.cp.getAreAdminsOfUserIds(ctx, tx, []int64{userId}, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		messageOwners := map[int64]struct{}{}
+		for _, msg := range pinnedMessages {
+			messageOwners[msg.OwnerId] = struct{}{}
+		}
+
+		messageOwnerUsers, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdStructToSlice(messageOwners))
+		if err != nil {
+			m.lgr.WarnContext(ctx, "unable to get users", "err", err)
+		}
+
+		messageOwnerUsersMap := utils.ToMap(messageOwnerUsers)
+
+		for _, pm := range pinnedMessages {
+			pinnedEnriched := m.enrichMessagePinned(ctx, &pm, cb.RegularParticipantCanPinMessage, areAdmins[userId], messageOwnerUsersMap)
+			rs.list = append(rs.list, *pinnedEnriched)
+		}
+
+		cnt, err := m.cp.GetPinnedMessageCount(ctx, tx, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		rs.count = cnt
+
+		return &rs, nil
+	})
+
+	if errOuter != nil {
+		return nil, 0, errOuter
+	}
+
+	return res.list, res.count, nil
 }
 
 func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64, behalfUserIds []int64, messageOwnerUsersMap map[int64]*dto.User) (map[int64]*dto.PinnedMessageDto, error) {
@@ -379,19 +443,23 @@ func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co d
 	}
 }
 
-func (m *CommonProjection) GetPinnedMessage(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*pinnedMessage, error) {
-	var pm pinnedMessage
-	err := sqlscan.Get(ctx, co, &pm, `
-	select 
+const pinnedMessageCols = `
 		message_id
 		,chat_id
 		,owner_id
 		,create_date_time
 		,preview
 		,promoted
+`
+
+func (m *CommonProjection) GetPinnedMessage(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.PinnedMessage, error) {
+	var pm dto.PinnedMessage
+	err := sqlscan.Get(ctx, co, &pm, fmt.Sprintf(`
+	select 
+		%s
 	from message_pinned 
 	where chat_id = $1 and message_id = $2
-	`, chatId, messageId)
+	`, pinnedMessageCols), chatId, messageId)
 	if errors.Is(err, sql.ErrNoRows) {
 		// there were no rows, but otherwise no error occurred
 	} else if err != nil {
@@ -399,6 +467,25 @@ func (m *CommonProjection) GetPinnedMessage(ctx context.Context, co db.CommonOpe
 	}
 
 	return &pm, nil
+}
+
+func (m *CommonProjection) GetPinnedMessages(ctx context.Context, co db.CommonOperations, chatId int64, offset int64, size int32) ([]dto.PinnedMessage, error) {
+	var pm = []dto.PinnedMessage{}
+
+	err := sqlscan.Select(ctx, co, &pm, fmt.Sprintf(`
+	select 
+		%s
+	from message_pinned 
+	where chat_id = $1 
+	order by create_date_time desc, promoted desc
+	limit $2 offset $3
+	`, pinnedMessageCols),
+		chatId, size, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return pm, nil
 }
 
 func (m *CommonProjection) GetPinnedMessageCount(ctx context.Context, co db.CommonOperations, chatId int64) (int64, error) {
@@ -456,6 +543,7 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 					values ($1, $2, $3, $4, $5, $6, true)
 					on conflict (chat_id, message_id) do update set
 					preview = excluded.preview
+					,promoted = excluded.promoted
 					,update_date_time = excluded.update_date_time
 				`,
 					event.ChatId, event.MessageId, mb.OwnerId, event.AdditionalData.CreatedAt, event.AdditionalData.CreatedAt, previewTxt)
@@ -1083,7 +1171,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		users, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdBoolToSlice(usersSet))
 		if err != nil {
-			m.lgr.WarnContext(ctx, "unable to get users")
+			m.lgr.WarnContext(ctx, "unable to get users", "err", err)
 		}
 
 		notAparticipant := false

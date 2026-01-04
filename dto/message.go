@@ -336,3 +336,17 @@ type BrowserNotification struct {
 	OwnerId     int64   `json:"ownerId"`
 	OwnerLogin  string  `json:"ownerLogin"`
 }
+
+type PinnedMessagesWrapper struct {
+	Data  []PinnedMessageDto `json:"items"`
+	Count int64              `json:"count"` // total pinned messages number
+}
+
+type PinnedMessage struct {
+	Id             int64     `db:"message_id"`
+	ChatId         int64     `db:"chat_id"`
+	OwnerId        int64     `db:"owner_id"`
+	CreateDateTime time.Time `db:"create_date_time"`
+	Text           string    `db:"preview"`
+	Promoted       bool      `db:"promoted"`
+}
