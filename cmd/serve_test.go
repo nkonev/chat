@@ -3614,7 +3614,7 @@ func TestPinMessage(t *testing.T) {
 			testOutputEventsAccumulator.Clean()
 		})
 
-		// restore pinned of 2
+		// restore pinned of 2 and check web handles
 		err = testRestClient.PinMessage(ctx, user1, chat1Id, message2Id, true)
 		require.NoError(t, err, "error in pinning message")
 		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
@@ -3628,6 +3628,20 @@ func TestPinMessage(t *testing.T) {
 			},
 		}))
 		testOutputEventsAccumulator.Clean()
+
+		pinneds, err := testRestClient.GetPinnedMessages(ctx, user1, chat1Id)
+		require.NoError(t, err, "error in get pinned messages")
+		assert.Equal(t, 2, len(pinneds))
+		assert.Equal(t, message2Id, pinneds[0].Id)
+		assert.Equal(t, message2TextNew, pinneds[0].Text)
+		assert.Equal(t, message1Id, pinneds[1].Id)
+		assert.Equal(t, message1Text, pinneds[1].Text)
+
+		pinnedPromoted, err := testRestClient.GetPinnedPromotedMessage(ctx, user1, chat1Id)
+		require.NoError(t, err, "error in get pinned promoted message")
+		assert.NotNil(t, pinnedPromoted)
+		assert.Equal(t, message2Id, pinnedPromoted.Id)
+		assert.Equal(t, message2TextNew, pinnedPromoted.Text)
 
 		t.Run("delete_makes_other_pinned", func(t *testing.T) {
 			err = testRestClient.DeleteMessage(ctx, user1, chat1Id, message2Id)

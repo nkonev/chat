@@ -374,6 +374,50 @@ func (rc *TestRestClient) PinMessage(ctx context.Context, behalfUserId int64, ch
 	return queryNoResponse[dto.MessageEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/pin", "message.Pin", nil, queryParams)
 }
 
+type MessagePinnedGetOption interface {
+	Apply(queryParams *url.Values) *url.Values
+}
+
+type MessagePinnedGetOptionWithSize struct {
+	v int32
+}
+
+func NewMessagePinnedGetOptionWithSize(v int32) *MessagePinnedGetOptionWithSize {
+	return &MessagePinnedGetOptionWithSize{v: v}
+}
+
+func (r *MessagePinnedGetOptionWithSize) Apply(queryParams *url.Values) *url.Values {
+	if queryParams == nil {
+		queryParams = &url.Values{}
+	}
+	queryParams.Add(dto.SizeParam, utils.ToString(r.v))
+	return queryParams
+}
+
+func (rc *TestRestClient) GetPinnedMessages(ctx context.Context, behalfUserId int64, chatId int64, messageGetOptions ...MessagePinnedGetOption) ([]dto.PinnedMessageDto, error) {
+	var queryParams *url.Values
+	for _, opt := range messageGetOptions {
+		if opt != nil {
+			queryParams = opt.Apply(queryParams)
+		}
+	}
+
+	res, err := query[any, dto.PinnedMessagesWrapper](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/message/pin", "message.Pinned", nil, queryParams)
+	if err != nil {
+		return []dto.PinnedMessageDto{}, err
+	}
+	return res.Data, nil
+}
+
+func (rc *TestRestClient) GetPinnedPromotedMessage(ctx context.Context, behalfUserId int64, chatId int64) (*dto.PinnedMessageDto, error) {
+	res, err := query[any, *dto.PinnedMessageDto](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/message/pin/promoted", "message.PinnedPromoted", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
 type MessageGetOption interface {
 	Apply(queryParams *url.Values) *url.Values
 }
