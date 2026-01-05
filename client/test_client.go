@@ -8,11 +8,12 @@ import (
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel"
 	"net/http"
 	"net/url"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
 )
 
 type TestRestClient struct {
@@ -364,6 +365,13 @@ func (rc *TestRestClient) SyncMessage(ctx context.Context, behalfUserId int64, c
 
 func (rc *TestRestClient) DeleteMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64) error {
 	return queryNoResponse[any](ctx, &rc.restClient, behalfUserId, http.MethodDelete, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Delete", nil, nil)
+}
+
+func (rc *TestRestClient) PinMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64, pin bool) error {
+	var queryParams *url.Values = &url.Values{}
+	queryParams.Set("pin", utils.ToString(pin))
+
+	return queryNoResponse[dto.MessageEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/pin", "message.Pin", nil, queryParams)
 }
 
 type MessageGetOption interface {

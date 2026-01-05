@@ -3,10 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/IBM/sarama"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
@@ -18,10 +14,15 @@ import (
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/tasks"
 	"go-cqrs-chat-example/utils"
-	"go.uber.org/fx"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/IBM/sarama"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/fx"
 )
 
 func TestUnreads(t *testing.T) {
@@ -3435,6 +3436,225 @@ func TestEditMessage(t *testing.T) {
 		assert.Equal(t, message1TextNew, message1New2.Content)
 		assert.Equal(t, message2Id, message2New2.Id)
 		assert.Equal(t, message2TextNew, message2New2.Content)
+	})
+}
+
+func TestPinMessage(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		dba *db.DB,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+		const chat1Name = "new chat 1"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		const message1Text = "new message 1"
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+		require.NoError(t, err, "error in creating message")
+
+		const message2Text = "new message 2"
+		message2Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message2Text)
+		require.NoError(t, err, "error in creating message")
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		t.Run("pin_unpin", func(t *testing.T) {
+			testOutputEventsAccumulator.Clean()
+
+			err = testRestClient.PinMessage(ctx, user1, chat1Id, message1Id, true)
+			require.NoError(t, err, "error in pinning message")
+
+			require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypePinnedMessagePromote &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.PromoteMessageNotification.Message.Id == message1Id &&
+						e.PromoteMessageNotification.Message.Text == message1Text
+				},
+			}))
+
+			testOutputEventsAccumulator.Clean()
+
+			err = testRestClient.PinMessage(ctx, user1, chat1Id, message1Id, false)
+			require.NoError(t, err, "error in pinning message")
+
+			require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypePinnedMessageUnpromote &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.PromoteMessageNotification.Message.Id == message1Id
+				},
+			}))
+
+			testOutputEventsAccumulator.Clean()
+
+			err = testRestClient.PinMessage(ctx, user1, chat1Id, message1Id, true)
+
+			require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypePinnedMessagePromote &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.PromoteMessageNotification.Message.Id == message1Id &&
+						e.PromoteMessageNotification.Message.Text == message1Text
+				},
+			}))
+
+			testOutputEventsAccumulator.Clean()
+		})
+
+		t.Run("pin_and_promote_new", func(t *testing.T) {
+			err = testRestClient.PinMessage(ctx, user1, chat1Id, message2Id, true)
+			require.NoError(t, err, "error in pinning message")
+
+			require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+				// here we not get unpromote, because we don't send unpromote, only promote new, unpromoting is made on the frontend
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypePinnedMessagePromote &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.PromoteMessageNotification.Message.Id == message2Id &&
+						e.PromoteMessageNotification.Message.Text == message2Text
+				},
+			}))
+
+			testOutputEventsAccumulator.Clean()
+		})
+
+		const message2TextNew = "new message 2 edited"
+
+		t.Run("edit_message", func(t *testing.T) {
+			err = testRestClient.EditMessage(ctx, user1, chat1Id, message2Id, message2TextNew)
+			require.NoError(t, err, "error in creating message")
+			require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+			require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypePinnedMessageEdit &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.PromoteMessageNotification.Message.Id == message2Id &&
+						e.PromoteMessageNotification.Message.Text == message2TextNew
+				},
+			}))
+
+			testOutputEventsAccumulator.Clean()
+		})
+
+		t.Run("unpin_makes_other_pinned", func(t *testing.T) {
+			err = testRestClient.PinMessage(ctx, user1, chat1Id, message2Id, false)
+			require.NoError(t, err, "error in pinning message")
+
+			require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypePinnedMessageUnpromote &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.PromoteMessageNotification.Message.Id == message2Id
+				},
+
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypePinnedMessagePromote &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.PromoteMessageNotification.Message.Id == message1Id &&
+						e.PromoteMessageNotification.Message.Text == message1Text
+				},
+			}))
+
+			testOutputEventsAccumulator.Clean()
+		})
+
+		// restore pinned of 2
+		err = testRestClient.PinMessage(ctx, user1, chat1Id, message2Id, true)
+		require.NoError(t, err, "error in pinning message")
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypePinnedMessagePromote &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					e.PromoteMessageNotification.Message.Id == message2Id &&
+					e.PromoteMessageNotification.Message.Text == message2TextNew
+			},
+		}))
+		testOutputEventsAccumulator.Clean()
+
+		t.Run("delete_makes_other_pinned", func(t *testing.T) {
+			err = testRestClient.DeleteMessage(ctx, user1, chat1Id, message2Id)
+			require.NoError(t, err, "error in pinning message")
+
+			require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypePinnedMessageUnpromote &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.PromoteMessageNotification.Message.Id == message2Id
+				},
+
+				func(ee any) bool {
+					e, ok := ee.(*dto.ChatEvent)
+					return ok && e.EventType == dto.EventTypePinnedMessagePromote &&
+						e.UserId == user1 &&
+						e.ChatId == chat1Id &&
+						e.PromoteMessageNotification.Message.Id == message1Id &&
+						e.PromoteMessageNotification.Message.Text == message1Text
+				},
+			}))
+
+			testOutputEventsAccumulator.Clean()
+		})
+
 	})
 }
 
