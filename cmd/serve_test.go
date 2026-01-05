@@ -3631,7 +3631,7 @@ func TestPinMessage(t *testing.T) {
 
 		pinneds, err := testRestClient.GetPinnedMessages(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in get pinned messages")
-		assert.Equal(t, 2, len(pinneds))
+		require.Equal(t, 2, len(pinneds))
 		assert.Equal(t, message2Id, pinneds[0].Id)
 		assert.Equal(t, message2TextNew, pinneds[0].Text)
 		assert.Equal(t, message1Id, pinneds[1].Id)
@@ -3639,7 +3639,7 @@ func TestPinMessage(t *testing.T) {
 
 		pinnedPromoted, err := testRestClient.GetPinnedPromotedMessage(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in get pinned promoted message")
-		assert.NotNil(t, pinnedPromoted)
+		require.NotNil(t, pinnedPromoted)
 		assert.Equal(t, message2Id, pinnedPromoted.Id)
 		assert.Equal(t, message2TextNew, pinnedPromoted.Text)
 
