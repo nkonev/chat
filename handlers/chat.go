@@ -12,7 +12,6 @@ import (
 	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 	"net/http"
-	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -440,36 +439,12 @@ func (ch *ChatHandler) DoesParticipantBelongToChat(g *gin.Context) {
 		return
 	}
 
-	var users = map[int64]dto.ParticipantBelongsToChat{}
-	for _, userId := range userIds {
-		var belongs = dto.ParticipantBelongsToChat{
-			UserId:  userId,
-			Belongs: false,
-		}
-		users[userId] = belongs
-	}
-
-	errOuter := ch.commonProjection.IterateOverChatParticipantIdsIncluding(g.Request.Context(), ch.dbWrapper, chatId, userIds, func(participantIdsPortion []int64) error {
-		for _, participantId := range participantIdsPortion {
-			if u, ok := users[participantId]; ok {
-				u.Belongs = true
-				users[participantId] = u
-			}
-		}
-		return nil
-	})
-
-	if errOuter != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error getting user ids", "err", errOuter)
+	usersSlice, err := ch.enrichingProjection.DoesParticipantBelongToChat(g.Request.Context(), chatId, userIds)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting users belogs", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
-
-	usersSlice := utils.ToSlice(users)
-
-	sort.Slice(usersSlice, func(i, j int) bool {
-		return usersSlice[i].UserId > usersSlice[j].UserId
-	})
 
 	g.JSON(http.StatusOK, &dto.ParticipantsBelongToChat{Users: usersSlice})
 }
