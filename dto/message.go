@@ -26,6 +26,7 @@ type MessageDto struct {
 	FileItemUuid   *string
 	BehalfUserId   int64 // behalf userId
 	Pinned         bool
+	Published      bool
 }
 
 type EmbedTyper struct {
@@ -104,6 +105,7 @@ type MessageViewEnrichedDto struct {
 	UpdateDateTime *time.Time            `json:"editDateTime"` // for sake compatibility
 	FileItemUuid   *string               `json:"fileItemUuid"`
 	Pinned         bool                  `json:"pinned"`
+	Published      bool                  `json:"published"`
 
 	Owner     *User      `json:"owner"`
 	Reactions []Reaction `json:"reactions"`
@@ -190,6 +192,7 @@ type MessageBasic struct {
 	OwnerId      int64   `db:"owner_id"`
 	Content      string  `db:"content"`
 	BlogPost     bool    `db:"blog_post"`
+	Pinned       bool    `db:"pinned"`
 	Published    bool    `db:"published"`
 	FileItemUuid *string `db:"file_item_uuid"`
 }
@@ -303,18 +306,19 @@ type MessageReadResponse struct {
 }
 
 type MessageAuthorizationData struct {
-	IsParticipant        bool   `db:"is_chat_participant"`
-	IsChatAdmin          bool   `db:"is_chat_admin"`
-	IsBlog               bool   `db:"chat_is_blog"`
-	ChatIsTetATet        bool   `db:"chat_is_tet_a_tet"`
-	ChatCanWriteMessage  bool   `db:"chat_can_write_message"`
-	IsMessageFound       bool   `db:"is_message_found"`
-	IsChatFound          bool   `db:"is_chat_found"`
-	IsMessageBlogPost    bool   `db:"is_message_blog_post"`
-	MessageOwnerId       int64  `db:"message_owner_id"`
-	HasEmbedMessage      bool   `db:"message_has_embed"`
-	EmbedMessageTypeSafe string `db:"message_embed_type"`
-	ChatCanPinMessage    bool   `db:"chat_can_pin_message"`
+	IsParticipant         bool   `db:"is_chat_participant"`
+	IsChatAdmin           bool   `db:"is_chat_admin"`
+	IsBlog                bool   `db:"chat_is_blog"`
+	ChatIsTetATet         bool   `db:"chat_is_tet_a_tet"`
+	ChatCanWriteMessage   bool   `db:"chat_can_write_message"`
+	IsMessageFound        bool   `db:"is_message_found"`
+	IsChatFound           bool   `db:"is_chat_found"`
+	IsMessageBlogPost     bool   `db:"is_message_blog_post"`
+	MessageOwnerId        int64  `db:"message_owner_id"`
+	HasEmbedMessage       bool   `db:"message_has_embed"`
+	EmbedMessageTypeSafe  string `db:"message_embed_type"`
+	ChatCanPinMessage     bool   `db:"chat_can_pin_message"`
+	ChatCanPublishMessage bool   `db:"chat_can_publish_message"`
 }
 
 type MessagePinningData struct {
@@ -349,4 +353,24 @@ type PinnedMessage struct {
 	CreateDateTime time.Time `db:"create_date_time"`
 	Text           string    `db:"preview"`
 	Promoted       bool      `db:"promoted"`
+}
+
+type PublishedMessage struct {
+	Id             int64     `db:"message_id"`
+	ChatId         int64     `db:"chat_id"`
+	OwnerId        int64     `db:"owner_id"`
+	CreateDateTime time.Time `db:"create_date_time"`
+	Text           string    `db:"preview"`
+	Content        string    `db:"content"`
+}
+
+type PublishedMessagesWrapper struct {
+	Data  []PublishedMessageDto `json:"items"`
+	Count int64                 `json:"count"` // total published messages number
+}
+
+type PublishedMessageWrapper struct {
+	Message *MessageViewEnrichedDto `json:"message"`
+	Title   string                  `json:"title"`
+	Preview string                  `json:"preview"`
 }

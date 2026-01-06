@@ -590,7 +590,7 @@ func (mc *MessageHandler) MessagesFresh(g *gin.Context) {
 		return
 	}
 
-	messageDtos, notAparticipant, _, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, true, &userId, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil, nil)
+	messageDtos, notAparticipant, _, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, true, false, &userId, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil, nil)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
@@ -765,13 +765,13 @@ func (mc *MessageHandler) GetPinnedMessages(g *gin.Context) {
 	page := utils.FixPageString(g.Query(dto.PageParam))
 	offset := utils.GetOffset(page, size)
 
-	pm, cnt, err := mc.enrichingProjection.GetPinnedMessages(g.Request.Context(), chatId, userId, offset, size)
+	pm, cnt, err := mc.enrichingProjection.GetPinnedMessagesEnriched(g.Request.Context(), chatId, userId, offset, size)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
 		}
 
-		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MakeMessageBlogPost command", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking GetPinnedMessages", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -805,7 +805,7 @@ func (mc *MessageHandler) GetPinnedPromotedMessage(g *gin.Context) {
 			return
 		}
 
-		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking MessageFilter", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking GetPinnedPromotedMessage", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -858,16 +858,142 @@ func (mc *MessageHandler) PinMessage(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
 	if err != nil {
-		if translateChatError(g, err) {
+		if translateMessageError(g, err) {
 			return
 		}
 
-		mc.lgr.ErrorContext(g.Request.Context(), "Error sending ChatPin command", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessagePin command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	g.Status(http.StatusOK)
+}
+
+func (mc *MessageHandler) PublishMessage(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	p := g.Query(dto.PublishParam)
+
+	publish := utils.GetBoolean(p)
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mid := g.Param(dto.MessageIdParam)
+
+	messageId, err := utils.ParseInt64(mid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cc := cqrs.MessagePublish{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		ChatId:         chatId,
+		MessageId:      messageId,
+		Publish:        publish,
+	}
+
+	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessagePublish command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.Status(http.StatusOK)
+}
+
+func (mc *MessageHandler) GetPublishedMessages(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
+	page := utils.FixPageString(g.Query(dto.PageParam))
+	offset := utils.GetOffset(page, size)
+
+	pm, cnt, err := mc.enrichingProjection.GetPublishedMessagesEnriched(g.Request.Context(), chatId, userId, offset, size)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking GetPublishedMessages", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, dto.PublishedMessagesWrapper{
+		Data:  pm,
+		Count: cnt,
+	})
+}
+
+func (mc *MessageHandler) GetPublishedMessage(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mid := g.Param(dto.MessageIdParam)
+	messageId, err := utils.ParseInt64(mid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	msg, notFound, err := mc.enrichingProjection.GetPublishedMessageForPublic(g.Request.Context(), chatId, messageId)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking GetPublishedMessage", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	if notFound {
+		g.Status(http.StatusNoContent)
+		return
+	}
+
+	g.JSON(http.StatusOK, msg)
 }
 
 func (mc *MessageHandler) SearchMessages(g *gin.Context) {
@@ -903,7 +1029,7 @@ func (mc *MessageHandler) SearchMessages(g *gin.Context) {
 	includeStartingFrom := utils.GetBoolean(g.Query(dto.IncludeStartingFromParam))
 	searchString := g.Query(dto.SearchStringParam)
 
-	messages, notAparticipant, _, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, true, &userId, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil, nil)
+	messages, notAparticipant, _, err := mc.enrichingProjection.GetMessagesEnriched(g.Request.Context(), []int64{userId}, true, false, &userId, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, nil, nil)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return

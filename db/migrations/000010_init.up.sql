@@ -90,6 +90,20 @@ CREATE unlogged TABLE message_pinned(
 
 SELECT create_distributed_table('message_pinned', 'chat_id', colocate_with => 'message');
 
+CREATE unlogged TABLE message_published(
+    message_id BIGINT NOT NULL,
+    chat_id BIGINT,
+    owner_id bigint not null,
+    create_date_time timestamp not null,
+    update_date_time timestamp,
+    preview text not null,
+    content text not null,
+    PRIMARY KEY (chat_id, message_id),
+    FOREIGN KEY (message_id, chat_id) REFERENCES message(id, chat_id) ON DELETE CASCADE
+);
+
+SELECT create_distributed_table('message_published', 'chat_id', colocate_with => 'message');
+
 create unlogged table chat_user_view(
     id bigint not null,
     pinned boolean not null default false,

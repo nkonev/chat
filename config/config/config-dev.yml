@@ -69,7 +69,7 @@ http:
   dump: true
 logger:
   level: info
-  json: true
+  json: false
   dir: "log"
   filename: "file.log"
   writeToFile: true

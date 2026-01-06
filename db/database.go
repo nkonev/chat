@@ -262,6 +262,7 @@ func (db *DB) Reset(mc config.MigrationConfig) error {
 	
 	drop table if exists chat_common;
 	drop table if exists chat_participant;
+	drop table if exists message_published;
 	drop table if exists message_pinned;
 	drop table if exists message_reaction;
 	drop table if exists message;

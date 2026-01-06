@@ -87,6 +87,9 @@ func CreateHttpRouter(
 	ginRouter.GET("/api/chat/:id/message/pin", messageHandler.GetPinnedMessages)
 	ginRouter.GET("/api/chat/:id/message/pin/promoted", messageHandler.GetPinnedPromotedMessage)
 	ginRouter.PUT("/api/chat/:id/message/:messageId/pin", messageHandler.PinMessage)
+	ginRouter.PUT("/api/chat/:id/message/:messageId/publish", messageHandler.PublishMessage)
+	ginRouter.GET("/api/chat/:id/message/publish", messageHandler.GetPublishedMessages)
+	ginRouter.GET("/api/chat/public/:id/message/:messageId", messageHandler.GetPublishedMessage)
 
 	ginRouter.PUT("/api/chat/:id/typing", messageHandler.TypeMessage)
 	ginRouter.PUT("/api/chat/:id/broadcast", messageHandler.BroadcastMessage)

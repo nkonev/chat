@@ -287,6 +287,13 @@ type MessagePinned struct {
 	Pinned         bool            `json:"pinned"`
 }
 
+type MessagePublished struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ChatId         int64           `json:"chatId"`
+	MessageId      int64           `json:"messageId"`
+	Published      bool            `json:"published"`
+}
+
 type MessageReactionFlipped struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`
@@ -370,6 +377,10 @@ func (s *MessagePinned) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
+func (s *MessagePublished) GetPartitionKey() string {
+	return utils.ToString(s.ChatId)
+}
+
 func (s *MessageReactionFlipped) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
@@ -440,6 +451,10 @@ func (s *MessageDeleted) Name() string {
 
 func (s *MessagePinned) Name() string {
 	return "messagePinned"
+}
+
+func (s *MessagePublished) Name() string {
+	return "messagePublished"
 }
 
 func (s *MessageReactionFlipped) Name() string {
