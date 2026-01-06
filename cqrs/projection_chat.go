@@ -11,7 +11,6 @@ import (
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
 	"slices"
-	"sort"
 	"time"
 
 	"github.com/qdm12/reprint"
@@ -778,39 +777,6 @@ func (m *EnrichingProjection) GetNameForInvite(ctx context.Context, chatId, beha
 	}
 
 	return ret, nil
-}
-
-func (m *EnrichingProjection) DoesParticipantBelongToChat(ctx context.Context, chatId int64, userIds []int64) ([]dto.ParticipantBelongsToChat, error) {
-	var users = map[int64]dto.ParticipantBelongsToChat{}
-	for _, userId := range userIds {
-		var belongs = dto.ParticipantBelongsToChat{
-			UserId:  userId,
-			Belongs: false,
-		}
-		users[userId] = belongs
-	}
-
-	errOuter := m.cp.IterateOverChatParticipantIdsIncluding(ctx, m.cp.db, chatId, userIds, func(participantIdsPortion []int64) error {
-		for _, participantId := range participantIdsPortion {
-			if u, ok := users[participantId]; ok {
-				u.Belongs = true
-				users[participantId] = u
-			}
-		}
-		return nil
-	})
-
-	if errOuter != nil {
-		return nil, errOuter
-	}
-
-	usersSlice := utils.ToSlice(users)
-
-	sort.Slice(usersSlice, func(i, j int) bool {
-		return usersSlice[i].UserId > usersSlice[j].UserId
-	})
-
-	return usersSlice, nil
 }
 
 func (m *EnrichingProjection) searchForUsers(ctx context.Context, searchString string) []int64 {

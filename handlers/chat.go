@@ -422,33 +422,6 @@ func (ch *ChatHandler) GetNameForInvite(g *gin.Context) {
 	g.JSON(http.StatusOK, ret)
 }
 
-func (ch *ChatHandler) DoesParticipantBelongToChat(g *gin.Context) {
-	cid := g.Query(dto.ChatIdQueryParam)
-
-	chatId, err := utils.ParseInt64(cid)
-	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
-		g.Status(http.StatusInternalServerError)
-		return
-	}
-
-	userIds, err := getQueryParamsAsInt64Slice(g, dto.UserId)
-	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error getting user ids", "err", err)
-		g.Status(http.StatusInternalServerError)
-		return
-	}
-
-	usersSlice, err := ch.enrichingProjection.DoesParticipantBelongToChat(g.Request.Context(), chatId, userIds)
-	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error getting users belogs", "err", err)
-		g.Status(http.StatusInternalServerError)
-		return
-	}
-
-	g.JSON(http.StatusOK, &dto.ParticipantsBelongToChat{Users: usersSlice})
-}
-
 func (ch *ChatHandler) SearchChats(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {

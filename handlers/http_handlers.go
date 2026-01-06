@@ -103,7 +103,6 @@ func CreateHttpRouter(
 	ginRouter.GET("/internal/participant-ids", participantHandler.GetChatParticipants)
 	ginRouter.GET("/internal/basic/:id", chatHandler.GetBasicInfo)
 	ginRouter.GET("/internal/name-for-invite", chatHandler.GetNameForInvite)
-	ginRouter.GET("/internal/does-participant-belong-to-chat", chatHandler.DoesParticipantBelongToChat)
 
 	ginRouter.GET("/internal/health", technicalHandler.Health)
 	if cfg.Cqrs.TestHelperMethods {
