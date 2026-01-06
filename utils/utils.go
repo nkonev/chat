@@ -182,6 +182,14 @@ func ToMap[T WithId](sliceInput []T) map[int64]T {
 	return m
 }
 
+func ToSlice[K comparable, T any](mapInput map[K]T) []T {
+	r := make([]T, 0, len(mapInput))
+	for _, v := range mapInput {
+		r = append(r, v)
+	}
+	return r
+}
+
 func GetType(aDto interface{}) string {
 	strName := fmt.Sprintf("%T", aDto)
 	return strName

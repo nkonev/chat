@@ -12,7 +12,7 @@ import (
 	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
 	"net/http"
-	"strings"
+	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -369,6 +369,111 @@ func (ch *ChatHandler) HasNewMessages(g *gin.Context) {
 	})
 }
 
+func (ch *ChatHandler) GetBasicInfo(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	bs, err := ch.commonProjection.GetBasicInfo(g.Request.Context(), chatId)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participant ids", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, bs)
+}
+
+func (ch *ChatHandler) GetNameForInvite(g *gin.Context) {
+	cid := g.Query(dto.ChatIdQueryParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	bui := g.Query(dto.BehalfUserId)
+	behalfUserId, err := utils.ParseInt64(bui)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding behalfUserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	participantIds, err := getQueryParamsAsInt64Slice(g, dto.UserIds)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding userIds", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	ret, err := ch.enrichingProjection.GetNameForInvite(g.Request.Context(), chatId, behalfUserId, participantIds)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participant ids", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, ret)
+}
+
+func (ch *ChatHandler) DoesParticipantBelongToChat(g *gin.Context) {
+	cid := g.Query(dto.ChatIdQueryParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userIds, err := getQueryParamsAsInt64Slice(g, dto.UserId)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting user ids", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	var users = map[int64]dto.ParticipantBelongsToChat{}
+	for _, userId := range userIds {
+		var belongs = dto.ParticipantBelongsToChat{
+			UserId:  userId,
+			Belongs: false,
+		}
+		users[userId] = belongs
+	}
+
+	errOuter := ch.commonProjection.IterateOverChatParticipantIdsIncluding(g.Request.Context(), ch.dbWrapper, chatId, userIds, func(participantIdsPortion []int64) error {
+		for _, participantId := range participantIdsPortion {
+			if u, ok := users[participantId]; ok {
+				u.Belongs = true
+				users[participantId] = u
+			}
+		}
+		return nil
+	})
+
+	if errOuter != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting user ids", "err", errOuter)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	usersSlice := utils.ToSlice(users)
+
+	sort.Slice(usersSlice, func(i, j int) bool {
+		return usersSlice[i].UserId > usersSlice[j].UserId
+	})
+
+	g.JSON(http.StatusOK, &dto.ParticipantsBelongToChat{Users: usersSlice})
+}
+
 func (ch *ChatHandler) SearchChats(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
@@ -620,17 +725,11 @@ func (ch *ChatHandler) IsAdmin(g *gin.Context) {
 }
 
 func (ch *ChatHandler) IsExists(g *gin.Context) {
-	chatIdsStr := g.Query("chatId")
-	chatIds := []int64{}
-	chatIdsStrs := strings.Split(chatIdsStr, ",")
-	for _, paramString := range chatIdsStrs {
-		param, err := utils.ParseInt64(paramString)
-		if err != nil {
-			ch.lgr.ErrorContext(g.Request.Context(), "Error getting chatId slice", "err", err)
-			g.Status(http.StatusInternalServerError)
-			return
-		}
-		chatIds = append(chatIds, param)
+	chatIds, err := getQueryParamsAsInt64Slice(g, dto.ChatIdQueryParam)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting chatId slice", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
 	}
 
 	responseList := make([]dto.ChatExists, 0)

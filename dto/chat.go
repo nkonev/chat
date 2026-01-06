@@ -106,15 +106,16 @@ type GetChatsResponseDto struct {
 }
 
 type ChatBasic struct {
-	Id                                  int64  `db:"id"`
-	Title                               string `db:"title"`
-	CanResend                           bool   `db:"can_resend"`
-	TetATet                             bool   `db:"tet_a_tet"`
-	IsBlog                              bool   `db:"blog"`
-	AvailableToSearch                   bool   `db:"available_to_search"`
-	RegularParticipantCanPublishMessage bool   `db:"regular_participant_can_publish_message"`
-	RegularParticipantCanPinMessage     bool   `db:"regular_participant_can_pin_message"`
-	RegularParticipantCanWriteMessage   bool   `db:"regular_participant_can_write_message"`
+	Id                                  int64   `db:"id"`
+	Title                               string  `db:"title"`
+	Avatar                              *string `db:"avatar"`
+	CanResend                           bool    `db:"can_resend"`
+	TetATet                             bool    `db:"tet_a_tet"`
+	IsBlog                              bool    `db:"blog"`
+	AvailableToSearch                   bool    `db:"available_to_search"`
+	RegularParticipantCanPublishMessage bool    `db:"regular_participant_can_publish_message"`
+	RegularParticipantCanPinMessage     bool    `db:"regular_participant_can_pin_message"`
+	RegularParticipantCanWriteMessage   bool    `db:"regular_participant_can_write_message"`
 }
 
 type BasicChatDtoExtended struct {
@@ -168,4 +169,24 @@ type ChatInfoForNotification struct {
 type ChatParticipant struct {
 	ChatId int64 `db:"chat_id"`
 	UserId int64 `db:"user_id"`
+}
+
+type BasicChatDto struct {
+	TetATet        bool    `json:"tetATet"`
+	ParticipantIds []int64 `json:"participantIds"`
+}
+
+type ChatName struct {
+	Name   string  `json:"name"`   // chatName or userName in case tet-a-tet
+	Avatar *string `json:"avatar"` // tet-a-tet -aware
+	UserId int64   `json:"userId"` // userId chatName for
+}
+
+type ParticipantBelongsToChat struct {
+	UserId  int64 `json:"userId"`
+	Belongs bool  `json:"belongs"`
+}
+
+type ParticipantsBelongToChat struct {
+	Users []ParticipantBelongsToChat `json:"users"`
 }

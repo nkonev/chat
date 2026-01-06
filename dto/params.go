@@ -14,6 +14,9 @@ const SearchStringParam = "searchString"
 const OverrideMessageId = "overrideMessageId"
 const OverrideChatId = "overrideChatId"
 const ChatIdQueryParam = "chatId"
+const BehalfUserId = "behalfUserId"
+const UserIds = "userIds"
+const UserId = "userId"
 
 // path
 const ChatIdParam = "id"

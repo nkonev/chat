@@ -12,6 +12,7 @@ import (
 	"go-cqrs-chat-example/utils"
 	"net/http"
 	"net/http/httputil"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -100,6 +101,9 @@ func CreateHttpRouter(
 	ginRouter.GET("/internal/is-admin", chatHandler.IsAdmin)
 	ginRouter.GET("/internal/does-chats-exist", chatHandler.IsExists)
 	ginRouter.GET("/internal/participant-ids", participantHandler.GetChatParticipants)
+	ginRouter.GET("/internal/basic/:id", chatHandler.GetBasicInfo)
+	ginRouter.GET("/internal/name-for-invite", chatHandler.GetNameForInvite)
+	ginRouter.GET("/internal/does-participant-belong-to-chat", chatHandler.DoesParticipantBelongToChat)
 
 	ginRouter.GET("/internal/health", technicalHandler.Health)
 	if cfg.Cqrs.TestHelperMethods {
@@ -136,6 +140,20 @@ func getCorrelationId(g *gin.Context) *string {
 		}
 	}
 	return nil
+}
+
+func getQueryParamsAsInt64Slice(g *gin.Context, queryParamName string) ([]int64, error) {
+	uids := g.Query(queryParamName)
+	uidss := strings.Split(uids, ",")
+	var ids []int64 = make([]int64, 0)
+	for _, iu := range uidss {
+		pa, err := utils.ParseInt64(iu)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, pa)
+	}
+	return ids, nil
 }
 
 func ConfigureHttpServer(

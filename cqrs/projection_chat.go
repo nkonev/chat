@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/qdm12/reprint"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/preview"
@@ -13,6 +12,8 @@ import (
 	"go-cqrs-chat-example/utils"
 	"slices"
 	"time"
+
+	"github.com/qdm12/reprint"
 
 	"github.com/georgysavva/scany/v2/sqlscan"
 	"github.com/jackc/pgtype"
@@ -669,6 +670,115 @@ func (m *EnrichingProjection) GetChat(ctx context.Context, userId, chatId int64)
 	return
 }
 
+func (m *CommonProjection) GetBasicInfo(ctx context.Context, chatId int64) (*dto.BasicChatDto, error) {
+	ret, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*dto.BasicChatDto, error) {
+		chatBasic, err := m.GetChatBasic(ctx, tx, chatId)
+		if err != nil {
+			return &dto.BasicChatDto{}, err
+		}
+
+		participantIds, err := m.GetParticipantIds(ctx, tx, chatId, utils.FixSize(0), utils.FixPage(0))
+		if err != nil {
+			return &dto.BasicChatDto{}, err
+		}
+
+		ret := dto.BasicChatDto{
+			TetATet:        chatBasic.TetATet,
+			ParticipantIds: participantIds,
+		}
+		return &ret, nil
+	})
+	if errOuter != nil {
+		return nil, errOuter
+	}
+	return ret, nil
+}
+
+func (m *EnrichingProjection) GetNameForInvite(ctx context.Context, chatId, behalfUserId int64, participantIds []int64) ([]dto.ChatName, error) {
+	ret := []dto.ChatName{}
+
+	type txDto struct {
+		chatBasic           *dto.ChatBasic
+		tetATetOppositeUser *int64
+	}
+
+	tr, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*txDto, error) {
+		cb, err := m.cp.GetChatBasic(ctx, tx, chatId)
+		if err != nil {
+			return nil, err
+		}
+		if cb == nil {
+			return nil, nil
+		}
+
+		var tetATetOppositeUser *int64
+		if cb.TetATet {
+			participantIds, err := m.cp.GetParticipantIds(ctx, tx, chatId, utils.FixSize(0), utils.FixPage(0))
+			if err != nil {
+				return nil, err
+			}
+			tetATetOppositeUser = tetATetOpposite(participantIds, behalfUserId)
+		}
+
+		return &txDto{
+			chatBasic:           cb,
+			tetATetOppositeUser: tetATetOppositeUser,
+		}, nil
+	})
+	if errOuter != nil {
+		return nil, errOuter
+	}
+
+	if tr == nil {
+		return ret, nil
+	}
+
+	var userMap = map[int64]*dto.User{}
+	var participantIdsToQuery = []int64{behalfUserId}
+	if tr.tetATetOppositeUser != nil {
+		participantIdsToQuery = append(participantIdsToQuery, *tr.tetATetOppositeUser)
+	}
+
+	users, err := m.aaaRestClient.GetUsers(ctx, participantIdsToQuery)
+	if err != nil {
+		return nil, err
+	}
+	userMap = utils.ToMap(users)
+
+	for _, userId := range participantIds {
+		cn := dto.ChatName{
+			Name:   tr.chatBasic.Title,
+			Avatar: tr.chatBasic.Avatar,
+			UserId: userId,
+		}
+
+		if tr.chatBasic.TetATet {
+			behalfOppUser := userMap[behalfUserId]
+			if behalfOppUser == nil {
+				m.lgr.WarnContext(ctx, "Skipping an behalfOppUser because it doesn't present in aaa response", "chat_id", chatId, "user_id", behalfUserId)
+				continue
+			}
+
+			if userId != behalfUserId {
+				cn.Name = behalfOppUser.Login
+				cn.Avatar = behalfOppUser.Avatar
+			} else {
+				itselfUser := userMap[userId]
+				if itselfUser == nil {
+					m.lgr.WarnContext(ctx, "Skipping an itselfUser because it doesn't present in aaa response", "chat_id", chatId, "user_id", userId)
+					continue
+				}
+				cn.Name = itselfUser.Login
+				cn.Avatar = itselfUser.Avatar
+			}
+		}
+
+		ret = append(ret, cn)
+	}
+
+	return ret, nil
+}
+
 func (m *EnrichingProjection) searchForUsers(ctx context.Context, searchString string) []int64 {
 	var additionalFoundUserIds = []int64{}
 
@@ -731,15 +841,24 @@ func getChatIdsFromChats(chats []dto.ChatViewDto) []int64 {
 	return r
 }
 
+func tetATetOpposite(participantIds []int64, behalfUserId int64) *int64 {
+	oppa := utils.GetSliceWithout(behalfUserId, participantIds)
+	if len(oppa) == 1 {
+		oppositeUserId := oppa[0]
+		return &oppositeUserId
+	}
+	return nil
+}
+
 func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto, users map[int64]*dto.User, admin bool, tetATetOnlines map[int64]bool, forceNonParticipant bool) dto.ChatViewEnrichedDto {
 	che := dto.ChatViewEnrichedDto{
 		ChatViewDto:  ch,
 		Participants: makeParticipants(ch.ParticipantIds, users),
 	}
 	if che.ChatViewDto.TetATet {
-		oppa := utils.GetSliceWithout(behalfUserId, che.ParticipantIds)
-		if len(oppa) == 1 {
-			oppositeUserId := oppa[0]
+		tetATetOpposite := tetATetOpposite(che.ParticipantIds, behalfUserId)
+		if tetATetOpposite != nil {
+			oppositeUserId := *tetATetOpposite
 			oppositeUser := users[oppositeUserId]
 			if oppositeUser != nil {
 				che.Title = oppositeUser.Login
@@ -1155,6 +1274,7 @@ func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperati
 		select 
 		    c.id,
 		    c.title,
+			coalesce(c.avatar_big, c.avatar) as avatar,
 		    c.can_resend,
 		    c.tet_a_tet,
 			b.id is not null as blog,
@@ -1199,6 +1319,7 @@ func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.Comm
 			re.user_id,
 			c.id,
 			c.title,
+			coalesce(c.avatar_big, c.avatar) as avatar,
 			(cp.user_id is not null) as behalf_user_is_participant,
 			c.tet_a_tet,
 			c.can_resend,
