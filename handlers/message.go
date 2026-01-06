@@ -771,7 +771,7 @@ func (mc *MessageHandler) GetPinnedMessages(g *gin.Context) {
 			return
 		}
 
-		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MakeMessageBlogPost command", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking GetPinnedMessages", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -805,7 +805,7 @@ func (mc *MessageHandler) GetPinnedPromotedMessage(g *gin.Context) {
 			return
 		}
 
-		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking MessageFilter", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking GetPinnedPromotedMessage", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -858,16 +858,73 @@ func (mc *MessageHandler) PinMessage(g *gin.Context) {
 
 	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
 	if err != nil {
-		if translateChatError(g, err) {
+		if translateMessageError(g, err) {
 			return
 		}
 
-		mc.lgr.ErrorContext(g.Request.Context(), "Error sending ChatPin command", "err", err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessagePin command", "err", err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	g.Status(http.StatusOK)
+}
+
+func (mc *MessageHandler) PublishMessage(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	p := g.Query(dto.PublishParam)
+
+	publish := utils.GetBoolean(p)
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mid := g.Param(dto.MessageIdParam)
+
+	messageId, err := utils.ParseInt64(mid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cc := cqrs.MessagePublish{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		ChatId:         chatId,
+		MessageId:      messageId,
+		Publish:        publish,
+	}
+
+	err = cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessagePublish command", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.Status(http.StatusOK)
+}
+
+func (mc *MessageHandler) GetPublishedMessages(g *gin.Context) {
+}
+
+func (mc *MessageHandler) GetPublishedMessage(g *gin.Context) {
 }
 
 func (mc *MessageHandler) SearchMessages(g *gin.Context) {

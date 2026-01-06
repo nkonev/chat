@@ -610,6 +610,10 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 	return res.promotedMessageId, res.count, nil
 }
 
+func (m *CommonProjection) OnMessagePublished(ctx context.Context, event *MessagePublished) error {
+	return nil // TODO
+}
+
 func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId int64) error {
 	_, err := tx.ExecContext(ctx, `
 		with last_message as (
@@ -1533,6 +1537,7 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 			,coalesce(mm.embed ->> 'embedMessageType', $5) as message_embed_type
 			,coalesce(mm.blog_post, false) as is_message_blog_post
 			,coalesce(cc.regular_participant_can_pin_message, false) as chat_can_pin_message
+			,coalesce(cc.regular_participant_can_publish_message, false) as chat_can_publish_message
 			,b.id is not null as chat_is_blog
 		FROM provided pr
 		LEFT JOIN chat_info cc on pr.chat_id = cc.id
@@ -1544,8 +1549,6 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 	}
 	return d, nil
 }
-
-//func (m *CommonProjection) //
 
 func makeReactions(users map[int64]*dto.User, reactionsList []dto.ReactionDto) []dto.Reaction {
 	var convertedReactionsOfMessageToReturn = make([]dto.Reaction, 0, len(reactionsList))

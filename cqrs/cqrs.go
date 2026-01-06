@@ -264,6 +264,7 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageRemoved),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageReactionFlipped),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessagePinned),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessagePublished),
 		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalProjectionsTruncated),
 		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalAbandonedChatRemoved),
 	)

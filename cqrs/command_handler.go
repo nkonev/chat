@@ -239,6 +239,13 @@ type MessagePin struct {
 	Pin            bool
 }
 
+type MessagePublish struct {
+	AdditionalData *AdditionalData
+	ChatId         int64
+	MessageId      int64
+	Publish        bool
+}
+
 type ChatPin struct {
 	AdditionalData *AdditionalData
 	ChatId         int64
@@ -1241,6 +1248,30 @@ func (s *MessagePin) Handle(ctx context.Context, eventBus EventBusInterface, dba
 		ChatId:         s.ChatId,
 		MessageId:      s.MessageId,
 		Pinned:         s.Pin,
+	}
+	err = eventBus.Publish(ctx, cp)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *MessagePublish) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
+	if err != nil {
+		return err
+	}
+
+	if !CanPublishMessage(adt.ChatCanPublishMessage, adt.IsChatAdmin, adt.MessageOwnerId, s.AdditionalData.BehalfUserId) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to publish the message in chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+	}
+
+	cp := &MessagePublished{
+		AdditionalData: s.AdditionalData,
+		ChatId:         s.ChatId,
+		MessageId:      s.MessageId,
+		Published:      s.Publish,
 	}
 	err = eventBus.Publish(ctx, cp)
 	if err != nil {

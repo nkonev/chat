@@ -1397,6 +1397,15 @@ func (m *EventHandler) sendPromotePinned(ctx context.Context, chatId, promotedMe
 	return nil
 }
 
+func (m *EventHandler) OnMessagePublished(ctx context.Context, event *MessagePublished) error {
+	err := m.commonProjection.OnMessagePublished(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
 	userIds := []int64{event.AdditionalData.BehalfUserId}
 

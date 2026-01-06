@@ -303,18 +303,19 @@ type MessageReadResponse struct {
 }
 
 type MessageAuthorizationData struct {
-	IsParticipant        bool   `db:"is_chat_participant"`
-	IsChatAdmin          bool   `db:"is_chat_admin"`
-	IsBlog               bool   `db:"chat_is_blog"`
-	ChatIsTetATet        bool   `db:"chat_is_tet_a_tet"`
-	ChatCanWriteMessage  bool   `db:"chat_can_write_message"`
-	IsMessageFound       bool   `db:"is_message_found"`
-	IsChatFound          bool   `db:"is_chat_found"`
-	IsMessageBlogPost    bool   `db:"is_message_blog_post"`
-	MessageOwnerId       int64  `db:"message_owner_id"`
-	HasEmbedMessage      bool   `db:"message_has_embed"`
-	EmbedMessageTypeSafe string `db:"message_embed_type"`
-	ChatCanPinMessage    bool   `db:"chat_can_pin_message"`
+	IsParticipant         bool   `db:"is_chat_participant"`
+	IsChatAdmin           bool   `db:"is_chat_admin"`
+	IsBlog                bool   `db:"chat_is_blog"`
+	ChatIsTetATet         bool   `db:"chat_is_tet_a_tet"`
+	ChatCanWriteMessage   bool   `db:"chat_can_write_message"`
+	IsMessageFound        bool   `db:"is_message_found"`
+	IsChatFound           bool   `db:"is_chat_found"`
+	IsMessageBlogPost     bool   `db:"is_message_blog_post"`
+	MessageOwnerId        int64  `db:"message_owner_id"`
+	HasEmbedMessage       bool   `db:"message_has_embed"`
+	EmbedMessageTypeSafe  string `db:"message_embed_type"`
+	ChatCanPinMessage     bool   `db:"chat_can_pin_message"`
+	ChatCanPublishMessage bool   `db:"chat_can_publish_message"`
 }
 
 type MessagePinningData struct {
