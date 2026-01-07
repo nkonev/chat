@@ -95,6 +95,7 @@ type ChatCreate struct {
 	Title                               string
 	ParticipantIds                      []int64
 	TetATet                             bool
+	TetATetOppositeUserId               *int64
 	Blog                                bool
 	BlogAbout                           bool
 	Avatar                              *string
@@ -281,7 +282,7 @@ type TechnicalRemoveAbandonedChat struct {
 	ChatId int64
 }
 
-func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *sanitizer.StripTagsPolicy, cfg *config.AppConfig) (int64, error) {
+func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *sanitizer.StripTagsPolicy, cfg *config.AppConfig, rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher, lgr *logger.LoggerWrapper) (int64, error) {
 	var copyCommand *ChatCreate
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -314,6 +315,32 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		if copyCommand.Blog {
 			return 0, NewValidationError("Error during validation: tet-a-tet cannot be blog")
 		}
+
+		if copyCommand.TetATetOppositeUserId == nil {
+			return 0, errors.New("Wrong invariant - TetATetOppositeUserId is nil")
+
+		}
+
+		exists, _, _, tetATetExistingChatId, err := commonProjection.IsExistsTetATet(ctx, dba, copyCommand.AdditionalData.BehalfUserId, *copyCommand.TetATetOppositeUserId)
+		if err != nil {
+			return 0, err
+		}
+
+		if exists {
+			// send upsert event
+			err = rabbitmqOutputEventPublisher.Publish(ctx, copyCommand.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+				UserId:    copyCommand.AdditionalData.BehalfUserId,
+				EventType: dto.EventTypeChatTetATetUpserted,
+				ChatTetATetUpsertedDto: &dto.ChatTetATetUpsertedDto{
+					ChatId: tetATetExistingChatId,
+				},
+			})
+			if err != nil {
+				lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+
+			return tetATetExistingChatId, nil
+		}
 	}
 
 	chatId, err := db.TransactWithResult(ctx, dba, func(tx *db.Tx) (int64, error) {
@@ -328,6 +355,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		ChatId:                              chatId,
 		Title:                               copyCommand.Title,
 		TetATet:                             copyCommand.TetATet,
+		TetATetOppositeUserId:               copyCommand.TetATetOppositeUserId,
 		Blog:                                copyCommand.Blog,
 		BlogAbout:                           copyCommand.BlogAbout,
 		Avatar:                              copyCommand.Avatar,
@@ -350,6 +378,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		ChatId:         chatId,
 		Participants:   make([]ParticipantWithAdmin, 0),
 		IsChatCreating: true,
+		TetATet:        copyCommand.TetATet,
 	}
 	for _, participantId := range copyCommand.ParticipantIds {
 		pa.Participants = append(pa.Participants, ParticipantWithAdmin{

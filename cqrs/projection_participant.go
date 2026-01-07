@@ -2,13 +2,15 @@ package cqrs
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/georgysavva/scany/v2/sqlscan"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
+
+	"github.com/georgysavva/scany/v2/sqlscan"
 )
 
 func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) error {
@@ -685,6 +687,44 @@ func (m *CommonProjection) IterateOverAllParticipants(ctx context.Context, co db
 		}
 	}
 	return lastError
+}
+
+func (m *CommonProjection) IsExistsTetATet(ctx context.Context, co db.CommonOperations, participant1 int64, participant2 int64) (bool, bool, bool, int64, error) {
+	type txDto struct {
+		ChatId                 int64 `db:"chat_id"`
+		TwoParticipantsTetATet bool  `db:"two_participants_tet_a_tet"`
+		OneParticipantsTetATet bool  `db:"one_participant_tet_a_tet"`
+	}
+	var res txDto
+
+	err := sqlscan.Get(ctx, co, &res, `
+		select
+			b.chat_id,
+			b.two_participants_tet_a_tet,
+			b.one_participant_tet_a_tet
+		from (
+			select 
+				a.count = 2 as two_participants_tet_a_tet, 
+				a.count = 1 as one_participant_tet_a_tet, 
+				a.chat_id 
+			from (
+				select 
+					cp.chat_id,
+					count(cp.user_id) 
+				from chat_participant cp 
+				join chat_common ch on ch.id = cp.chat_id 
+				where ch.tet_a_tet = true and (cp.user_id = $1 or cp.user_id = $2) 
+				group by cp.chat_id
+			) a
+		) b 
+		where b.two_participants_tet_a_tet or b.one_participant_tet_a_tet`, participant1, participant2)
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+		return false, false, false, 0, nil
+	} else if err != nil {
+		return false, false, false, 0, fmt.Errorf("error during interacting with db: %w", err)
+	}
+	return true, res.TwoParticipantsTetATet, res.OneParticipantsTetATet, res.ChatId, nil
 }
 
 func (m *CommonProjection) HasParticipants(ctx context.Context, co db.CommonOperations, chatIds []int64) (map[int64]bool, error) {

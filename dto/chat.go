@@ -79,6 +79,10 @@ type ChatDeletedDto struct {
 	Id int64 `json:"id"`
 }
 
+type ChatTetATetUpsertedDto struct {
+	ChatId int64 `json:"chatId"`
+}
+
 type ChatViewEnrichedDto struct {
 	ChatViewDto
 	LastMessagePreview  *string `json:"lastMessagePreview"`

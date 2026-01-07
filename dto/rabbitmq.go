@@ -5,6 +5,7 @@ type GlobalUserEvent struct {
 	UserId                           int64                            `json:"userId"`
 	ChatNotification                 *ChatViewEnrichedDto             `json:"chatNotification"`
 	ChatDeletedDto                   *ChatDeletedDto                  `json:"chatDeletedNotification"`
+	ChatTetATetUpsertedDto           *ChatTetATetUpsertedDto          `json:"chatTetATetUpsertedNotification"`
 	CoChattedParticipantNotification *User                            `json:"coChattedParticipantNotification"`
 	HasUnreadMessagesChanged         *HasUnreadMessagesChanged        `json:"hasUnreadMessagesChanged"`
 	UnreadMessagesNotification       *ChatUnreadMessageChanged        `json:"unreadMessagesNotification"`

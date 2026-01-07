@@ -116,6 +116,20 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during IterateOverParticipantsChatIds", "err", err)
 		}
+
+		if event.TetATet {
+			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+				UserId:    cv.BehalfUserId,
+				EventType: dto.EventTypeChatTetATetUpserted,
+				ChatTetATetUpsertedDto: &dto.ChatTetATetUpsertedDto{
+					ChatId: cv.Id,
+				},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+
+		}
 	}
 
 	m.lgr.DebugContext(ctx, "Sending notification about the participants", "event_type", eventTypeParticipantAdded, "user_ids", userIds)
@@ -380,9 +394,21 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 
 func (m *EventHandler) OnChatCreated(ctx context.Context, event *ChatCreated) error {
 	// we don't check authorization for the chat creation
-	err := m.commonProjection.OnChatCreated(ctx, event)
+	created, chatId, err := m.commonProjection.OnChatCreated(ctx, event)
 	if err != nil {
 		return err
+	}
+	if !created && event.TetATet {
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			UserId:    event.AdditionalData.BehalfUserId,
+			EventType: dto.EventTypeChatTetATetUpserted,
+			ChatTetATetUpsertedDto: &dto.ChatTetATetUpsertedDto{
+				ChatId: chatId,
+			},
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
 	}
 
 	return nil

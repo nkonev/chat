@@ -35,10 +35,34 @@ func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32
 	return ma, nil
 }
 
-func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated) error {
+func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated) (bool, int64, error) {
 	// we don't check chat existence for the chat creation
 
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+	type txRes struct {
+		ChatId  int64
+		Created bool
+	}
+
+	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*txRes, error) {
+		if event.TetATet {
+			exists, _, _, existingTetATetChatId, errInner := m.IsExistsTetATet(ctx, tx, event.AdditionalData.BehalfUserId, *event.TetATetOppositeUserId)
+			if errInner != nil {
+				return nil, errInner
+			}
+
+			if exists {
+				m.lgr.InfoContext(ctx,
+					"Common chat not created because tet-a-tet already exists",
+					"chat_id", existingTetATetChatId,
+				)
+
+				return &txRes{
+					ChatId:  existingTetATetChatId,
+					Created: false,
+				}, nil
+			}
+		}
+
 		_, errInner := tx.ExecContext(ctx, `
 		insert into chat_common(
 			 id
@@ -83,31 +107,34 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 			,regular_participant_can_add_participant = excluded.regular_participant_can_add_participant
 	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.TetATet, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage, event.RegularParticipantCanAddParticipant)
 		if errInner != nil {
-			return errInner
+			return nil, errInner
 		}
 
 		if event.Blog {
 			// add blog
 			_, errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt, &event.BlogAbout)
 			if errInner != nil {
-				return errInner
+				return nil, errInner
 			}
 		}
 
-		return nil
+		return &txRes{
+			ChatId:  event.ChatId,
+			Created: true,
+		}, nil
 	})
 
 	if errOuter != nil {
-		return errOuter
+		return false, 0, errOuter
 	}
 
 	m.lgr.InfoContext(ctx,
 		"Common chat created",
-		"chat_id", event.ChatId,
+		"chat_id", res.ChatId,
 		"title", event.Title,
 	)
 
-	return nil
+	return res.Created, res.ChatId, nil
 }
 
 func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) (*int64, error) {

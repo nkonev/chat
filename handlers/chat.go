@@ -8,6 +8,7 @@ import (
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/services"
 	"go-cqrs-chat-example/utils"
@@ -18,14 +19,15 @@ import (
 )
 
 type ChatHandler struct {
-	lgr                 *logger.LoggerWrapper
-	eventBus            *cqrs.PartitionAwareEventBus
-	dbWrapper           *db.DB
-	commonProjection    *cqrs.CommonProjection
-	stripTagsPolicy     *sanitizer.StripTagsPolicy
-	enrichingProjection *cqrs.EnrichingProjection
-	cfg                 *config.AppConfig
-	authorizeService    *services.AuthorizationService
+	lgr                          *logger.LoggerWrapper
+	eventBus                     *cqrs.PartitionAwareEventBus
+	dbWrapper                    *db.DB
+	commonProjection             *cqrs.CommonProjection
+	stripTagsPolicy              *sanitizer.StripTagsPolicy
+	enrichingProjection          *cqrs.EnrichingProjection
+	cfg                          *config.AppConfig
+	authorizeService             *services.AuthorizationService
+	rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher
 }
 
 func NewChatHandler(
@@ -37,16 +39,18 @@ func NewChatHandler(
 	enrichingProjection *cqrs.EnrichingProjection,
 	cfg *config.AppConfig,
 	authorizeService *services.AuthorizationService,
+	rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher,
 ) *ChatHandler {
 	return &ChatHandler{
-		lgr:                 lgr,
-		eventBus:            eventBus,
-		dbWrapper:           dbWrapper,
-		commonProjection:    commonProjection,
-		stripTagsPolicy:     stripTagsPolicy,
-		enrichingProjection: enrichingProjection,
-		cfg:                 cfg,
-		authorizeService:    authorizeService,
+		lgr:                          lgr,
+		eventBus:                     eventBus,
+		dbWrapper:                    dbWrapper,
+		commonProjection:             commonProjection,
+		stripTagsPolicy:              stripTagsPolicy,
+		enrichingProjection:          enrichingProjection,
+		cfg:                          cfg,
+		authorizeService:             authorizeService,
+		rabbitmqOutputEventPublisher: rabbitmqOutputEventPublisher,
 	}
 }
 
@@ -85,7 +89,7 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		RegularParticipantCanAddParticipant: utils.GetNullableBooleanOr(ccd.RegularParticipantCanAddParticipant, dto.DefaultRegularParticipantCanAddParticipant),
 	}
 
-	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
+	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg, ch.rabbitmqOutputEventPublisher, ch.lgr)
 	if err != nil {
 		if translateChatError(g, err) {
 			return
@@ -122,16 +126,17 @@ func (ch *ChatHandler) CreateTetAChat(g *gin.Context) {
 	tetATetChatName := fmt.Sprintf("tet_a_tet_%v_%v", userId, oppositeUserId)
 
 	cc := cqrs.ChatCreate{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
-		Title:          tetATetChatName,
-		ParticipantIds: []int64{oppositeUserId},
-		TetATet:        true,
-		Blog:           false,
-		CanResend:      ch.cfg.Chat.TetATet.CanResend,
-		CanReact:       ch.cfg.Chat.TetATet.CanReact,
+		AdditionalData:        cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		Title:                 tetATetChatName,
+		ParticipantIds:        []int64{oppositeUserId},
+		TetATet:               true,
+		TetATetOppositeUserId: &oppositeUserId,
+		Blog:                  false,
+		CanResend:             ch.cfg.Chat.TetATet.CanResend,
+		CanReact:              ch.cfg.Chat.TetATet.CanReact,
 	}
 
-	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg)
+	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg, ch.rabbitmqOutputEventPublisher, ch.lgr)
 	if err != nil {
 		if translateChatError(g, err) {
 			return
