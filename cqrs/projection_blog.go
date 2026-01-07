@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/jackc/pgtype"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -16,6 +14,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/jackc/pgtype"
 
 	"github.com/georgysavva/scany/v2/sqlscan"
 )
@@ -388,9 +389,9 @@ const BlogOrderByUpdateDateTime BlogOrderBy = 2
 func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int64, orderBy BlogOrderBy, reverseOrder bool, searchString string) ([]BlogListViewDto, int64, *blogAbout, error) {
 	queryArgs := []any{size, offset}
 
-	order := "asc"
+	order := "desc"
 	if reverseOrder {
-		order = "desc"
+		order = "asc"
 	}
 
 	searchClause := ""

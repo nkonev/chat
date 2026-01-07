@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"github.com/gin-gonic/gin"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
@@ -9,6 +8,8 @@ import (
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 type BlogHandler struct {
@@ -42,7 +43,7 @@ func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
 	page := utils.FixPageString(g.Query(dto.PageParam))
 	size := utils.FixSizeString(g.Query(dto.SizeParam))
 	offset := utils.GetOffset(page, size)
-	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), true)
+	reverse := utils.GetBooleanOr(g.Query(dto.ReverseParam), false)
 	searchString := g.Query(dto.SearchStringParam)
 
 	blogs, err := ch.enrichingProjection.GetBlogsEnriched(g.Request.Context(), size, offset, cqrs.BlogOrderByCreateDateTime, reverse, searchString)
