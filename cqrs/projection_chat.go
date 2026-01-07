@@ -39,6 +39,40 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 	// we don't check chat existence for the chat creation
 
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		if event.TetATet {
+			if event.TetATetOppositeUserId != nil {
+				tetATetTwoExists, _, errInner := m.IsExistsTetATetTwo(ctx, tx, event.AdditionalData.BehalfUserId, *event.TetATetOppositeUserId)
+				if errInner != nil {
+					return errInner
+				}
+
+				if tetATetTwoExists {
+					m.lgr.InfoContext(ctx,
+						"Not created common chat because 2-participant tet-a-tet esists",
+						"chat_id", event.ChatId,
+						"title", event.Title,
+					)
+
+					return nil
+				}
+			} else {
+				tetATetOneExists, _, errInner := m.IsExistsTetATetOne(ctx, tx, event.AdditionalData.BehalfUserId)
+				if errInner != nil {
+					return errInner
+				}
+
+				if tetATetOneExists {
+					m.lgr.InfoContext(ctx,
+						"Not created common chat because 1-participant tet-a-tet esists",
+						"chat_id", event.ChatId,
+						"title", event.Title,
+					)
+
+					return nil
+				}
+			}
+		}
+
 		_, errInner := tx.ExecContext(ctx, `
 		insert into chat_common(
 			 id

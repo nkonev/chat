@@ -304,6 +304,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		}
 	}
 
+	var tetATetOppositeUserId *int64
 	if copyCommand.TetATet {
 		if len(copyCommand.ParticipantIds) != 2 && len(copyCommand.ParticipantIds) != 1 {
 			return 0, NewValidationError("Error during validation: tet-a-tet chat doesn't have 2 or 1 participants")
@@ -318,9 +319,9 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 			return 0, NewValidationError("Error during validation: tet-a-tet cannot be blog")
 		}
 
-		tetATetOpposite := tetATetOpposite(copyCommand.ParticipantIds, copyCommand.AdditionalData.BehalfUserId)
-		if tetATetOpposite != nil {
-			tetATetTwoExists, tetATetExistingTwoChatId, err := commonProjection.IsExistsTetATetTwo(ctx, dba, copyCommand.AdditionalData.BehalfUserId, *tetATetOpposite)
+		tetATetOppositeUserId = tetATetOpposite(copyCommand.ParticipantIds, copyCommand.AdditionalData.BehalfUserId)
+		if tetATetOppositeUserId != nil {
+			tetATetTwoExists, tetATetExistingTwoChatId, err := commonProjection.IsExistsTetATetTwo(ctx, dba, copyCommand.AdditionalData.BehalfUserId, *tetATetOppositeUserId)
 			if err != nil {
 				return 0, err
 			}
@@ -376,6 +377,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		ChatId:                              chatId,
 		Title:                               copyCommand.Title,
 		TetATet:                             copyCommand.TetATet,
+		TetATetOppositeUserId:               tetATetOppositeUserId,
 		Blog:                                copyCommand.Blog,
 		BlogAbout:                           copyCommand.BlogAbout,
 		Avatar:                              copyCommand.Avatar,

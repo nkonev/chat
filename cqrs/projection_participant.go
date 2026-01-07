@@ -13,15 +13,21 @@ import (
 	"github.com/georgysavva/scany/v2/sqlscan"
 )
 
-func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+type OnParticipantAddedResponse struct {
+	ChatExists bool
+}
+
+func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *ParticipantsAdded) (*OnParticipantAddedResponse, error) {
+	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*OnParticipantAddedResponse, error) {
 		chatExists, err := m.checkChatExists(ctx, tx, event.ChatId)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !chatExists {
 			m.lgr.InfoContext(ctx, "Skipping OnParticipantAdded because there is no chat", "chat_id", event.ChatId)
-			return nil
+			return &OnParticipantAddedResponse{
+				ChatExists: false,
+			}, nil
 		}
 
 		_, err = tx.ExecContext(ctx, `
@@ -33,7 +39,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		on conflict(user_id, chat_id) do nothing
 	`, GetParticipantIds(event.Participants), getParticipantChatAdmins(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// no problems here because
@@ -63,24 +69,26 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			, update_date_time = excluded.update_date_time 
 		`, GetParticipantIds(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		err = m.updateViewableParticipants(ctx, tx, event.ChatId)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// recalc in case an user was added after
 		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, GetParticipantIds(event.Participants), event.ChatId)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		return nil
+		return &OnParticipantAddedResponse{
+			ChatExists: true,
+		}, nil
 	})
 	if errOuter != nil {
-		return errOuter
+		return nil, errOuter
 	}
 
 	m.lgr.InfoContext(ctx,
@@ -89,7 +97,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		"chat_id", event.ChatId,
 	)
 
-	return nil
+	return res, nil
 }
 
 func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participantIds []int64, chatId int64, isRemoveAllParticipantsFromChat, wereRemovedUsersFromAaa bool) error {

@@ -76,9 +76,14 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 		return nil
 	}
 
-	errp := m.commonProjection.OnParticipantAdded(ctx, event)
+	resp, errp := m.commonProjection.OnParticipantAdded(ctx, event)
 	if errp != nil {
 		return errp
+	}
+
+	if !resp.ChatExists {
+		m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no chat exists. Probably it's protection against ahead creating tet-a-tet", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		return nil
 	}
 
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventTypeChatCreated, "user_ids", userIds)
