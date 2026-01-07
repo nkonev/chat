@@ -28,6 +28,7 @@ type ChatCreated struct {
 	Title                               string          `json:"title"`
 	TetATet                             bool            `json:"tetATet"`
 	TetATetOppositeUserId               *int64          `json:"tetATetOppositeUserId"` // not nil in case tet-a-tet
+	TetATetSingle                       bool            `json:"tetATetSingle"`
 	Blog                                bool            `json:"blog"`
 	BlogAbout                           bool            `json:"blogAbout"`
 	Avatar                              *string         `json:"avatar"`

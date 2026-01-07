@@ -35,40 +35,17 @@ func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32
 	return ma, nil
 }
 
-func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated) (bool, int64, error) {
+func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated) error {
 	// we don't check chat existence for the chat creation
 
-	type txRes struct {
-		ChatId  int64
-		Created bool
-	}
-
-	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*txRes, error) {
-		if event.TetATet {
-			exists, _, _, existingTetATetChatId, errInner := m.IsExistsTetATet(ctx, tx, event.AdditionalData.BehalfUserId, *event.TetATetOppositeUserId)
-			if errInner != nil {
-				return nil, errInner
-			}
-
-			if exists {
-				m.lgr.InfoContext(ctx,
-					"Common chat not created because tet-a-tet already exists",
-					"chat_id", existingTetATetChatId,
-				)
-
-				return &txRes{
-					ChatId:  existingTetATetChatId,
-					Created: false,
-				}, nil
-			}
-		}
-
+	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		_, errInner := tx.ExecContext(ctx, `
 		insert into chat_common(
 			 id
 			,title
 			,create_date_time
 			,tet_a_tet
+			,tet_a_tet_single
 			,avatar
 			,avatar_big
 			,can_resend
@@ -92,10 +69,12 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 		    ,$11
 		    ,$12
 		    ,$13
+			,$14
 		)
 		on conflict(id) do update set 
 		    title = excluded.title
 		    ,tet_a_tet = excluded.tet_a_tet
+		    ,tet_a_tet_single = excluded.tet_a_tet_single
 		    ,avatar = excluded.avatar
 		    ,avatar_big = excluded.avatar_big
 			,can_resend = excluded.can_resend
@@ -105,36 +84,33 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 			,regular_participant_can_pin_message = excluded.regular_participant_can_pin_message
 			,regular_participant_can_write_message = excluded.regular_participant_can_write_message
 			,regular_participant_can_add_participant = excluded.regular_participant_can_add_participant
-	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.TetATet, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage, event.RegularParticipantCanAddParticipant)
+	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.TetATet, event.TetATetSingle, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage, event.RegularParticipantCanAddParticipant)
 		if errInner != nil {
-			return nil, errInner
+			return errInner
 		}
 
 		if event.Blog {
 			// add blog
 			_, errInner = m.refreshBlog(ctx, tx, event.ChatId, event.AdditionalData.CreatedAt, &event.BlogAbout)
 			if errInner != nil {
-				return nil, errInner
+				return errInner
 			}
 		}
 
-		return &txRes{
-			ChatId:  event.ChatId,
-			Created: true,
-		}, nil
+		return nil
 	})
 
 	if errOuter != nil {
-		return false, 0, errOuter
+		return errOuter
 	}
 
 	m.lgr.InfoContext(ctx,
 		"Common chat created",
-		"chat_id", res.ChatId,
+		"chat_id", event.ChatId,
 		"title", event.Title,
 	)
 
-	return res.Created, res.ChatId, nil
+	return nil
 }
 
 func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) (*int64, error) {
@@ -883,26 +859,33 @@ func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto,
 		Participants: makeParticipants(ch.ParticipantIds, users),
 	}
 	if che.ChatViewDto.TetATet {
-		tetATetOpposite := tetATetOpposite(che.ParticipantIds, behalfUserId)
-		if tetATetOpposite != nil {
-			oppositeUserId := *tetATetOpposite
-			oppositeUser := users[oppositeUserId]
-			if oppositeUser != nil {
-				che.Title = oppositeUser.Login
-				che.Avatar = oppositeUser.Avatar
+		var displayableUser *dto.User
+		if che.ChatViewDto.ParticipantsCount == 1 {
+			oppositeUserId := che.ChatViewDto.ParticipantIds[0]
+			displayableUser = users[oppositeUserId]
+		} else {
+			tetATetOpposite := tetATetOpposite(che.ParticipantIds, behalfUserId)
+			if tetATetOpposite != nil {
+				oppositeUserId := *tetATetOpposite
+				displayableUser = users[oppositeUserId]
+			}
+		}
 
-				che.ShortInfo = oppositeUser.ShortInfo
-				che.LoginColor = oppositeUser.LoginColor
-				che.AdditionalData = oppositeUser.AdditionalData
+		if displayableUser != nil {
+			che.Title = displayableUser.Login
+			che.Avatar = displayableUser.Avatar
 
-				if oppositeUserId != behalfUserId {
-					che.LastSeenDateTime = oppositeUser.LastSeenDateTime
+			che.ShortInfo = displayableUser.ShortInfo
+			che.LoginColor = displayableUser.LoginColor
+			che.AdditionalData = displayableUser.AdditionalData
 
-					onl, ok := tetATetOnlines[oppositeUser.Id]
-					if ok {
-						if onl { // if the opposite user is online we don't need to show last login
-							che.LastSeenDateTime = nil
-						}
+			if displayableUser.Id != behalfUserId {
+				che.LastSeenDateTime = displayableUser.LastSeenDateTime
+
+				onl, ok := tetATetOnlines[displayableUser.Id]
+				if ok {
+					if onl { // if the opposite user is online we don't need to show last login
+						che.LastSeenDateTime = nil
 					}
 				}
 			}
