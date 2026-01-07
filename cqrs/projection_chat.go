@@ -45,7 +45,6 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 			,title
 			,create_date_time
 			,tet_a_tet
-			,tet_a_tet_single
 			,avatar
 			,avatar_big
 			,can_resend
@@ -69,12 +68,10 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 		    ,$11
 		    ,$12
 		    ,$13
-			,$14
 		)
 		on conflict(id) do update set 
 		    title = excluded.title
 		    ,tet_a_tet = excluded.tet_a_tet
-		    ,tet_a_tet_single = excluded.tet_a_tet_single
 		    ,avatar = excluded.avatar
 		    ,avatar_big = excluded.avatar_big
 			,can_resend = excluded.can_resend
@@ -84,7 +81,7 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 			,regular_participant_can_pin_message = excluded.regular_participant_can_pin_message
 			,regular_participant_can_write_message = excluded.regular_participant_can_write_message
 			,regular_participant_can_add_participant = excluded.regular_participant_can_add_participant
-	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.TetATet, event.TetATetSingle, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage, event.RegularParticipantCanAddParticipant)
+	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.TetATet, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage, event.RegularParticipantCanAddParticipant)
 		if errInner != nil {
 			return errInner
 		}

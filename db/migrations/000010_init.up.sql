@@ -19,7 +19,6 @@ create unlogged table chat_common(
     last_generated_message_id bigint not null default 0,
     create_date_time timestamp not null,
     tet_a_tet boolean not null,
-    tet_a_tet_single boolean not null,
     available_to_search boolean not null,
     avatar text,
     avatar_big text,

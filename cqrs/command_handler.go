@@ -95,7 +95,6 @@ type ChatCreate struct {
 	Title                               string
 	ParticipantIds                      []int64
 	TetATet                             bool
-	TetATetOppositeUserId               *int64
 	Blog                                bool
 	BlogAbout                           bool
 	Avatar                              *string
@@ -319,52 +318,49 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 			return 0, NewValidationError("Error during validation: tet-a-tet cannot be blog")
 		}
 
-		if copyCommand.TetATetOppositeUserId == nil {
-			return 0, errors.New("Wrong invariant - TetATetOppositeUserId is nil")
-
-		}
-
-		tetATetTwoExists, tetATetExistingTwoChatId, err := commonProjection.IsExistsTetATetTwo(ctx, dba, copyCommand.AdditionalData.BehalfUserId, *copyCommand.TetATetOppositeUserId)
-		if err != nil {
-			return 0, err
-		}
-
-		tetATetOneExists, tetATetExistingOneChatId, err := commonProjection.IsExistsTetATetOne(ctx, dba, copyCommand.AdditionalData.BehalfUserId)
-		if err != nil {
-			return 0, err
-		}
-
-		isTwo := len(copyCommand.ParticipantIds) == 2 && tetATetTwoExists
-		isOne := len(copyCommand.ParticipantIds) == 1 && tetATetOneExists
-
-		if isTwo {
-			// send upsert event
-			err = rabbitmqOutputEventPublisher.Publish(ctx, copyCommand.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-				UserId:    copyCommand.AdditionalData.BehalfUserId,
-				EventType: dto.EventTypeChatTetATetUpserted,
-				ChatTetATetUpsertedDto: &dto.ChatTetATetUpsertedDto{
-					ChatId: tetATetExistingTwoChatId,
-				},
-			})
+		tetATetOpposite := tetATetOpposite(copyCommand.ParticipantIds, copyCommand.AdditionalData.BehalfUserId)
+		if tetATetOpposite != nil {
+			tetATetTwoExists, tetATetExistingTwoChatId, err := commonProjection.IsExistsTetATetTwo(ctx, dba, copyCommand.AdditionalData.BehalfUserId, *tetATetOpposite)
 			if err != nil {
-				lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				return 0, err
 			}
 
-			return tetATetExistingTwoChatId, nil
-		} else if isOne {
-			// send upsert event
-			err = rabbitmqOutputEventPublisher.Publish(ctx, copyCommand.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-				UserId:    copyCommand.AdditionalData.BehalfUserId,
-				EventType: dto.EventTypeChatTetATetUpserted,
-				ChatTetATetUpsertedDto: &dto.ChatTetATetUpsertedDto{
-					ChatId: tetATetExistingOneChatId,
-				},
-			})
+			if tetATetTwoExists {
+				// send upsert event
+				err = rabbitmqOutputEventPublisher.Publish(ctx, copyCommand.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+					UserId:    copyCommand.AdditionalData.BehalfUserId,
+					EventType: dto.EventTypeChatTetATetUpserted,
+					ChatTetATetUpsertedDto: &dto.ChatTetATetUpsertedDto{
+						ChatId: tetATetExistingTwoChatId,
+					},
+				})
+				if err != nil {
+					lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
+
+				return tetATetExistingTwoChatId, nil
+			}
+		} else {
+			tetATetOneExists, tetATetExistingOneChatId, err := commonProjection.IsExistsTetATetOne(ctx, dba, copyCommand.AdditionalData.BehalfUserId)
 			if err != nil {
-				lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				return 0, err
 			}
 
-			return tetATetExistingOneChatId, nil
+			if tetATetOneExists {
+				// send upsert event
+				err = rabbitmqOutputEventPublisher.Publish(ctx, copyCommand.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+					UserId:    copyCommand.AdditionalData.BehalfUserId,
+					EventType: dto.EventTypeChatTetATetUpserted,
+					ChatTetATetUpsertedDto: &dto.ChatTetATetUpsertedDto{
+						ChatId: tetATetExistingOneChatId,
+					},
+				})
+				if err != nil {
+					lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				}
+
+				return tetATetExistingOneChatId, nil
+			}
 		}
 	}
 
@@ -375,15 +371,11 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		return 0, err
 	}
 
-	tetATetSingle := copyCommand.TetATet && len(copyCommand.ParticipantIds) == 1
-
 	cc := &ChatCreated{
 		AdditionalData:                      copyCommand.AdditionalData,
 		ChatId:                              chatId,
 		Title:                               copyCommand.Title,
 		TetATet:                             copyCommand.TetATet,
-		TetATetOppositeUserId:               copyCommand.TetATetOppositeUserId,
-		TetATetSingle:                       tetATetSingle,
 		Blog:                                copyCommand.Blog,
 		BlogAbout:                           copyCommand.BlogAbout,
 		Avatar:                              copyCommand.Avatar,

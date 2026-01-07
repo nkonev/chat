@@ -733,7 +733,7 @@ func (m *CommonProjection) IsExistsTetATetOne(ctx context.Context, co db.CommonO
 					cp.chat_id
 				from chat_participant cp 
 				join chat_common ch on ch.id = cp.chat_id 
-				where ch.tet_a_tet = true and ch.tet_a_tet_single = true and cp.user_id = $1
+				where ch.tet_a_tet = true and ch.participants_count = 1 and cp.user_id = $1
 			) a
 		) b`, participant1)
 	if errors.Is(err, sql.ErrNoRows) {

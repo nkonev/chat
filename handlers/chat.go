@@ -126,14 +126,13 @@ func (ch *ChatHandler) CreateTetAChat(g *gin.Context) {
 	tetATetChatName := fmt.Sprintf("tet_a_tet_%v_%v", userId, oppositeUserId)
 
 	cc := cqrs.ChatCreate{
-		AdditionalData:        cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
-		Title:                 tetATetChatName,
-		ParticipantIds:        []int64{oppositeUserId},
-		TetATet:               true,
-		TetATetOppositeUserId: &oppositeUserId,
-		Blog:                  false,
-		CanResend:             ch.cfg.Chat.TetATet.CanResend,
-		CanReact:              ch.cfg.Chat.TetATet.CanReact,
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		Title:          tetATetChatName,
+		ParticipantIds: []int64{oppositeUserId},
+		TetATet:        true,
+		Blog:           false,
+		CanResend:      ch.cfg.Chat.TetATet.CanResend,
+		CanReact:       ch.cfg.Chat.TetATet.CanReact,
 	}
 
 	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg, ch.rabbitmqOutputEventPublisher, ch.lgr)
