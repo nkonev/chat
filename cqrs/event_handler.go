@@ -1492,11 +1492,68 @@ func (m *EventHandler) OnMessagePublished(ctx context.Context, event *MessagePub
 		}
 	} else {
 		// send publish
-		// TODO send publish
-		errOuter := m.sendPublish(ctx, event.ChatId, *promotedMessageId, pinnedCount, event.AdditionalData.GetCorrelationId())
+		errOuter := m.sendPublish(ctx, event.ChatId, event.MessageId, publishedCount, event.AdditionalData.GetCorrelationId())
 		if errOuter != nil {
 			return errOuter
 		}
+	}
+
+	return nil
+}
+
+func (m *EventHandler) sendPublish(ctx context.Context, chatId, messageId, publishedCount int64, correlationId *string) error {
+	eventTypeMessageEdit := dto.EventTypeMessageEdited
+
+	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, chatId, nil, func(participantIdsPortion []int64) error {
+		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, chatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &messageId, nil)
+		if errInn != nil {
+			return errInn
+		}
+
+		// allPortionUsersMap contains message owner
+		allPortionUsersMap := utils.ToMap(allPortionUsers)
+
+		enrichedsPublished, errInn := m.enrichingProjection.GetPublishedMessageEnriched(ctx, m.db, chatId, messageId, participantIdsPortion, allPortionUsersMap)
+		if errInn != nil {
+			return errInn
+		}
+
+		for _, participantId := range participantIdsPortion {
+			publishedMessage := enrichedsPublished[participantId]
+			if publishedMessage != nil {
+				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, correlationId, dto.ChatEvent{
+					EventType: dto.EventTypePublishedMessageAdd,
+					PublishedMessageNotification: &dto.PublishedMessageEvent{
+						Message:    *publishedMessage,
+						TotalCount: publishedCount,
+					},
+					UserId: participantId,
+					ChatId: chatId,
+				})
+				if errInn != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				}
+			} else {
+				m.lgr.WarnContext(ctx, "Published promoted isn't found for the participant", "user_id", participantId)
+			}
+		}
+
+		for _, messageView := range messageViews {
+			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, correlationId, dto.ChatEvent{
+				EventType:           eventTypeMessageEdit,
+				UserId:              messageView.BehalfUserId,
+				ChatId:              chatId,
+				MessageNotification: &messageView,
+			})
+			if errInn != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+			}
+		}
+
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
 	}
 
 	return nil
