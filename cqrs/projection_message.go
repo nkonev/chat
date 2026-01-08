@@ -335,6 +335,14 @@ func (m *CommonProjection) setMessagePinned(ctx context.Context, tx *db.Tx, chat
 	return nil
 }
 
+func (m *CommonProjection) setMessagePublished(ctx context.Context, tx *db.Tx, chatId, messageId int64, published bool) error {
+	_, err := tx.ExecContext(ctx, `update message set published = $3 where chat_id = $1 and id = $2`, chatId, messageId, published)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *dto.PinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool, messageOwnerUsersMap map[int64]*dto.User) *dto.PinnedMessageDto {
 	res := dto.PinnedMessageDto{
 		Id:             pinnedMessage.Id,
@@ -792,7 +800,66 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 }
 
 func (m *CommonProjection) OnMessagePublished(ctx context.Context, event *MessagePublished) (int64, error) {
-	return 0, nil // TODO
+	type resDto struct {
+		count int64
+	}
+	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*resDto, error) {
+		var publishCount int64
+		if event.Published {
+			mb, err := m.GetMessageBasic(ctx, tx, event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
+
+			if mb != nil {
+				previewTxt := m.createMessagePublishedText(mb.Content)
+
+				_, err = tx.ExecContext(ctx, `
+					insert into message_published (chat_id, message_id, owner_id, create_date_time, update_date_time, preview, content)
+					values ($1, $2, $3, $4, $5, $6, $7)
+					on conflict (chat_id, message_id) do update set
+					preview = excluded.preview
+					,promoted = excluded.promoted
+					,update_date_time = excluded.update_date_time
+				`,
+					event.ChatId, event.MessageId, mb.OwnerId, event.AdditionalData.CreatedAt, event.AdditionalData.CreatedAt, previewTxt, mb.Content)
+				if err != nil {
+					return nil, err
+				}
+
+				err = m.setMessagePublished(ctx, tx, event.ChatId, event.MessageId, true)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				m.lgr.InfoContext(ctx, "Skipping publishing the mesage because it is not exists", "chat_id", event.ChatId, "message_id", event.MessageId)
+			}
+		} else {
+			_, err := tx.ExecContext(ctx, "delete from message_published where chat_id = $1 and message_id = $2", event.ChatId, event.MessageId)
+			if err != nil {
+				return nil, err
+			}
+
+			err = m.setMessagePublished(ctx, tx, event.ChatId, event.MessageId, false)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		var errc error
+		publishCount, errc = m.GetPublishedMessageCount(ctx, tx, event.ChatId)
+		if errc != nil {
+			return nil, errc
+		}
+
+		return &resDto{
+			count: publishCount,
+		}, nil
+	})
+	if errOuter != nil {
+		return 0, errOuter
+	}
+	return res.count, nil
 }
 
 func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId int64) error {

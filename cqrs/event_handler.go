@@ -1534,7 +1534,7 @@ func (m *EventHandler) sendPublish(ctx context.Context, chatId, messageId, publi
 					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
 				}
 			} else {
-				m.lgr.WarnContext(ctx, "Published promoted isn't found for the participant", "user_id", participantId)
+				m.lgr.WarnContext(ctx, "Published isn't found for the participant", "user_id", participantId)
 			}
 		}
 
