@@ -931,6 +931,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 	var additionalUserIdToFetch []int64 = []int64{event.AdditionalData.BehalfUserId}
 
 	var pinnedCount int64
+	// TODO published
 
 	if isPinned {
 		pinnedCount, err = m.commonProjection.GetPinnedMessageCount(ctx, m.db, event.MessageCommoned.ChatId)
@@ -1140,7 +1141,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 		return err
 	}
 
-	wasPinned, promotedMessageId, pinnedCount, err := m.commonProjection.OnMessageRemoved(ctx, event)
+	wasPinned, wasPublished, promotedMessageId, pinnedCount, publishedCount, err := m.commonProjection.OnMessageRemoved(ctx, event)
 	if err != nil {
 		return err
 	}
@@ -1216,6 +1217,14 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 				}
 			}
 
+			if wasPublished {
+				if publishedCount != nil {
+					m.sendUnpublish(ctx, participantIdsPortion, *publishedCount, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt, event.AdditionalData.GetCorrelationId())
+				} else {
+					m.lgr.ErrorContext(ctx, "Wrong invariant - publishedCount is nil while wasPublished is true")
+				}
+			}
+
 			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 				UserId:    participantId,
 				EventType: dto.EventTypeMessageBrowserNotificationDelete,
@@ -1269,7 +1278,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 	}
 
 	if !CanPinMessage(adt.ChatCanPinMessage, adt.IsChatAdmin) {
-		m.lgr.InfoContext(ctx, "Skipping OnChatEdited because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping OnMessagePinned because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -1316,6 +1325,27 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 	}
 
 	return nil
+}
+
+func (m *EventHandler) sendUnpublish(ctx context.Context, participantIdsPortion []int64, publishedCount int64, chatId, messageId int64, createdAt time.Time, correlationId *string) {
+	for _, participantId := range participantIdsPortion {
+		errInn := m.rabbitmqOutputEventPublisher.Publish(ctx, correlationId, dto.ChatEvent{
+			EventType: dto.EventTypePublishedMessageRemove,
+			PublishedMessageNotification: &dto.PublishedMessageEvent{
+				Message: dto.PublishedMessageDto{
+					Id:             messageId,
+					ChatId:         chatId,
+					CreateDateTime: createdAt, // to pass thru graphql
+				},
+				TotalCount: publishedCount,
+			},
+			UserId: participantId,
+			ChatId: chatId,
+		})
+		if errInn != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+		}
+	}
 }
 
 func (m *EventHandler) sendUnpromotePinned(ctx context.Context, participantIdsPortion []int64, pinnedCount int64, chatId, messageId int64, createdAt time.Time, correlationId *string) {
@@ -1398,9 +1428,67 @@ func (m *EventHandler) sendPromotePinned(ctx context.Context, chatId, promotedMe
 }
 
 func (m *EventHandler) OnMessagePublished(ctx context.Context, event *MessagePublished) error {
-	err := m.commonProjection.OnMessagePublished(ctx, event)
+	var eventTypeV string
+	if event.Published {
+		eventTypeV = dto.EventTypePublishedMessageAdd
+	} else {
+		eventTypeV = dto.EventTypePublishedMessageRemove
+	}
+
+	eventTypeMessageEdit := dto.EventTypeMessageEdited
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventTypeV))
+	defer messageSpan.End()
+
+	adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId)
 	if err != nil {
 		return err
+	}
+
+	if !CanPublishMessage(adt.ChatCanPublishMessage, adt.IsChatAdmin, adt.MessageOwnerId, event.AdditionalData.BehalfUserId) {
+		m.lgr.InfoContext(ctx, "Skipping OnMessagePublished because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		return nil
+	}
+
+	publishedCount, err := m.commonProjection.OnMessagePublished(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	// send unpublish
+	if !event.Published {
+		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+			messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId, nil)
+			if errInn != nil {
+				return errInn
+			}
+
+			m.sendUnpublish(ctx, participantIdsPortion, publishedCount, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt, event.AdditionalData.GetCorrelationId())
+
+			for _, messageView := range messageViews {
+				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+					EventType:           eventTypeMessageEdit,
+					UserId:              messageView.BehalfUserId,
+					ChatId:              event.ChatId,
+					MessageNotification: &messageView,
+				})
+				if errInn != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				}
+			}
+
+			return nil
+		})
+		if errOuter != nil {
+			return errOuter
+		}
+	} else {
+		// send publish
+		// TODO send publish
+		errOuter := m.sendPromotePinned(ctx, event.ChatId, *promotedMessageId, pinnedCount, event.AdditionalData.GetCorrelationId())
+		if errOuter != nil {
+			return errOuter
+		}
 	}
 
 	return nil

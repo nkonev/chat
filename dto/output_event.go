@@ -27,3 +27,7 @@ const EventTypeChatNotificationSettingsChanged = "chat_notification_settings_cha
 const EventTypePinnedMessagePromote = "pinned_message_promote"
 const EventTypePinnedMessageUnpromote = "pinned_message_unpromote"
 const EventTypePinnedMessageEdit = "pinned_message_edit"
+
+const EventTypePublishedMessageAdd = "published_message_add"
+const EventTypePublishedMessageRemove = "published_message_remove"
+const EventTypePublishedMessageEdit = "published_message_edit"

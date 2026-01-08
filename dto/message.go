@@ -26,6 +26,7 @@ type MessageDto struct {
 	FileItemUuid   *string
 	BehalfUserId   int64 // behalf userId
 	Pinned         bool
+	Published      bool
 }
 
 type EmbedTyper struct {
@@ -104,6 +105,7 @@ type MessageViewEnrichedDto struct {
 	UpdateDateTime *time.Time            `json:"editDateTime"` // for sake compatibility
 	FileItemUuid   *string               `json:"fileItemUuid"`
 	Pinned         bool                  `json:"pinned"`
+	Published      bool                  `json:"published"`
 
 	Owner     *User      `json:"owner"`
 	Reactions []Reaction `json:"reactions"`
@@ -190,6 +192,7 @@ type MessageBasic struct {
 	OwnerId      int64   `db:"owner_id"`
 	Content      string  `db:"content"`
 	BlogPost     bool    `db:"blog_post"`
+	Pinned       bool    `db:"pinned"`
 	Published    bool    `db:"published"`
 	FileItemUuid *string `db:"file_item_uuid"`
 }
