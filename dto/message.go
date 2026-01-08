@@ -363,3 +363,8 @@ type PublishedMessage struct {
 	Text           string    `db:"preview"`
 	Content        string    `db:"content"`
 }
+
+type PublishedMessagesWrapper struct {
+	Data  []PublishedMessageDto `json:"items"`
+	Count int64                 `json:"count"` // total published messages number
+}

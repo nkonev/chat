@@ -765,7 +765,7 @@ func (mc *MessageHandler) GetPinnedMessages(g *gin.Context) {
 	page := utils.FixPageString(g.Query(dto.PageParam))
 	offset := utils.GetOffset(page, size)
 
-	pm, cnt, err := mc.enrichingProjection.GetPinnedMessages(g.Request.Context(), chatId, userId, offset, size)
+	pm, cnt, err := mc.enrichingProjection.GetPinnedMessagesEnriched(g.Request.Context(), chatId, userId, offset, size)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
@@ -922,8 +922,44 @@ func (mc *MessageHandler) PublishMessage(g *gin.Context) {
 }
 
 func (mc *MessageHandler) GetPublishedMessages(g *gin.Context) {
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := getUserId(g)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	size := utils.FixSizeString(g.Query(dto.SizeParam))
+	page := utils.FixPageString(g.Query(dto.PageParam))
+	offset := utils.GetOffset(page, size)
+
+	pm, cnt, err := mc.enrichingProjection.GetPublishedMessagesEnriched(g.Request.Context(), chatId, userId, offset, size)
+	if err != nil {
+		if translateMessageError(g, err) {
+			return
+		}
+
+		mc.lgr.ErrorContext(g.Request.Context(), "Error invoking GetPublishedMessages", "err", err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	g.JSON(http.StatusOK, dto.PublishedMessagesWrapper{
+		Data:  pm,
+		Count: cnt,
+	})
 }
 
+// TODO здесь использовать content
 func (mc *MessageHandler) GetPublishedMessage(g *gin.Context) {
 }
 

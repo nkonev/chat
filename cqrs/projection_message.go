@@ -439,7 +439,7 @@ func (m *EnrichingProjection) GetPinnedPromotedMessage(ctx context.Context, chat
 	return res.promoted, res.notAParticipant, nil
 }
 
-func (m *EnrichingProjection) GetPinnedMessages(ctx context.Context, chatId, userId, offset int64, size int32) ([]dto.PinnedMessageDto, int64, error) {
+func (m *EnrichingProjection) GetPinnedMessagesEnriched(ctx context.Context, chatId, userId, offset int64, size int32) ([]dto.PinnedMessageDto, int64, error) {
 	type txRes struct {
 		list  []dto.PinnedMessageDto
 		count int64
@@ -599,6 +599,79 @@ func (m *CommonProjection) GetPinnedMessageCount(ctx context.Context, co db.Comm
 	return count, nil
 }
 
+func (m *EnrichingProjection) GetPublishedMessagesEnriched(ctx context.Context, chatId, userId, offset int64, size int32) ([]dto.PublishedMessageDto, int64, error) {
+	type txRes struct {
+		list  []dto.PublishedMessageDto
+		count int64
+	}
+	res, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*txRes, error) {
+		rs := txRes{
+			list:  []dto.PublishedMessageDto{},
+			count: 0,
+		}
+
+		participant, err := m.cp.IsParticipant(ctx, tx, userId, chatId)
+		if err != nil {
+			return nil, err
+		}
+		if !participant {
+			return nil, NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", userId, chatId))
+		}
+
+		publishedMessages, err := m.cp.GetPublishedMessages(ctx, tx, chatId, offset, size)
+		if err != nil {
+			return nil, err
+		}
+
+		cb, err := m.cp.GetChatBasic(ctx, tx, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		if cb == nil {
+			m.lgr.InfoContext(ctx, "chat is not found", "chat_id", chatId)
+			return &rs, nil
+		}
+
+		areAdmins, err := m.cp.getAreAdminsOfUserIds(ctx, tx, []int64{userId}, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		messageOwners := map[int64]struct{}{}
+		for _, msg := range publishedMessages {
+			messageOwners[msg.OwnerId] = struct{}{}
+		}
+
+		messageOwnerUsers, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdStructToSlice(messageOwners))
+		if err != nil {
+			m.lgr.WarnContext(ctx, "unable to get users", "err", err)
+		}
+
+		messageOwnerUsersMap := utils.ToMap(messageOwnerUsers)
+
+		for _, pm := range publishedMessages {
+			publishedEnriched := m.enrichMessagePublished(ctx, &pm, cb.RegularParticipantCanPublishMessage, areAdmins[userId], messageOwnerUsersMap, userId)
+			rs.list = append(rs.list, *publishedEnriched)
+		}
+
+		cnt, err := m.cp.GetPublishedMessageCount(ctx, tx, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		rs.count = cnt
+
+		return &rs, nil
+	})
+
+	if errOuter != nil {
+		return nil, 0, errOuter
+	}
+
+	return res.list, res.count, nil
+}
+
 func (m *EnrichingProjection) GetPublishedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64, behalfUserIds []int64, messageOwnerUsersMap map[int64]*dto.User) (map[int64]*dto.PublishedMessageDto, error) {
 	published, err := m.cp.GetPublishedMessage(ctx, co, chatId, messageId)
 	if err != nil {
@@ -666,7 +739,7 @@ func (m *CommonProjection) GetPublishedMessages(ctx context.Context, co db.Commo
 		%s
 	from message_published 
 	where chat_id = $1 
-	order by create_date_time desc, promoted desc
+	order by create_date_time desc
 	limit $2 offset $3
 	`, publishedMessageCols),
 		chatId, size, offset)
