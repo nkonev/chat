@@ -221,7 +221,11 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 		return false, false, 0, 0, errOuter
 	}
 
-	return res.isPinned, res.isPublished, res.pinnedCount, res.publishedCount, errOuter
+	if res != nil {
+		return res.isPinned, res.isPublished, res.pinnedCount, res.publishedCount, errOuter
+	} else {
+		return false, false, 0, 0, nil
+	}
 }
 
 func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx context.Context, tx *db.Tx, participantIds []int64, chatId int64) error {
