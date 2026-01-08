@@ -354,3 +354,12 @@ type PinnedMessage struct {
 	Text           string    `db:"preview"`
 	Promoted       bool      `db:"promoted"`
 }
+
+type PublishedMessage struct {
+	Id             int64     `db:"message_id"`
+	ChatId         int64     `db:"chat_id"`
+	OwnerId        int64     `db:"owner_id"`
+	CreateDateTime time.Time `db:"create_date_time"`
+	Text           string    `db:"preview"`
+	Content        string    `db:"content"`
+}

@@ -874,7 +874,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 	oldMentionedUserIds, oldHasHere, oldHasAll, _, oldRepliedUserId := m.getNotificationData(ctx, messageBasicOld.GetContentOrEmpty(), messageBasicOld.GetEmbed())
 	oldMentionedUserIdsMap := utils.SliceToSetMapIdStruct(oldMentionedUserIds)
 
-	isPinned, err := m.commonProjection.OnMessageEdited(ctx, event)
+	isPinned, isPublished, pinnedCount, publishedCount, err := m.commonProjection.OnMessageEdited(ctx, event)
 	if err != nil {
 		return err
 	}
@@ -930,16 +930,6 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 
 	var additionalUserIdToFetch []int64 = []int64{event.AdditionalData.BehalfUserId}
 
-	var pinnedCount int64
-	// TODO published
-
-	if isPinned {
-		pinnedCount, err = m.commonProjection.GetPinnedMessageCount(ctx, m.db, event.MessageCommoned.ChatId)
-		if err != nil {
-			return err
-		}
-	}
-
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.MessageCommoned.ChatId, nil, func(participantIdsPortion []int64) error {
 		messageViews, _, allPortionUsers, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, nil, event.MessageCommoned.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageCommoned.Id, additionalUserIdToFetch)
 		if errInn != nil {
@@ -950,9 +940,18 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		behalfUserDto = allPortionUsersMap[event.AdditionalData.BehalfUserId]
 
 		var pinnedEnricheds = map[int64]*dto.PinnedMessageDto{}
+		var publishedEnricheds = map[int64]*dto.PublishedMessageDto{}
 		if isPinned {
 			// allPortionUsersMap contains message owner
 			pinnedEnricheds, errInn = m.enrichingProjection.GetPinnedMessageEnriched(ctx, m.db, event.MessageCommoned.ChatId, event.MessageCommoned.Id, participantIdsPortion, allPortionUsersMap)
+			if errInn != nil {
+				return errInn
+			}
+		}
+
+		if isPublished {
+			// allPortionUsersMap contains message owner
+			publishedEnricheds, errInn = m.enrichingProjection.GetPublishedMessageEnriched(ctx, m.db, event.MessageCommoned.ChatId, event.MessageCommoned.Id, participantIdsPortion, allPortionUsersMap)
 			if errInn != nil {
 				return errInn
 			}
@@ -989,6 +988,26 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 					}
 				} else {
 					m.lgr.WarnContext(ctx, "Pinned enriched isn't found", "user_id", messageView.BehalfUserId)
+				}
+			}
+
+			if isPublished {
+				publishedEnriched := publishedEnricheds[messageView.BehalfUserId]
+				if publishedEnriched != nil {
+					errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+						EventType: dto.EventTypePublishedMessageEdit,
+						PublishedMessageNotification: &dto.PublishedMessageEvent{
+							Message:    *publishedEnriched,
+							TotalCount: publishedCount,
+						},
+						UserId: messageView.BehalfUserId,
+						ChatId: event.MessageCommoned.ChatId,
+					})
+					if errInn != nil {
+						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					}
+				} else {
+					m.lgr.WarnContext(ctx, "Published enriched isn't found", "user_id", messageView.BehalfUserId)
 				}
 			}
 		}
@@ -1210,19 +1229,12 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 
 			// send unpromote/unpin
 			if wasPinned {
-				if pinnedCount != nil {
-					m.sendUnpromotePinned(ctx, participantIdsPortion, *pinnedCount, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt, event.AdditionalData.GetCorrelationId())
-				} else {
-					m.lgr.ErrorContext(ctx, "Wrong invariant - pinnedCount is nil while wasPinned is true")
-				}
+				m.sendUnpromotePinned(ctx, participantIdsPortion, pinnedCount, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt, event.AdditionalData.GetCorrelationId())
 			}
 
+			// send unpublish
 			if wasPublished {
-				if publishedCount != nil {
-					m.sendUnpublish(ctx, participantIdsPortion, *publishedCount, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt, event.AdditionalData.GetCorrelationId())
-				} else {
-					m.lgr.ErrorContext(ctx, "Wrong invariant - publishedCount is nil while wasPublished is true")
-				}
+				m.sendUnpublish(ctx, participantIdsPortion, publishedCount, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt, event.AdditionalData.GetCorrelationId())
 			}
 
 			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
@@ -1246,13 +1258,9 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 	}
 
 	if promotedMessageId != nil {
-		if pinnedCount != nil {
-			errOuter = m.sendPromotePinned(ctx, event.ChatId, *promotedMessageId, *pinnedCount, event.AdditionalData.GetCorrelationId())
-			if errOuter != nil {
-				return errOuter
-			}
-		} else {
-			m.lgr.ErrorContext(ctx, "Wrong invariant - pinnedCount is nil while wasPinned is true")
+		errOuter = m.sendPromotePinned(ctx, event.ChatId, *promotedMessageId, pinnedCount, event.AdditionalData.GetCorrelationId())
+		if errOuter != nil {
+			return errOuter
 		}
 	}
 
@@ -1485,7 +1493,7 @@ func (m *EventHandler) OnMessagePublished(ctx context.Context, event *MessagePub
 	} else {
 		// send publish
 		// TODO send publish
-		errOuter := m.sendPromotePinned(ctx, event.ChatId, *promotedMessageId, pinnedCount, event.AdditionalData.GetCorrelationId())
+		errOuter := m.sendPublish(ctx, event.ChatId, *promotedMessageId, pinnedCount, event.AdditionalData.GetCorrelationId())
 		if errOuter != nil {
 			return errOuter
 		}

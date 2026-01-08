@@ -97,38 +97,46 @@ func (m *CommonProjection) isMessagePromoted(ctx context.Context, co db.CommonOp
 	return isMessagePromoted, nil
 }
 
-func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) (bool, error) {
-	pinned, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (bool, error) {
+func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEdited) (bool, bool, int64, int64, error) {
+
+	type resDto struct {
+		isPinned, isPublished       bool
+		pinnedCount, publishedCount int64
+	}
+
+	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*resDto, error) {
+
+		var pinnedCount, publishedCount int64
 
 		chatExists, err := m.checkChatExists(ctx, tx, event.MessageCommoned.ChatId)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		if !chatExists {
 			m.lgr.InfoContext(ctx, "Skipping MessageEdited because there is no chat", "chat_id", event.MessageCommoned.ChatId)
-			return false, nil
+			return nil, nil
 		}
 
 		messageBlogPost, err := m.isMessageBlogPost(ctx, tx, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 
 		isMessagePinned, err := m.isMessagePinned(ctx, tx, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 
 		isMessagePublished, err := m.isMessagePublished(ctx, tx, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 
 		var embed pgtype.JSONB
 		if event.MessageCommoned.Embed != nil {
 			err = embed.Set(event.MessageCommoned.Embed)
 			if err != nil {
-				return false, err
+				return nil, err
 			}
 		} else {
 			embed.Status = pgtype.Null
@@ -144,13 +152,13 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			where chat_id = $2 and id = $1 
 		`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, event.MessageCommoned.Content, embed, event.AdditionalData.CreatedAt, event.MessageCommoned.FileItemUuid)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 
 		if messageBlogPost {
 			_, err = m.refreshBlog(ctx, tx, event.MessageCommoned.ChatId, event.AdditionalData.CreatedAt, nil)
 			if err != nil {
-				return false, err
+				return nil, err
 			}
 		}
 
@@ -158,14 +166,19 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			previewTxt := m.createMessagePinnedText(event.MessageCommoned.Content)
 
 			_, err = tx.ExecContext(ctx, `
-			update message_pinned
-			set	
-			    preview = $3
-				, update_date_time = $4
-			where chat_id = $2 and message_id = $1 
-		`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, previewTxt, event.AdditionalData.CreatedAt)
+				update message_pinned
+				set	
+					preview = $3
+					, update_date_time = $4
+				where chat_id = $2 and message_id = $1 
+			`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, previewTxt, event.AdditionalData.CreatedAt)
 			if err != nil {
-				return false, err
+				return nil, err
+			}
+
+			pinnedCount, err = m.GetPinnedMessageCount(ctx, m.db, event.MessageCommoned.ChatId)
+			if err != nil {
+				return nil, err
 			}
 		}
 
@@ -173,15 +186,20 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			previewTxt := m.createMessagePublishedText(event.MessageCommoned.Content)
 
 			_, err = tx.ExecContext(ctx, `
-			update message_published
-			set	
-			    preview = $3
-				, content = $4
-				, update_date_time = $5
-			where chat_id = $2 and message_id = $1 
-		`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, previewTxt, event.MessageCommoned.Content, event.AdditionalData.CreatedAt)
+				update message_published
+				set	
+					preview = $3
+					, content = $4
+					, update_date_time = $5
+				where chat_id = $2 and message_id = $1 
+			`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, previewTxt, event.MessageCommoned.Content, event.AdditionalData.CreatedAt)
 			if err != nil {
-				return false, err
+				return nil, err
+			}
+
+			publishedCount, err = m.GetPublishedMessageCount(ctx, tx, event.MessageCommoned.ChatId)
+			if err != nil {
+				return nil, err
 			}
 		}
 
@@ -191,10 +209,19 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			"chat_id", event.MessageCommoned.ChatId,
 			"message_id", event.MessageCommoned.Id,
 		)
-		return isMessagePinned, nil
+		return &resDto{
+			isPinned:       isMessagePinned,
+			isPublished:    isMessagePublished,
+			pinnedCount:    pinnedCount,
+			publishedCount: publishedCount,
+		}, nil
 	})
 
-	return pinned, errOuter
+	if errOuter != nil {
+		return false, false, 0, 0, errOuter
+	}
+
+	return res.isPinned, res.isPublished, res.pinnedCount, res.publishedCount, errOuter
 }
 
 func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx context.Context, tx *db.Tx, participantIds []int64, chatId int64) error {
@@ -205,11 +232,11 @@ func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx conte
 	return nil
 }
 
-func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageDeleted) (bool, bool, *int64, *int64, *int64, error) {
+func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageDeleted) (bool, bool, *int64, int64, int64, error) {
 	type txDto struct {
 		promotedMessageId   *int64
-		pinnedCount         *int64
-		publishedCount      *int64
+		pinnedCount         int64
+		publishedCount      int64
 		wasMessagePinned    bool
 		wasMessagePublished bool
 	}
@@ -280,15 +307,15 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 		}
 
 		return &txDto{
-			pinnedCount:         &pinnedCount,
-			publishedCount:      &publishedCount,
+			pinnedCount:         pinnedCount,
+			publishedCount:      publishedCount,
 			promotedMessageId:   promotedMessageId,
 			wasMessagePinned:    wasMessagePinned,
 			wasMessagePublished: wasMessagePublished,
 		}, nil
 	})
 	if errOuter != nil {
-		return false, false, nil, nil, nil, errOuter
+		return false, false, nil, 0, 0, errOuter
 	}
 
 	m.lgr.InfoContext(ctx,
@@ -309,7 +336,6 @@ func (m *CommonProjection) setMessagePinned(ctx context.Context, tx *db.Tx, chat
 }
 
 func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *dto.PinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool, messageOwnerUsersMap map[int64]*dto.User) *dto.PinnedMessageDto {
-
 	res := dto.PinnedMessageDto{
 		Id:             pinnedMessage.Id,
 		Text:           pinnedMessage.Text,
@@ -319,6 +345,20 @@ func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMes
 		PinnedPromoted: pinnedMessage.Promoted,
 		CreateDateTime: pinnedMessage.CreateDateTime,
 		CanPin:         CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin),
+	}
+
+	return &res
+}
+
+func (m *EnrichingProjection) enrichMessagePublished(ctx context.Context, publishedMessage *dto.PublishedMessage, chatRegularParticipantCanPublishMessage bool, chatIsAdmin bool, messageOwnerUsersMap map[int64]*dto.User, behalfUserId int64) *dto.PublishedMessageDto {
+	res := dto.PublishedMessageDto{
+		Id:             publishedMessage.Id,
+		Text:           publishedMessage.Text,
+		ChatId:         publishedMessage.ChatId,
+		OwnerId:        publishedMessage.OwnerId,
+		Owner:          messageOwnerUsersMap[publishedMessage.OwnerId],
+		CreateDateTime: publishedMessage.CreateDateTime,
+		CanPublish:     CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, publishedMessage.OwnerId, behalfUserId),
 	}
 
 	return &res
@@ -545,6 +585,84 @@ func (m *CommonProjection) GetPinnedMessageCount(ctx context.Context, co db.Comm
 		return 0, err
 	}
 	return count, nil
+}
+
+func (m *EnrichingProjection) GetPublishedMessageEnriched(ctx context.Context, co db.CommonOperations, chatId, messageId int64, behalfUserIds []int64, messageOwnerUsersMap map[int64]*dto.User) (map[int64]*dto.PublishedMessageDto, error) {
+	published, err := m.cp.GetPublishedMessage(ctx, co, chatId, messageId)
+	if err != nil {
+		return nil, err
+	}
+	if published != nil {
+		areAdmins, err := m.cp.getAreAdminsOfUserIds(ctx, co, behalfUserIds, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		cb, err := m.cp.GetChatBasic(ctx, co, chatId)
+		if err != nil {
+			return nil, err
+		}
+
+		resMap := map[int64]*dto.PublishedMessageDto{}
+
+		if cb != nil {
+			for _, participantId := range behalfUserIds {
+				publishedEnriched := m.enrichMessagePublished(ctx, published, cb.RegularParticipantCanPublishMessage, areAdmins[participantId], messageOwnerUsersMap, participantId)
+				resMap[participantId] = publishedEnriched
+			}
+		} else {
+			m.lgr.ErrorContext(ctx, "Chat isn't found", "chat_id", chatId)
+		}
+
+		return resMap, nil
+	} else {
+		return nil, nil
+	}
+}
+
+const publishedMessageCols = `
+		message_id
+		,chat_id
+		,owner_id
+		,create_date_time
+		,preview
+		,content
+`
+
+func (m *CommonProjection) GetPublishedMessage(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.PublishedMessage, error) {
+	var pm dto.PublishedMessage
+	err := sqlscan.Get(ctx, co, &pm, fmt.Sprintf(`
+	select 
+		%s
+	from message_published 
+	where chat_id = $1 and message_id = $2
+	`, publishedMessageCols), chatId, messageId)
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+	} else if err != nil {
+		return nil, err
+	}
+
+	return &pm, nil
+}
+
+func (m *CommonProjection) GetPublishedMessages(ctx context.Context, co db.CommonOperations, chatId int64, offset int64, size int32) ([]dto.PublishedMessage, error) {
+	var pm = []dto.PublishedMessage{}
+
+	err := sqlscan.Select(ctx, co, &pm, fmt.Sprintf(`
+	select 
+		%s
+	from message_published 
+	where chat_id = $1 
+	order by create_date_time desc, promoted desc
+	limit $2 offset $3
+	`, publishedMessageCols),
+		chatId, size, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	return pm, nil
 }
 
 func (m *CommonProjection) GetPublishedMessageCount(ctx context.Context, co db.CommonOperations, chatId int64) (int64, error) {

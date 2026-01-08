@@ -96,6 +96,7 @@ CREATE unlogged TABLE message_published(
     owner_id bigint not null,
     create_date_time timestamp not null,
     update_date_time timestamp,
+    preview text not null,
     content text not null,
     PRIMARY KEY (chat_id, message_id),
     FOREIGN KEY (message_id, chat_id) REFERENCES message(id, chat_id) ON DELETE CASCADE
