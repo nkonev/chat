@@ -823,7 +823,7 @@ func (m *CommonProjection) OnMessagePublished(ctx context.Context, event *Messag
 					values ($1, $2, $3, $4, $5, $6, $7)
 					on conflict (chat_id, message_id) do update set
 					preview = excluded.preview
-					,promoted = excluded.promoted
+					,content = excluded.content
 					,update_date_time = excluded.update_date_time
 				`,
 					event.ChatId, event.MessageId, mb.OwnerId, event.AdditionalData.CreatedAt, event.AdditionalData.CreatedAt, previewTxt, mb.Content)
