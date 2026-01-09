@@ -337,6 +337,45 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 						}
 					}
 
+					// reactions
+					lgr.InfoContext(ctx, "Starting migrating reactions on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id, "message_id", oldMessage.Id)
+					type oldReaction struct {
+						UserId    int64  `db:"user_id"`
+						Reaction  string `db:"reaction"`
+						MessageId int64  `db:"message_id"`
+						ChatId    int64  `db:"chat_id"`
+					}
+					oldReactions := []oldReaction{}
+					err = pgxscan.Select(ctx, connOldDb, &oldReactions, `
+						select
+							user_id
+							,reaction
+							,message_id
+							,chat_id
+						from message_reaction
+						where chat_id = $1 and message_id = $2
+						order by user_id
+					`, oldChat.Id, oldMessage.Id)
+					if err != nil {
+						return err
+					}
+
+					for _, oldReaction := range oldReactions {
+						fl := &MessageReactionFlipped{
+							AdditionalData: GenerateMessageAdditionalData(nil, oldReaction.UserId),
+							ChatId:         oldChat.Id,
+							MessageId:      oldMessage.Id,
+							Reaction:       oldReaction.Reaction,
+						}
+
+						err = eventBus.Publish(ctx, fl)
+						if err != nil {
+							return err
+						}
+					}
+
+					lgr.InfoContext(ctx, "Finishing migrating reactions on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id, "message_id", oldMessage.Id)
+
 					ui := &ChatViewRefreshed{
 						AdditionalData:             GenerateMessageAdditionalData(nil, oldMessage.OwnerId),
 						ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
