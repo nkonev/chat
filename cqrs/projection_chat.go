@@ -638,7 +638,10 @@ func (m *EnrichingProjection) getTetATetOpposite(ctx context.Context, co db.Comm
 		from chat_participant cp
 		where cp.chat_id = $1 and cp.user_id != $2
 	`, chatId, behalfUserId)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
+		// there were no rows, but otherwise no error occurred
+		return nil, nil
+	} else if err != nil {
 		return nil, err
 	}
 

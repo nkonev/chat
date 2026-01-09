@@ -216,6 +216,9 @@ func ConfigureEventProcessor(
 	kafkaConsumerConfig.ClientID = cfg.Kafka.Consumer.ClientId
 	kafkaConsumerConfig.Consumer.Offsets.Initial = sarama.OffsetOldest // need for to work after import
 	kafkaConsumerConfig.Consumer.Offsets.AutoCommit.Interval = cfg.Kafka.Consumer.OffsetCommitInterval
+	// kafkaConsumerConfig.Consumer.Fetch.Default = 20_000_000
+	// kafkaConsumerConfig.Consumer.MaxWaitTime = time.Second
+	//kafkaConsumerConfig.Consumer.MaxProcessingTime = time.Second * 5
 
 	eventProcessor, err := cqrs.NewEventGroupProcessorWithConfig(
 		cqrsRouter,
