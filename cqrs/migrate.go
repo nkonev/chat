@@ -1,0 +1,404 @@
+package cqrs
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"go-cqrs-chat-example/config"
+	"go-cqrs-chat-example/db"
+	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/logger"
+	"go-cqrs-chat-example/utils"
+	"time"
+
+	"github.com/georgysavva/scany/pgxscan"
+	sqlscanv2 "github.com/georgysavva/scany/v2/sqlscan"
+	"github.com/jackc/pgx/v4/pgxpool"
+)
+
+func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus, lgr *logger.LoggerWrapper, dba *db.DB, commonProjection *CommonProjection) error {
+	ctx := context.Background()
+
+	if !cfg.PerformMigration {
+		lgr.InfoContext(ctx, "Skipping migration because disabled")
+		return nil
+	}
+
+	isNeedToSkipMigrate, err := commonProjection.GetIsNeedToSkipMigrate(ctx, dba)
+	if err != nil {
+		return err
+	}
+
+	if isNeedToSkipMigrate {
+		lgr.InfoContext(ctx, "Skipping migration because already migrated")
+		return nil
+	}
+
+	lgr.InfoContext(ctx, "Starting migration from the old db")
+	connOldDb, err := pgxpool.Connect(ctx, cfg.PostgreSQLOld.Url)
+	if err != nil {
+		return err
+	}
+
+	// * migrate chats
+	for {
+		chatOffset := 0
+		lgr.InfoContext(ctx, "Starting migrating chats bunch on the offset", "chat_offset", chatOffset)
+
+		type oldChat struct {
+			Id                                  int64     `db:"id"`
+			Title                               string    `db:"title"`
+			CreateDateTime                      time.Time `db:"create_date_time"`
+			TetATet                             bool      `db:"tet_a_tet"`
+			Avatar                              *string   `db:"avatar"`
+			AvatarBig                           *string   `db:"avatar_big"`
+			CanResend                           bool      `db:"can_resend"`
+			AvailableToSearch                   bool      `db:"available_to_search"`
+			Blog                                bool      `db:"blog"`
+			RegularParticipantCanPublishMessage bool      `db:"regular_participant_can_publish_message"`
+			RegularParticipantCanPinMessage     bool      `db:"regular_participant_can_pin_message"`
+			BlogAbout                           bool      `db:"blog_about"`
+			RegularParticipantCanWriteMessage   bool      `db:"regular_participant_can_write_message"`
+			CanReact                            bool      `db:"can_react"`
+		}
+		oldChats := []oldChat{}
+		err = pgxscan.Select(ctx, connOldDb, &oldChats, `
+			select
+				id
+				,title
+				,create_date_time
+				,tet_a_tet
+				,avatar
+				,avatar_big
+				,can_resend
+				,available_to_search
+				,blog
+				,regular_participant_can_publish_message
+				,regular_participant_can_pin_message
+				,blog_about
+				,regular_participant_can_write_message
+				,can_react
+			from chat
+			order by id
+			limit $1 offset $2
+		`, utils.DefaultSize, chatOffset)
+		if err != nil {
+			return err
+		}
+
+		for _, oldChat := range oldChats {
+			lgr.InfoContext(ctx, "Starting migrating chat on the offset", "chat_offset", chatOffset, "chat_id", oldChat.Id)
+
+			var behalfUserId int64
+			err = pgxscan.Get(ctx, connOldDb, &behalfUserId, `
+				select user_id from chat_participant where chat_id = $1 order by create_date_time limit 1
+			`, oldChat.Id)
+			if err != nil {
+				return err
+			}
+
+			var tetATetOppositeUserId *int64
+			if oldChat.TetATet {
+				err = pgxscan.Get(ctx, connOldDb, &tetATetOppositeUserId, `
+				select user_id from chat_participant where chat_id = $1 and user_id != $2 order by create_date_time limit 1
+			`, oldChat.Id, behalfUserId)
+				if err != nil {
+					return err
+				}
+			}
+
+			err = eventBus.Publish(ctx, &ChatCreated{
+				AdditionalData:                      GenerateMessageAdditionalData(nil, behalfUserId),
+				ChatId:                              oldChat.Id,
+				Title:                               oldChat.Title,
+				TetATet:                             oldChat.TetATet,
+				TetATetOppositeUserId:               tetATetOppositeUserId,
+				Blog:                                oldChat.Blog,
+				BlogAbout:                           oldChat.BlogAbout,
+				Avatar:                              oldChat.Avatar,
+				AvatarBig:                           oldChat.AvatarBig,
+				CanResend:                           oldChat.CanResend,
+				CanReact:                            oldChat.CanReact,
+				AvailableToSearch:                   oldChat.AvailableToSearch,
+				RegularParticipantCanPublishMessage: oldChat.RegularParticipantCanPublishMessage,
+				RegularParticipantCanPinMessage:     oldChat.RegularParticipantCanPinMessage,
+				RegularParticipantCanWriteMessage:   oldChat.RegularParticipantCanWriteMessage,
+				RegularParticipantCanAddParticipant: true,
+			})
+
+			// * * migrate participants
+			for {
+				participantOffset := 0
+				lgr.InfoContext(ctx, "Starting migrating participants bunch on the offset", "chat_offset", chatOffset, "participant_offset", participantOffset, "chat_id", oldChat.Id)
+				type oldParticipant struct {
+					ChatId         int64     `db:"chat_id"`
+					UserId         int64     `db:"user_id"`
+					Admin          bool      `db:"admin"`
+					CreateDateTime time.Time `db:"create_date_time"`
+				}
+				oldParticipants := []oldParticipant{}
+				err = pgxscan.Select(ctx, connOldDb, &oldParticipants, `
+					select
+						chat_id
+						,user_id
+						,admin
+						,create_date_time
+					from chat_participant
+					where chat_id = $1
+					order by create_date_time
+					limit $2 offset $3
+				`, oldChat.Id, utils.DefaultSize, participantOffset)
+				if err != nil {
+					return err
+				}
+
+				pa := &ParticipantsAdded{
+					AdditionalData: GenerateMessageAdditionalData(nil, behalfUserId),
+					ChatId:         oldChat.Id,
+					IsJoining:      true,
+				}
+
+				for _, oldParticipant := range oldParticipants {
+					lgr.InfoContext(ctx, "Migrating participant on the offset", "chat_offset", chatOffset, "participant_offset", participantOffset, "chat_id", oldChat.Id, "user_id", oldParticipant.UserId)
+
+					pa.Participants = append(pa.Participants, ParticipantWithAdmin{
+						ParticipantId: oldParticipant.UserId,
+						ChatAdmin:     oldParticipant.Admin,
+					})
+				}
+				err = eventBus.Publish(ctx, pa)
+				if err != nil {
+					return err
+				}
+
+				lgr.InfoContext(ctx, "Finishing migrating participants bunch on the offset", "chat_offset", chatOffset, "participant_offset", participantOffset, "chat_id", oldChat.Id)
+				if len(oldParticipants) < utils.DefaultSize {
+					break
+				}
+				participantOffset += utils.DefaultSize
+			}
+
+			// * * migrate messages
+			for {
+				messageOffset := 0
+				lgr.InfoContext(ctx, "Starting migrating messages bunch on the offset", "chat_offset", chatOffset, "message_offset", messageOffset)
+
+				type oldMessage struct {
+					Id               int64      `db:"id"`
+					Text             string     `db:"text"`
+					OwnerId          int64      `db:"owner_id"`
+					CreateDateTime   time.Time  `db:"create_date_time"`
+					EditDateTime     *time.Time `db:"edit_date_time"`
+					FileItemUuid     *string    `db:"file_item_uuid"`
+					EmbedMessageId   *int64     `db:"embed_message_id"`
+					EmbedChatId      *int64     `db:"embed_chat_id"`
+					EmbedOwnerId     *int64     `db:"embed_owner_id"`
+					EmbedMessageType *string    `db:"embed_message_type"`
+					Pinned           bool       `db:"pinned"`
+					PinPromoted      bool       `db:"pin_promoted"`
+					BlogPost         bool       `db:"blog_post"`
+					Published        bool       `db:"published"`
+					ChatId           int64      `db:"chat_id"`
+				}
+				oldMessages := []oldMessage{}
+				err = pgxscan.Select(ctx, connOldDb, &oldMessages, `
+					select
+						id
+						,text
+						,owner_id
+						,create_date_time
+						,edit_date_time
+						,file_item_uuid
+						,embed_message_id
+						,embed_chat_id
+						,embed_owner_id
+						,embed_message_type
+						,pinned
+						,pin_promoted
+						,blog_post
+						,published
+						,chat_id
+					from message
+					where chat_id = $1
+					order by id
+					limit $2 offset $3
+				`, oldChat.Id, utils.DefaultSize, messageOffset)
+				if err != nil {
+					return err
+				}
+
+				for _, oldMessage := range oldMessages {
+					lgr.InfoContext(ctx, "Starting migrating message on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id)
+					// send to the event
+					mc := &MessageCreated{
+						MessageCommoned: MessageCommoned{
+							Id:           oldMessage.Id,
+							ChatId:       oldChat.Id,
+							Content:      oldMessage.Text,
+							FileItemUuid: oldMessage.FileItemUuid,
+						},
+						AdditionalData: GenerateMessageAdditionalData(nil, oldMessage.OwnerId),
+					}
+
+					getEmbedContent := func(chatId, messageId int64) (*string, error) {
+						var c string
+						err = pgxscan.Get(ctx, connOldDb, &c, `
+							select 
+								text
+							from message
+							where chat_id = $1 and id = $2
+						`, chatId, messageId)
+						if errors.Is(err, sql.ErrNoRows) {
+							// there were no rows, but otherwise no error occurred
+							return nil, nil
+						} else if err != nil {
+							return nil, err
+						}
+
+						return &c, nil
+					}
+
+					if oldMessage.EmbedMessageType != nil {
+						if *oldMessage.EmbedMessageType == "reply" {
+							ec, err := getEmbedContent(oldChat.Id, *oldMessage.EmbedMessageId)
+							if err != nil {
+								return err
+							}
+
+							if ec != nil {
+								mc.MessageCommoned.Embed = dto.NewEmbedReply(
+									*oldMessage.EmbedMessageId,
+									*ec,
+									*oldMessage.EmbedOwnerId,
+								)
+							}
+						} else if *oldMessage.EmbedMessageType == "resend" {
+							ec, err := getEmbedContent(*oldMessage.EmbedChatId, *oldMessage.EmbedMessageId)
+							if err != nil {
+								return err
+							}
+							if ec != nil {
+								mc.MessageCommoned.Embed = dto.NewEmbedResend(
+									*oldMessage.EmbedMessageId,
+									*ec,
+									*oldMessage.EmbedOwnerId,
+									*oldMessage.EmbedChatId,
+								)
+							}
+						}
+					}
+
+					err = eventBus.Publish(ctx, mc)
+					if err != nil {
+						return err
+					}
+
+					// * * * migrate pinned
+					if oldMessage.Pinned {
+						cpin := &MessagePinned{
+							AdditionalData: GenerateMessageAdditionalData(nil, oldMessage.OwnerId),
+							ChatId:         oldChat.Id,
+							MessageId:      oldMessage.Id,
+							Pinned:         oldMessage.Pinned,
+						}
+						err = eventBus.Publish(ctx, cpin)
+						if err != nil {
+							return err
+						}
+					}
+
+					// * * * migrate published
+					if oldMessage.Published {
+						cpub := &MessagePublished{
+							AdditionalData: GenerateMessageAdditionalData(nil, oldMessage.OwnerId),
+							ChatId:         oldChat.Id,
+							MessageId:      oldMessage.Id,
+							Published:      oldMessage.Published,
+						}
+						err = eventBus.Publish(ctx, cpub)
+						if err != nil {
+							return err
+						}
+					}
+
+					// message blog post
+					if oldChat.Blog && oldMessage.BlogPost {
+						ev := MessageBlogPostMade{
+							AdditionalData: GenerateMessageAdditionalData(nil, oldMessage.OwnerId),
+							ChatId:         oldChat.Id,
+							MessageId:      oldMessage.Id,
+							BlogPost:       true,
+						}
+
+						err = eventBus.Publish(ctx, &ev)
+						if err != nil {
+							return err
+						}
+					}
+
+					ui := &ChatViewRefreshed{
+						AdditionalData:             GenerateMessageAdditionalData(nil, oldMessage.OwnerId),
+						ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
+						AllParticipantIdsExcepting: []int64{},
+						ChatId:                     oldChat.Id,
+						UnreadMessagesAction:       UnreadMessagesActionIncrease,
+						IncreaseOn:                 1,
+						LastMessageAction:          LastMessageActionRefresh,
+					}
+
+					err = eventBus.Publish(ctx, ui)
+					if err != nil {
+						return err
+					}
+
+					lgr.InfoContext(ctx, "Finishing migrating message on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id)
+				}
+
+				lgr.InfoContext(ctx, "Finishing migrating messages bunch on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id)
+				if len(oldMessages) < utils.DefaultSize {
+					break
+				}
+				messageOffset += utils.DefaultSize
+			}
+
+			lgr.InfoContext(ctx, "Finishing migrating chat on the offset", "chat_offset", chatOffset, "chat_id", oldChat.Id)
+		}
+
+		lgr.InfoContext(ctx, "Finishing migrating chats bunch on the offset", "chat_offset", chatOffset)
+		if len(oldChats) < utils.DefaultSize {
+			break
+		}
+		chatOffset += utils.DefaultSize
+	}
+
+	err = commonProjection.SetIsNeedToSkipMigrate(ctx)
+	if err != nil {
+		return err
+	}
+
+	lgr.InfoContext(ctx, "Finishing migration from the old db")
+
+	return nil
+}
+
+const need_to_migrate_key = "need_to_migrate"
+const need_to_migrate_value = "true"
+
+func (m *CommonProjection) SetIsNeedToSkipMigrate(ctx context.Context) error {
+	_, err := m.db.ExecContext(ctx, "insert into technical(the_key, the_value) values ($1, $2) on conflict (the_key) do update set the_value = excluded.the_value", need_to_migrate_key, need_to_migrate_value)
+	return err
+}
+
+func (m *CommonProjection) UnsetIsNeedToSkipMigrate(ctx context.Context, co db.CommonOperations) error {
+	_, err := co.ExecContext(ctx, "delete from technical where the_key = $1", need_to_migrate_key)
+	return err
+}
+
+func (m *CommonProjection) GetIsNeedToSkipMigrate(ctx context.Context, co db.CommonOperations) (bool, error) {
+	var e bool
+	err := sqlscanv2.Get(ctx, co, &e, "select exists(select * from technical where the_key = $1 and the_value = $2)", need_to_migrate_key, need_to_migrate_value)
+	if err != nil {
+		return false, err
+	}
+	return e, err
+}
