@@ -411,6 +411,59 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 		chatOffset += utils.DefaultSize
 	}
 
+	// * * migrate chat pinneds
+	for {
+		chatPinnedOffset := 0
+		lgr.InfoContext(ctx, "Starting migrating chat pinned bunch on the offset", "chat_pinned_offset", chatPinnedOffset)
+		type oldChatPinned struct {
+			ChatId int64 `db:"chat_id"`
+			UserId int64 `db:"user_id"`
+		}
+		oldChatPinneds := []oldChatPinned{}
+		err = pgxscan.Select(ctx, connOldDb, &oldChatPinneds, `
+					select
+						chat_id
+						,user_id
+					from chat_pinned
+					order by chat_id
+					limit $1 offset $2
+				`, utils.DefaultSize, chatPinnedOffset)
+		if err != nil {
+			return err
+		}
+
+		for _, oldChatPinned := range oldChatPinneds {
+			chpin := &ChatPinned{
+				AdditionalData: GenerateMessageAdditionalData(nil, oldChatPinned.UserId),
+				ChatId:         oldChatPinned.ChatId,
+				Pinned:         true,
+			}
+			err := eventBus.Publish(ctx, chpin)
+			if err != nil {
+				return err
+			}
+
+			chui := &ChatViewRefreshed{
+				AdditionalData:     GenerateMessageAdditionalData(nil, oldChatPinned.UserId),
+				ParticipantsMode:   ParticipantsModeOnlyParticipantIds,
+				OnlyParticipantIds: []int64{oldChatPinned.UserId},
+				ChatId:             oldChatPinned.ChatId,
+				ChatAction:         ChatActionRefresh,
+			}
+
+			err = eventBus.Publish(ctx, chui)
+			if err != nil {
+				return err
+			}
+		}
+
+		lgr.InfoContext(ctx, "Finishing migrating chat pinned bunch on the offset", "chat_pinned_offset", chatPinnedOffset)
+		if len(oldChatPinneds) < utils.DefaultSize {
+			break
+		}
+		chatPinnedOffset += utils.DefaultSize
+	}
+
 	err = commonProjection.SetIsNeedToSkipMigrate(ctx)
 	if err != nil {
 		return err
