@@ -262,6 +262,24 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 						return &c, nil
 					}
 
+					getEmbedOwner := func(chatId, messageId int64) (*int64, error) {
+						var c int64
+						err = pgxscan.Get(ctx, connOldDb, &c, `
+							select 
+								owner_id
+							from message
+							where chat_id = $1 and id = $2
+						`, chatId, messageId)
+						if errors.Is(err, pgx.ErrNoRows) {
+							// there were no rows, but otherwise no error occurred
+							return nil, nil
+						} else if err != nil {
+							return nil, err
+						}
+
+						return &c, nil
+					}
+
 					if oldMessage.EmbedMessageType != nil {
 						if *oldMessage.EmbedMessageType == "reply" {
 							ec, err := getEmbedContent(oldChat.Id, *oldMessage.EmbedMessageId)
@@ -269,11 +287,16 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 								return err
 							}
 
-							if ec != nil {
+							eo, err := getEmbedOwner(oldChat.Id, *oldMessage.EmbedMessageId)
+							if err != nil {
+								return err
+							}
+
+							if ec != nil && eo != nil {
 								mc.MessageCommoned.Embed = dto.NewEmbedReply(
 									*oldMessage.EmbedMessageId,
 									*ec,
-									*oldMessage.EmbedOwnerId,
+									*eo,
 								)
 							}
 						} else if *oldMessage.EmbedMessageType == "resend" {
