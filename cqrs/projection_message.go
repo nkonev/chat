@@ -587,7 +587,7 @@ func (m *CommonProjection) GetPinnedMessages(ctx context.Context, co db.CommonOp
 		%s
 	from message_pinned 
 	where chat_id = $1 
-	order by create_date_time desc, promoted desc
+	order by promoted desc, create_date_time desc
 	limit $2 offset $3
 	`, pinnedMessageCols),
 		chatId, size, offset)
