@@ -13,7 +13,7 @@ See [It's Okay To Store Data In Kafka](https://www.confluent.io/blog/okay-store-
 # Start
 ```bash
 docker compose up -d
-go run . serve
+go run . serve | jq
 
 # or
 make package
