@@ -20,7 +20,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 	ctx := context.Background()
 
 	if !cfg.PerformMigration {
-		lgr.InfoContext(ctx, "Skipping migration because disabled")
+		lgr.InfoContext(ctx, "Skipping old db migration because disabled")
 		return nil
 	}
 
@@ -30,11 +30,11 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 	}
 
 	if isNeedToSkipMigrate {
-		lgr.InfoContext(ctx, "Skipping migration because already migrated")
+		lgr.InfoContext(ctx, "Skipping old db migration because already migrated")
 		return nil
 	}
 
-	lgr.InfoContext(ctx, "Starting migration from the old db")
+	lgr.InfoContext(ctx, "Starting old db migration from the old db")
 	connOldDb, err := pgxpool.Connect(ctx, cfg.PostgreSQLOld.Url)
 	if err != nil {
 		return err
@@ -155,7 +155,8 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 				pa := &ParticipantsAdded{
 					AdditionalData: GenerateMessageAdditionalData(nil, behalfUserId),
 					ChatId:         oldChat.Id,
-					IsJoining:      true,
+					IsChatCreating: true,
+					TetATet:        oldChat.TetATet,
 				}
 
 				for _, oldParticipant := range oldParticipants {
@@ -376,27 +377,32 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 		return err
 	}
 
-	lgr.InfoContext(ctx, "Finishing migration from the old db")
+	err = commonProjection.SetIsNeedToFastForwardSequences(ctx)
+	if err != nil {
+		return err
+	}
+
+	lgr.InfoContext(ctx, "Finishing old db migration from the old db")
 
 	return nil
 }
 
-const need_to_migrate_key = "need_to_migrate"
-const need_to_migrate_value = "true"
+const need_to_skip_migrate_key = "need_to_skip_old_db_migration"
+const need_to_skip_migrate_value = "true"
 
 func (m *CommonProjection) SetIsNeedToSkipMigrate(ctx context.Context) error {
-	_, err := m.db.ExecContext(ctx, "insert into technical(the_key, the_value) values ($1, $2) on conflict (the_key) do update set the_value = excluded.the_value", need_to_migrate_key, need_to_migrate_value)
+	_, err := m.db.ExecContext(ctx, "insert into technical(the_key, the_value) values ($1, $2) on conflict (the_key) do update set the_value = excluded.the_value", need_to_skip_migrate_key, need_to_skip_migrate_value)
 	return err
 }
 
 func (m *CommonProjection) UnsetIsNeedToSkipMigrate(ctx context.Context, co db.CommonOperations) error {
-	_, err := co.ExecContext(ctx, "delete from technical where the_key = $1", need_to_migrate_key)
+	_, err := co.ExecContext(ctx, "delete from technical where the_key = $1", need_to_skip_migrate_key)
 	return err
 }
 
 func (m *CommonProjection) GetIsNeedToSkipMigrate(ctx context.Context, co db.CommonOperations) (bool, error) {
 	var e bool
-	err := sqlscanv2.Get(ctx, co, &e, "select exists(select * from technical where the_key = $1 and the_value = $2)", need_to_migrate_key, need_to_migrate_value)
+	err := sqlscanv2.Get(ctx, co, &e, "select exists(select * from technical where the_key = $1 and the_value = $2)", need_to_skip_migrate_key, need_to_skip_migrate_value)
 	if err != nil {
 		return false, err
 	}
