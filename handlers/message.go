@@ -959,7 +959,7 @@ func (mc *MessageHandler) GetPublishedMessages(g *gin.Context) {
 	})
 }
 
-func (mc *MessageHandler) GetPublishedMessage(g *gin.Context) {
+func (mc *MessageHandler) GetPublishedMessageForPublic(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
 
 	chatId, err := utils.ParseInt64(cid)

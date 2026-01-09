@@ -1515,18 +1515,20 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 			if len(messages) == 1 {
 				if !isForPublic { // this !isForPublic check is to skip this patching for public message
-					var messagesTmp []dto.MessageDto
+					var messagesTmp = []dto.MessageDto{}
 					for _, userId := range behalfUserIds {
 						msg := messages[0]
 						msg.BehalfUserId = userId
 						messagesTmp = append(messagesTmp, msg)
 					}
 					messages = messagesTmp
-				} else {
-					var messagesTmp []dto.MessageDto
+				} else { // is for public
+					var messagesTmp = []dto.MessageDto{}
 					msg := messages[0]
-					msg.BehalfUserId = fakeUserId // to use below for getting GetChatsBasicExtended() and then get this chat by fakeUserId in enrichMessage()
-					messagesTmp = append(messagesTmp, msg)
+					if msg.Published { // here we check if the message published, if no - we gonna respond the empty slice
+						msg.BehalfUserId = fakeUserId // to use below for getting GetChatsBasicExtended() and then get this chat by fakeUserId in enrichMessage()
+						messagesTmp = append(messagesTmp, msg)
+					}
 					messages = messagesTmp
 				}
 			}
