@@ -8,10 +8,12 @@ import (
 	"go-cqrs-chat-example/kafka"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
-	"go.uber.org/fx"
-	"go.uber.org/fx/fxevent"
+	"go-cqrs-chat-example/sanitizer"
 	"log/slog"
 	"os"
+
+	"go.uber.org/fx"
+	"go.uber.org/fx/fxevent"
 )
 
 const CommandImportName = "import"
@@ -41,6 +43,7 @@ func RunImport(args []string) {
 			db.ConfigureDatabase,
 			kafka.ConfigureKafkaAdmin,
 			cqrs.ConfigureCommonProjection,
+			sanitizer.CreateStripTags,
 		),
 		fx.Invoke(
 			db.RunMigrations,
