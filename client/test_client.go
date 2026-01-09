@@ -369,9 +369,16 @@ func (rc *TestRestClient) DeleteMessage(ctx context.Context, behalfUserId int64,
 
 func (rc *TestRestClient) PinMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64, pin bool) error {
 	var queryParams *url.Values = &url.Values{}
-	queryParams.Set("pin", utils.ToString(pin))
+	queryParams.Set(dto.PinParam, utils.ToString(pin))
 
 	return queryNoResponse[dto.MessageEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/pin", "message.Pin", nil, queryParams)
+}
+
+func (rc *TestRestClient) PublishMessage(ctx context.Context, behalfUserId int64, chatId, messageId int64, publish bool) error {
+	var queryParams *url.Values = &url.Values{}
+	queryParams.Set(dto.PublishParam, utils.ToString(publish))
+
+	return queryNoResponse[dto.MessageEditDto](ctx, &rc.restClient, behalfUserId, http.MethodPut, "/api/chat/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId)+"/publish", "message.Publish", nil, queryParams)
 }
 
 type MessagePinnedGetOption interface {
@@ -416,6 +423,19 @@ func (rc *TestRestClient) GetPinnedPromotedMessage(ctx context.Context, behalfUs
 	}
 
 	return res, nil
+}
+
+func (rc *TestRestClient) GetPublishedMessage(ctx context.Context, chatId, messageId int64) (*dto.MessageViewEnrichedDto, error) {
+	res, err := query[any, *dto.PublishedMessageWrapper](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/chat/public/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Published", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if res == nil {
+		return nil, nil
+	}
+
+	return res.Message, nil
 }
 
 type MessageGetOption interface {

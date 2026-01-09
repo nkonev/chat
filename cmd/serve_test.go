@@ -3672,6 +3672,82 @@ func TestPinMessage(t *testing.T) {
 	})
 }
 
+func TestPublishMessage(t *testing.T) {
+	startAppFull(t, func(
+		lgr *logger.LoggerWrapper,
+		cfg *config.AppConfig,
+		testRestClient *client.TestRestClient,
+		saramaClient sarama.Client,
+		dba *db.DB,
+		m *cqrs.CommonProjection,
+		aaaRestClient client.AaaRestClient,
+		testOutputEventsAccumulator *listener.TestOutputEventAccumulator,
+		lc fx.Lifecycle,
+	) {
+		const user1 int64 = 1
+		const user2 int64 = 2
+		const user1Login = "admin1"
+		const user2Login = "admin2"
+		const chat1Name = "new chat 1"
+
+		mockUser1 := dto.User{
+			Id:               user1,
+			Login:            user1Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockUser2 := dto.User{
+			Id:               user2,
+			Login:            user2Login,
+			Avatar:           nil,
+			ShortInfo:        nil,
+			LoginColor:       nil,
+			LastSeenDateTime: nil,
+			AdditionalData:   nil,
+		}
+
+		mockAaaClient := aaaRestClient.(*client.MockAaaRestClient)
+		mockAaaClient.EXPECT().GetUsers(mock.Anything, mock.Anything).Return([]*dto.User{&mockUser1, &mockUser2}, nil)
+
+		ctx := context.Background()
+
+		chat1Id, err := testRestClient.CreateChat(ctx, user1, chat1Name, client.NewChatOptionParticipants(user2))
+		require.NoError(t, err, "error in creating chat")
+		assert.True(t, chat1Id > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		waitForChatExists(lgr, m, dba, chat1Id, user1, cfg.Cqrs.SleepBeforePolling, cfg.Cqrs.PollingMaxTimes)
+
+		const message1Text = "new message 1"
+		message1Id, err := testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
+		require.NoError(t, err, "error in creating message")
+
+		err = testRestClient.PublishMessage(ctx, user1, chat1Id, message1Id, true)
+		require.NoError(t, err, "error in publishing message")
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypePublishedMessageAdd &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					e.PublishedMessageNotification.Message.Id == message1Id &&
+					e.PublishedMessageNotification.Message.Text == message1Text
+			},
+		}))
+		testOutputEventsAccumulator.Clean()
+
+		published, err := testRestClient.GetPublishedMessage(ctx, chat1Id, message1Id)
+		require.NoError(t, err, "error in get pinned promoted message")
+		require.NotNil(t, published)
+		assert.Equal(t, message1Id, published.Id)
+		assert.Equal(t, message1Text, published.Content)
+	})
+}
+
 func TestEditMessageStillNotExists(t *testing.T) {
 	startAppFull(t, func(
 		lgr *logger.LoggerWrapper,

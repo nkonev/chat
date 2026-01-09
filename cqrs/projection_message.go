@@ -705,6 +705,64 @@ func (m *EnrichingProjection) GetPublishedMessageEnriched(ctx context.Context, c
 	}
 }
 
+func (m *EnrichingProjection) GetPublishedMessageForPublic(ctx context.Context, chatId, messageId int64) (*dto.PublishedMessageWrapper, bool, error) {
+	cb, err := m.cp.GetChatBasic(ctx, m.cp.db, chatId)
+	if err != nil {
+		return nil, false, err
+	}
+	if cb == nil {
+		m.lgr.InfoContext(ctx, "Public message isn't found due to no chat", "chat_id", chatId, "message_id", messageId)
+		return nil, true, nil
+	}
+
+	tetATetParticipantIds := []int64{}
+	if cb.TetATet {
+		tetATetParticipantIds, err = m.cp.GetParticipantIds(ctx, m.cp.db, chatId, 2, 0)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	msgs, _, users, err := m.GetMessagesEnriched(ctx, []int64{}, false, true, nil, chatId, 1, nil, true, false, dto.NoSearchString, &messageId, tetATetParticipantIds)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(msgs) == 0 {
+		m.lgr.InfoContext(ctx, "Public message isn't found due to no message", "chat_id", chatId, "message_id", messageId)
+		return nil, true, nil
+	}
+	if len(msgs) > 1 {
+		return nil, false, errors.New("Wrong invariant - more than 1 messsage was returned")
+	}
+	msg := msgs[0]
+
+	userMap := utils.ToMap(users)
+
+	previewTxt := preview.CreateMessagePreviewWithoutLogin(m.stripAllTags, m.cfg.Message.PreviewMaxTextSize, msg.Content)
+
+	aTitle := cb.Title
+	if cb.TetATet {
+		first := true
+		aTitle = ""
+		for _, userId := range tetATetParticipantIds {
+			if !first {
+				aTitle += ", "
+			}
+			usr := userMap[userId]
+			if usr != nil {
+				aTitle += usr.Login
+			}
+			first = false
+		}
+	}
+
+	return &dto.PublishedMessageWrapper{
+		Message: &msg,
+		Title:   aTitle,
+		Preview: previewTxt,
+	}, false, nil
+}
+
 const publishedMessageCols = `
 		message_id
 		,chat_id
@@ -1414,12 +1472,17 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 	return maxMessageId, nil
 }
 
-func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, needCheckAuth bool, authForUserId *int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64, additionalUserIdToFetch []int64) ([]dto.MessageViewEnrichedDto, bool, []*dto.User, error) {
+func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, needCheckAuth, isForPublic bool, authForUserId *int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64, additionalUserIdToFetch []int64) ([]dto.MessageViewEnrichedDto, bool, []*dto.User, error) {
 	type resDto struct {
 		items           []dto.MessageViewEnrichedDto
 		notAparticipant bool
 		users           []*dto.User
 	}
+
+	if isForPublic && len(behalfUserIds) > 0 {
+		return nil, false, nil, errors.New("Wrong invariant - isForPublic and more than 0 behalfUserIds")
+	}
+
 	res, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*resDto, error) {
 		if needCheckAuth {
 			if authForUserId != nil {
@@ -1446,19 +1509,29 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			return nil, err
 		}
 
+		const fakeUserId = dto.NonExistentUser
+
 		if messageId != nil {
 			if len(messages) > 1 {
 				return nil, fmt.Errorf("By id = %d %v messages got", *messageId, len(messages))
 			}
 
 			if len(messages) == 1 {
-				var messagesTmp []dto.MessageDto
-				for _, userId := range behalfUserIds {
+				if !isForPublic { // this !isForPublic check is to skip this patching for public message
+					var messagesTmp []dto.MessageDto
+					for _, userId := range behalfUserIds {
+						msg := messages[0]
+						msg.BehalfUserId = userId
+						messagesTmp = append(messagesTmp, msg)
+					}
+					messages = messagesTmp
+				} else {
+					var messagesTmp []dto.MessageDto
 					msg := messages[0]
-					msg.BehalfUserId = userId
+					msg.BehalfUserId = fakeUserId // to use below for getting GetChatsBasicExtended() and then get this chat by fakeUserId in enrichMessage()
 					messagesTmp = append(messagesTmp, msg)
+					messages = messagesTmp
 				}
-				messages = messagesTmp
 			}
 		} else if len(behalfUserIds) == 1 {
 			for i := range messages {
@@ -1486,10 +1559,22 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 				return nil, err
 			}
 		}
-		chatsByUserIdByChatId, err := m.cp.GetChatsBasicExtended(ctx, tx, utils.SetMapIdBoolToSlice(chatsPreSet), behalfUserIds)
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", err)
-			return nil, err
+
+		var chatsByUserIdByChatId map[int64]map[int64]*dto.BasicChatDtoExtended = map[int64]map[int64]*dto.BasicChatDtoExtended{}
+		notAparticipant := false
+		if isForPublic {
+			notAparticipant = true
+			chatsByUserIdByChatId, err = m.cp.GetChatsBasicExtended(ctx, tx, utils.SetMapIdBoolToSlice(chatsPreSet), []int64{fakeUserId})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", err)
+				return nil, err
+			}
+		} else {
+			chatsByUserIdByChatId, err = m.cp.GetChatsBasicExtended(ctx, tx, utils.SetMapIdBoolToSlice(chatsPreSet), behalfUserIds)
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", err)
+				return nil, err
+			}
 		}
 
 		// it's ok because we have 1 chat in the both cases
@@ -1502,8 +1587,6 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 		if err != nil {
 			m.lgr.WarnContext(ctx, "unable to get users", "err", err)
 		}
-
-		notAparticipant := false
 
 		usersMap := utils.ToMap(users)
 

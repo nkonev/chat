@@ -858,6 +858,9 @@ func (m *CommonProjection) GetAreAdminsOfUserIds(ctx context.Context, co db.Comm
 // returns [userId]isAdmin
 func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64) (map[int64]bool, error) {
 	res := map[int64]bool{}
+	if len(participantIds) == 0 {
+		return res, nil
+	}
 
 	list, err := m.areAdminsCommon(ctx, co, participantIds, []int64{chatId})
 	if err != nil {
@@ -874,6 +877,9 @@ func (m *CommonProjection) getAreAdminsOfUserIds(ctx context.Context, co db.Comm
 // returns [chatId]isAdmin
 func (m *CommonProjection) getAreAdminsOfChatIds(ctx context.Context, co db.CommonOperations, participantId int64, chatIds []int64) (map[int64]bool, error) {
 	res := map[int64]bool{}
+	if len(chatIds) == 0 {
+		return res, nil
+	}
 
 	list, err := m.areAdminsCommon(ctx, co, []int64{participantId}, chatIds)
 	if err != nil {

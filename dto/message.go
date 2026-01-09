@@ -368,3 +368,9 @@ type PublishedMessagesWrapper struct {
 	Data  []PublishedMessageDto `json:"items"`
 	Count int64                 `json:"count"` // total published messages number
 }
+
+type PublishedMessageWrapper struct {
+	Message *MessageViewEnrichedDto `json:"message"`
+	Title   string                  `json:"title"`
+	Preview string                  `json:"preview"`
+}
