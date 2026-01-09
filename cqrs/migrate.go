@@ -100,8 +100,8 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 			var tetATetOppositeUserId *int64
 			if oldChat.TetATet {
 				err = pgxscan.Get(ctx, connOldDb, &tetATetOppositeUserId, `
-				select user_id from chat_participant where chat_id = $1 and user_id != $2 order by create_date_time limit 1
-			`, oldChat.Id, behalfUserId)
+					select user_id from chat_participant where chat_id = $1 and user_id != $2 order by create_date_time limit 1
+				`, oldChat.Id, behalfUserId)
 				if err != nil {
 					return err
 				}
@@ -125,6 +125,9 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 				RegularParticipantCanWriteMessage:   oldChat.RegularParticipantCanWriteMessage,
 				RegularParticipantCanAddParticipant: true,
 			})
+			if err != nil {
+				return err
+			}
 
 			// * * migrate participants
 			for {
