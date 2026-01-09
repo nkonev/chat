@@ -3,6 +3,7 @@ package cqrs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
@@ -83,7 +84,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 			limit $1 offset $2
 		`, utils.DefaultSize, chatOffset)
 		if err != nil {
-			return err
+			return fmt.Errorf("error during get old chats: %w", err)
 		}
 
 		for _, oldChat := range oldChats {
@@ -94,7 +95,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 				select user_id from chat_participant where chat_id = $1 order by create_date_time limit 1
 			`, oldChat.Id)
 			if err != nil {
-				return err
+				return fmt.Errorf("error during get behalfUserId: %w", err)
 			}
 
 			var tetATetOppositeUserId *int64
@@ -103,7 +104,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 					select user_id from chat_participant where chat_id = $1 and user_id != $2 order by create_date_time limit 1
 				`, oldChat.Id, behalfUserId)
 				if err != nil {
-					return err
+					return fmt.Errorf("error during get tetATetOppositeUserId: %w", err)
 				}
 			}
 
@@ -152,7 +153,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 					limit $2 offset $3
 				`, oldChat.Id, utils.DefaultSize, participantOffset)
 				if err != nil {
-					return err
+					return fmt.Errorf("error during get old participants: %w", err)
 				}
 
 				pa := &ParticipantsAdded{
@@ -228,7 +229,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 					limit $2 offset $3
 				`, oldChat.Id, utils.DefaultSize, messageOffset)
 				if err != nil {
-					return err
+					return fmt.Errorf("error during get old messages: %w", err)
 				}
 
 				for _, oldMessage := range oldMessages {
@@ -256,7 +257,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 							// there were no rows, but otherwise no error occurred
 							return nil, nil
 						} else if err != nil {
-							return nil, err
+							return nil, fmt.Errorf("error during getEmbedContent: %w", err)
 						}
 
 						return &c, nil
@@ -274,7 +275,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 							// there were no rows, but otherwise no error occurred
 							return nil, nil
 						} else if err != nil {
-							return nil, err
+							return nil, fmt.Errorf("error during getEmbedOwner: %w", err)
 						}
 
 						return &c, nil
@@ -383,7 +384,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 						order by user_id
 					`, oldChat.Id, oldMessage.Id)
 					if err != nil {
-						return err
+						return fmt.Errorf("error during get old reactions: %w", err)
 					}
 
 					for _, oldReaction := range oldReactions {
@@ -455,7 +456,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 					limit $1 offset $2
 				`, utils.DefaultSize, chatPinnedOffset)
 		if err != nil {
-			return err
+			return fmt.Errorf("error during get old chat pinneds: %w", err)
 		}
 
 		for _, oldChatPinned := range oldChatPinneds {
