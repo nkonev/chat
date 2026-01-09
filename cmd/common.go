@@ -6,4 +6,5 @@ var AllCommands = []string{
 	CommandResetName,
 	CommandHelpName,
 	CommandServeName,
+	CommandMigrateName,
 }

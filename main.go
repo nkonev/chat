@@ -23,6 +23,8 @@ func main() {
 		cmd.RunReset(remainingArgs)
 	case cmd.CommandHelpName:
 		cmd.RunHelp(remainingArgs)
+	case cmd.CommandMigrateName:
+		cmd.RunMigrate(remainingArgs)
 	case cmd.CommandServeName:
 		cmd.RunServe(remainingArgs)
 	default:

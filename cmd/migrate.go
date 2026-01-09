@@ -1,20 +1,18 @@
 package cmd
 
 import (
+	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
-	"go-cqrs-chat-example/handlers"
 	"go-cqrs-chat-example/kafka"
-	"go-cqrs-chat-example/listener"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/rabbitmq"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/services"
-	"go-cqrs-chat-example/tasks"
 	"go-cqrs-chat-example/type_registry"
 	"log/slog"
 	"os"
@@ -23,9 +21,9 @@ import (
 	"go.uber.org/fx/fxevent"
 )
 
-const CommandServeName = "serve"
+const CommandMigrateName = "migrate"
 
-func RunServe(args []string) {
+func RunMigrate(args []string) {
 	cfg, err := config.CreateTypedConfig(args)
 	if err != nil {
 		panic(err)
@@ -33,7 +31,7 @@ func RunServe(args []string) {
 	lgr := logger.NewLogger(os.Stdout, cfg)
 	defer lgr.CloseLogger()
 
-	lgr.Info("Start serve command")
+	lgr.Info("Start migrate command")
 
 	appFx := fx.New(
 		fx.Supply(cfg),
@@ -52,19 +50,10 @@ func RunServe(args []string) {
 			cqrs.ConfigureKafkaMarshaller,
 			cqrs.ConfigureWatermillLogger,
 			cqrs.ConfigurePublisher,
-			cqrs.ConfigureCqrsRouter,
 			cqrs.ConfigureCqrsMarshaller,
 			cqrs.ConfigureEventBus,
-			cqrs.ConfigureEventProcessor,
 			cqrs.ConfigureCommonProjection,
 			cqrs.NewEnrichingProjection,
-			handlers.NewChatHandler,
-			handlers.NewParticipantHandler,
-			handlers.NewMessageHandler,
-			handlers.NewBlogHandler,
-			handlers.NewTechnicalHandler,
-			handlers.CreateHttpRouter,
-			handlers.ConfigureHttpServer,
 			kafka.ConfigureSaramaClient,
 			client.NewAAARestClient,
 			sanitizer.CreateSanitizer,
@@ -78,32 +67,15 @@ func RunServe(args []string) {
 			producer.NewRabbitNotificationEventsPublisher,
 			producer.NewRabbitInternalEventsPublisher,
 			rabbitmq.CreateRabbitMqConnection,
-			cqrs.NewEventHandler,
-			listener.CreateRabbitInternalEventsListener,
-			listener.CreateRabbitAaaUserProfileUpdateListener,
 			type_registry.NewTypeRegistryInstance,
-			tasks.RedisV9,
-			tasks.RedisLocker,
-			tasks.Scheduler,
-			tasks.CleanAbandonedChatsScheduler,
-			tasks.CleanDeletedUserDataScheduler,
-			tasks.NewCleanAbandonedChatsService,
-			tasks.NewCleanDeletedUserDataService,
 		),
 		fx.Invoke(
 			db.RunMigrations,
-			listener.CreateAndListenInternalEventsChannel,
-			listener.CreateAndListenAaaChannel,
 			kafka.RunCreateTopic,
 			cqrs.RunMigrateFromOldDb,
-			cqrs.RunCqrsRouter,
-			kafka.WaitForAllEventsProcessed,
-			cqrs.RunSequenceFastforwarder,
-			producer.EnableOutputEvents,
-			tasks.RunScheduler,
-			handlers.RunHttpServer,
+			app.Shutdown,
 		),
 	)
 	appFx.Run()
-	lgr.Info("Exit serve command")
+	lgr.Info("Exit migrate command")
 }

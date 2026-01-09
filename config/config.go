@@ -4,14 +4,15 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"github.com/traefik/paerser/env"
-	"github.com/traefik/paerser/file"
-	"github.com/traefik/paerser/flag"
 	"go-cqrs-chat-example/app"
 	"log/slog"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/traefik/paerser/env"
+	"github.com/traefik/paerser/file"
+	"github.com/traefik/paerser/flag"
 )
 
 const configLongPrefix = "--config"
@@ -205,21 +206,23 @@ type RedisConfig struct {
 }
 
 type AppConfig struct {
-	Kafka       KafkaConfig
-	Otlp        OtlpConfig
-	PostgreSQL  PostgreSQLConfig
-	Server      HttpServerConfig
-	Cqrs        CqrsConfig
-	Http        RestClientConfig
-	Logger      LoggerConfig
-	Aaa         AaaConfig
-	Message     MessageConfig
-	Chat        ChatConfig
-	Blog        BlogConfig
-	FrontendUrl string
-	RabbitMQ    RabbitMQConfig
-	Schedulers  TaskConfig
-	Redis       RedisConfig
+	Kafka            KafkaConfig
+	Otlp             OtlpConfig
+	PostgreSQL       PostgreSQLConfig
+	PerformMigration bool
+	PostgreSQLOld    PostgreSQLConfig
+	Server           HttpServerConfig
+	Cqrs             CqrsConfig
+	Http             RestClientConfig
+	Logger           LoggerConfig
+	Aaa              AaaConfig
+	Message          MessageConfig
+	Chat             ChatConfig
+	Blog             BlogConfig
+	FrontendUrl      string
+	RabbitMQ         RabbitMQConfig
+	Schedulers       TaskConfig
+	Redis            RedisConfig
 }
 
 //go:embed config
