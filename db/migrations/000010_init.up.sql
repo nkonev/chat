@@ -118,11 +118,6 @@ SELECT create_distributed_table('chat_user_view', 'user_id');
 create unlogged table has_unread_messages(user_id bigint primary key, has boolean not null default false);
 SELECT create_distributed_table('has_unread_messages', 'user_id');
 
-create unlogged table technical(
-    the_key varchar(256) primary key,
-    the_value text
-);
-
 create unlogged table blog(
     id int primary key,
     blog_about boolean not null,

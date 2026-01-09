@@ -7,7 +7,7 @@ import (
 )
 
 func (m *CommonProjection) OnTechnicalProjectionsTruncated(ctx context.Context, event *ProjectionsTruncated) error {
-	err := db.RunResetDatabase(m.db, m.cfg)
+	err := db.RunResetDatabaseSoft(m.db, m.cfg)
 	if err != nil {
 		return fmt.Errorf("Error during resetting: %w", err)
 	}

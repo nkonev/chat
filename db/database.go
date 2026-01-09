@@ -255,7 +255,15 @@ func (db *DB) Migrate(mc config.MigrationConfig) error {
 	return nil
 }
 
-func (db *DB) Reset(mc config.MigrationConfig) error {
+func (db *DB) Reset(mc config.MigrationConfig, hard bool) error {
+
+	additional := ""
+	if hard { // whether to preserve techical info (need to fast-worward, need to skip old db migration and so on)
+		additional = `
+		drop table if exists technical;
+		`
+	}
+
 	_, err := db.Exec(fmt.Sprintf(`
 	drop EXTENSION if exists pg_trgm;
 	drop sequence if exists chat_id_sequence;
@@ -268,16 +276,16 @@ func (db *DB) Reset(mc config.MigrationConfig) error {
 	drop table if exists message;
 	drop table if exists chat_user_view;
 	drop table if exists has_unread_messages;
-	drop table if exists technical;
+	
+	%s
 
 	drop table if exists blog;
 
 	drop FUNCTION if exists strip_tags;
 	drop FUNCTION if exists cyrillic_transliterate;
 
-
 	drop table if exists %s;
-`, mc.MigrationTable))
+`, additional, mc.MigrationTable))
 	db.lgr.Info("Recreating database", "err", err)
 	return err
 }
@@ -286,6 +294,10 @@ func RunMigrations(db *DB, cfg *config.AppConfig) error {
 	return db.Migrate(cfg.PostgreSQL.Migration)
 }
 
-func RunResetDatabase(db *DB, cfg *config.AppConfig) error {
-	return db.Reset(cfg.PostgreSQL.Migration)
+func RunResetDatabaseSoft(db *DB, cfg *config.AppConfig) error {
+	return db.Reset(cfg.PostgreSQL.Migration, false)
+}
+
+func RunResetDatabaseHard(db *DB, cfg *config.AppConfig) error {
+	return db.Reset(cfg.PostgreSQL.Migration, true)
 }

@@ -46,7 +46,7 @@ func RunReset(args []string) {
 			sanitizer.CreateStripTags,
 		),
 		fx.Invoke(
-			db.RunResetDatabase,
+			db.RunResetDatabaseSoft,
 			kafka.RunResetPartitions,
 			db.RunMigrations,
 			kafka.RunCreateTopic,

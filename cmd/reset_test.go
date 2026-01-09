@@ -119,7 +119,7 @@ func TestReset(t *testing.T) {
 			sanitizer.CreateStripTags,
 		),
 		fx.Invoke(
-			db.RunResetDatabase,
+			db.RunResetDatabaseSoft,
 			kafka.RunResetPartitions,
 			db.RunMigrations,
 			kafka.RunCreateTopic,

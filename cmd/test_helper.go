@@ -62,7 +62,7 @@ func resetInfra(lgr *logger.LoggerWrapper, cfg *config.AppConfig) {
 			rabbitmq.CreateRabbitMqConnection,
 		),
 		fx.Invoke(
-			db.RunResetDatabase,
+			db.RunResetDatabaseHard,
 			kafka.RunDeleteTopic,
 			listener.DeleteTestEventQueue,
 			db.RunMigrations,
