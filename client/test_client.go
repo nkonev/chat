@@ -425,8 +425,8 @@ func (rc *TestRestClient) GetPinnedPromotedMessage(ctx context.Context, behalfUs
 	return res, nil
 }
 
-func (rc *TestRestClient) GetPublishedMessage(ctx context.Context, chatId, messageId int64) (*dto.MessageViewEnrichedDto, error) {
-	res, err := query[any, *dto.PublishedMessageWrapper](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/chat/public/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.Published", nil, nil)
+func (rc *TestRestClient) GetPublishedMessageForPublic(ctx context.Context, chatId, messageId int64) (*dto.MessageViewEnrichedDto, error) {
+	res, err := query[any, *dto.PublishedMessageWrapper](ctx, &rc.restClient, dto.NonExistentUser, http.MethodGet, "/api/chat/public/"+utils.ToString(chatId)+"/message/"+utils.ToString(messageId), "message.PublishedPublic", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -436,6 +436,15 @@ func (rc *TestRestClient) GetPublishedMessage(ctx context.Context, chatId, messa
 	}
 
 	return res.Message, nil
+}
+
+func (rc *TestRestClient) GetPublishedMessages(ctx context.Context, behalfUserId int64, chatId int64) ([]dto.PublishedMessageDto, error) {
+	res, err := query[any, dto.PublishedMessagesWrapper](ctx, &rc.restClient, behalfUserId, http.MethodGet, "/api/chat/"+utils.ToString(chatId)+"/message/publish", "message.Published", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Data, nil
 }
 
 type MessageGetOption interface {
