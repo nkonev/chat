@@ -685,8 +685,10 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	var oppositeTetATetUserId *int64
 	if adt.ChatIsTetATet {
 		oppositeTetATetUserId, err = m.enrichingProjection.getTetATetOpposite(ctx, m.db, event.MessageCommoned.ChatId, event.AdditionalData.BehalfUserId)
-		if err != nil || oppositeTetATetUserId == nil {
+		if err != nil {
 			m.lgr.WarnContext(ctx, "Unable to get opposite", "chat_id", event.MessageCommoned.ChatId, "err", err)
+		} else if oppositeTetATetUserId == nil {
+			m.lgr.DebugContext(ctx, "single tet-a-tet", "chat_id", event.MessageCommoned.ChatId)
 		} else {
 			additionalUserIdToFetch = append(additionalUserIdToFetch, *oppositeTetATetUserId)
 		}
