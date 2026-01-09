@@ -3753,6 +3753,22 @@ func TestPublishMessage(t *testing.T) {
 		assert.Equal(t, message1Id, published.Id)
 		assert.Equal(t, message1Text, published.Content)
 
+		const message1TextNew = "new message 1 edited"
+		err = testRestClient.EditMessage(ctx, user1, chat1Id, message1Id, message1TextNew)
+		require.NoError(t, err, "error in editing message")
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypePublishedMessageEdit &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					e.PublishedMessageNotification.Message.Id == message1Id &&
+					e.PublishedMessageNotification.Message.ChatId == chat1Id &&
+					e.PublishedMessageNotification.Message.Text == message1TextNew
+			},
+		}))
+		testOutputEventsAccumulator.Clean()
+
 		err = testRestClient.PublishMessage(ctx, user1, chat1Id, message1Id, false)
 		require.NoError(t, err, "error in publishing message")
 		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
