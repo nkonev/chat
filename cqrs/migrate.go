@@ -103,7 +103,9 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 				err = pgxscan.Get(ctx, connOldDb, &tetATetOppositeUserId, `
 					select user_id from chat_participant where chat_id = $1 and user_id != $2 order by create_date_time limit 1
 				`, oldChat.Id, behalfUserId)
-				if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					// nothing
+				} else if err != nil {
 					return fmt.Errorf("error during get tetATetOppositeUserId: %w", err)
 				}
 			}
