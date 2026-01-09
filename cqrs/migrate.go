@@ -41,8 +41,8 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 	}
 
 	// * migrate chats
+	chatOffset := 0
 	for {
-		chatOffset := 0
 		lgr.InfoContext(ctx, "Starting migrating chats bunch on the offset", "chat_offset", chatOffset)
 
 		type oldChat struct {
@@ -130,8 +130,8 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 			}
 
 			// * * migrate participants
+			participantOffset := 0
 			for {
-				participantOffset := 0
 				lgr.InfoContext(ctx, "Starting migrating participants bunch on the offset", "chat_offset", chatOffset, "participant_offset", participantOffset, "chat_id", oldChat.Id)
 				type oldParticipant struct {
 					ChatId         int64     `db:"chat_id"`
@@ -183,8 +183,8 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 			}
 
 			// * * migrate messages
+			messageOffset := 0
 			for {
-				messageOffset := 0
 				lgr.InfoContext(ctx, "Starting migrating messages bunch on the offset", "chat_offset", chatOffset, "message_offset", messageOffset)
 
 				type oldMessage struct {
@@ -232,7 +232,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 				}
 
 				for _, oldMessage := range oldMessages {
-					lgr.InfoContext(ctx, "Starting migrating message on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id)
+					lgr.InfoContext(ctx, "Starting migrating message on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id, "message_id", oldMessage.Id)
 					// send to the event
 					mc := &MessageCreated{
 						MessageCommoned: MessageCommoned{
@@ -394,7 +394,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 						return err
 					}
 
-					lgr.InfoContext(ctx, "Finishing migrating message on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id)
+					lgr.InfoContext(ctx, "Finishing migrating message on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id, "message_id", oldMessage.Id)
 				}
 
 				lgr.InfoContext(ctx, "Finishing migrating messages bunch on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id)
@@ -415,8 +415,8 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 	}
 
 	// * * migrate chat pinneds
+	chatPinnedOffset := 0
 	for {
-		chatPinnedOffset := 0
 		lgr.InfoContext(ctx, "Starting migrating chat pinned bunch on the offset", "chat_pinned_offset", chatPinnedOffset)
 		type oldChatPinned struct {
 			ChatId int64 `db:"chat_id"`
