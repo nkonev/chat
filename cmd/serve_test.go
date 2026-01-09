@@ -3735,6 +3735,7 @@ func TestPublishMessage(t *testing.T) {
 					e.UserId == user1 &&
 					e.ChatId == chat1Id &&
 					e.PublishedMessageNotification.Message.Id == message1Id &&
+					e.PublishedMessageNotification.Message.ChatId == chat1Id &&
 					e.PublishedMessageNotification.Message.Text == message1Text
 			},
 		}))
@@ -3745,6 +3746,24 @@ func TestPublishMessage(t *testing.T) {
 		require.NotNil(t, published)
 		assert.Equal(t, message1Id, published.Id)
 		assert.Equal(t, message1Text, published.Content)
+
+		err = testRestClient.PublishMessage(ctx, user1, chat1Id, message1Id, false)
+		require.NoError(t, err, "error in publishing message")
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.ChatEvent)
+				return ok && e.EventType == dto.EventTypePublishedMessageRemove &&
+					e.UserId == user1 &&
+					e.ChatId == chat1Id &&
+					e.PublishedMessageNotification.Message.Id == message1Id &&
+					e.PublishedMessageNotification.Message.ChatId == chat1Id
+			},
+		}))
+		testOutputEventsAccumulator.Clean()
+
+		publishedNo, err := testRestClient.GetPublishedMessage(ctx, chat1Id, message1Id)
+		require.NoError(t, err, "error in get pinned promoted message")
+		require.Nil(t, publishedNo)
 	})
 }
 

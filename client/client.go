@@ -121,9 +121,11 @@ func query[ReqDto any, ResDto any](ctx context.Context, rc *restClient, behalfUs
 		return resp, err
 	}
 
-	if err = json.Unmarshal(bodyBytes, &resp); err != nil {
-		rc.lgr.ErrorContext(ctx, fmt.Sprintf("Failed to parse %v response:", opName), "err", err)
-		return resp, err
+	if len(bodyBytes) > 0 { // to handle 204 no content
+		if err = json.Unmarshal(bodyBytes, &resp); err != nil {
+			rc.lgr.ErrorContext(ctx, fmt.Sprintf("Failed to parse %v response:", opName), "err", err)
+			return resp, err
+		}
 	}
 	return resp, nil
 }
