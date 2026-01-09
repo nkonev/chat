@@ -361,7 +361,6 @@ type PublishedMessage struct {
 	OwnerId        int64     `db:"owner_id"`
 	CreateDateTime time.Time `db:"create_date_time"`
 	Text           string    `db:"preview"`
-	Content        string    `db:"content"`
 }
 
 type PublishedMessagesWrapper struct {

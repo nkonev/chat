@@ -189,10 +189,9 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 				update message_published
 				set	
 					preview = $3
-					, content = $4
-					, update_date_time = $5
+					, update_date_time = $4
 				where chat_id = $2 and message_id = $1 
-			`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, previewTxt, event.MessageCommoned.Content, event.AdditionalData.CreatedAt)
+			`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, previewTxt, event.AdditionalData.CreatedAt)
 			if err != nil {
 				return nil, err
 			}
@@ -769,7 +768,6 @@ const publishedMessageCols = `
 		,owner_id
 		,create_date_time
 		,preview
-		,content
 `
 
 func (m *CommonProjection) GetPublishedMessage(ctx context.Context, co db.CommonOperations, chatId, messageId int64) (*dto.PublishedMessage, error) {
@@ -950,14 +948,13 @@ func (m *CommonProjection) OnMessagePublished(ctx context.Context, event *Messag
 				previewTxt := m.createMessagePublishedText(mb.Content)
 
 				_, err = tx.ExecContext(ctx, `
-					insert into message_published (chat_id, message_id, owner_id, create_date_time, update_date_time, preview, content)
-					values ($1, $2, $3, $4, $5, $6, $7)
+					insert into message_published (chat_id, message_id, owner_id, create_date_time, update_date_time, preview)
+					values ($1, $2, $3, $4, $5, $6)
 					on conflict (chat_id, message_id) do update set
 					preview = excluded.preview
-					,content = excluded.content
 					,update_date_time = excluded.update_date_time
 				`,
-					event.ChatId, event.MessageId, mb.OwnerId, event.AdditionalData.CreatedAt, event.AdditionalData.CreatedAt, previewTxt, mb.Content)
+					event.ChatId, event.MessageId, mb.OwnerId, event.AdditionalData.CreatedAt, event.AdditionalData.CreatedAt, previewTxt)
 				if err != nil {
 					return nil, err
 				}
