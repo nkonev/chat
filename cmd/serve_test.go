@@ -3742,13 +3742,13 @@ func TestPublishMessage(t *testing.T) {
 		testOutputEventsAccumulator.Clean()
 
 		publisheds, err := testRestClient.GetPublishedMessages(ctx, user1, chat1Id)
-		require.NoError(t, err, "error in get pinned promoted message")
+		require.NoError(t, err, "error in get published messages")
 		require.Equal(t, 1, len(publisheds))
 		assert.Equal(t, message1Id, publisheds[0].Id)
 		assert.Equal(t, message1Text, publisheds[0].Text)
 
 		published, err := testRestClient.GetPublishedMessageForPublic(ctx, chat1Id, message1Id)
-		require.NoError(t, err, "error in get pinned promoted message")
+		require.NoError(t, err, "error in get published message")
 		require.NotNil(t, published)
 		assert.Equal(t, message1Id, published.Id)
 		assert.Equal(t, message1Text, published.Content)
@@ -3784,11 +3784,11 @@ func TestPublishMessage(t *testing.T) {
 		testOutputEventsAccumulator.Clean()
 
 		publishedsNo, err := testRestClient.GetPublishedMessages(ctx, user1, chat1Id)
-		require.NoError(t, err, "error in get pinned promoted message")
+		require.NoError(t, err, "error in get published messages")
 		require.Equal(t, 0, len(publishedsNo))
 
 		publishedNo, err := testRestClient.GetPublishedMessageForPublic(ctx, chat1Id, message1Id)
-		require.NoError(t, err, "error in get pinned promoted message")
+		require.NoError(t, err, "error in get published message")
 		require.Nil(t, publishedNo)
 	})
 }
