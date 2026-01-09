@@ -347,12 +347,16 @@ func (m *CommonProjection) setMessagePublished(ctx context.Context, tx *db.Tx, c
 }
 
 func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMessage *dto.PinnedMessage, chatRegularParticipantCanPinMessage bool, chatIsAdmin bool, messageOwnerUsersMap map[int64]*dto.User) *dto.PinnedMessageDto {
+	owner := messageOwnerUsersMap[pinnedMessage.OwnerId]
+	if owner == nil {
+		owner = getDeletedUser(pinnedMessage.OwnerId)
+	}
 	res := dto.PinnedMessageDto{
 		Id:             pinnedMessage.Id,
 		Text:           pinnedMessage.Text,
 		ChatId:         pinnedMessage.ChatId,
 		OwnerId:        pinnedMessage.OwnerId,
-		Owner:          messageOwnerUsersMap[pinnedMessage.OwnerId],
+		Owner:          owner,
 		PinnedPromoted: pinnedMessage.Promoted,
 		CreateDateTime: pinnedMessage.CreateDateTime,
 		CanPin:         CanPinMessage(chatRegularParticipantCanPinMessage, chatIsAdmin),
@@ -362,12 +366,17 @@ func (m *EnrichingProjection) enrichMessagePinned(ctx context.Context, pinnedMes
 }
 
 func (m *EnrichingProjection) enrichMessagePublished(ctx context.Context, publishedMessage *dto.PublishedMessage, chatRegularParticipantCanPublishMessage bool, chatIsAdmin bool, messageOwnerUsersMap map[int64]*dto.User, behalfUserId int64) *dto.PublishedMessageDto {
+	owner := messageOwnerUsersMap[publishedMessage.OwnerId]
+	if owner == nil {
+		owner = getDeletedUser(publishedMessage.OwnerId)
+	}
+
 	res := dto.PublishedMessageDto{
 		Id:             publishedMessage.Id,
 		Text:           publishedMessage.Text,
 		ChatId:         publishedMessage.ChatId,
 		OwnerId:        publishedMessage.OwnerId,
-		Owner:          messageOwnerUsersMap[publishedMessage.OwnerId],
+		Owner:          owner,
 		CreateDateTime: publishedMessage.CreateDateTime,
 		CanPublish:     CanPublishMessage(chatRegularParticipantCanPublishMessage, chatIsAdmin, publishedMessage.OwnerId, behalfUserId),
 	}
