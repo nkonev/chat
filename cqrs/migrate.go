@@ -2,7 +2,6 @@ package cqrs
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/db"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/georgysavva/scany/pgxscan"
 	sqlscanv2 "github.com/georgysavva/scany/v2/sqlscan"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
@@ -252,7 +252,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 							from message
 							where chat_id = $1 and id = $2
 						`, chatId, messageId)
-						if errors.Is(err, sql.ErrNoRows) {
+						if errors.Is(err, pgx.ErrNoRows) {
 							// there were no rows, but otherwise no error occurred
 							return nil, nil
 						} else if err != nil {
