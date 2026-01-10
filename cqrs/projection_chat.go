@@ -336,89 +336,84 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 // called in cases when chat should lift because of changing update_date_time
 // in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
 func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, increaseOn int, messageOwnerId int64, chatAction ChatAction) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		// in oder not to have a potential race condition
-		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
-		// we shouldn't upsert into chat_user_view
-		// we can only update it here
+	// in oder not to have a potential race condition
+	// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
+	// we shouldn't upsert into chat_user_view
+	// we can only update it here
 
-		wasUpdated := false
-		if unreadMessagesAction == UnreadMessagesActionIncrease {
-			participantIdsWithoutMessageOwner := utils.GetSliceWithout(messageOwnerId, participantIds)
-			var ownerIdP *int64
-			if slices.Contains(participantIds, messageOwnerId) { // for batches with[out] owner
-				ownerIdP = &messageOwnerId
+	// because of deadlock we don't use transaction
+
+	wasUpdated := false
+	if unreadMessagesAction == UnreadMessagesActionIncrease {
+		participantIdsWithoutMessageOwner := utils.GetSliceWithout(messageOwnerId, participantIds)
+		var ownerIdP *int64
+		if slices.Contains(participantIds, messageOwnerId) { // for batches with[out] owner
+			ownerIdP = &messageOwnerId
+		}
+
+		// owner
+		if ownerIdP != nil {
+			err := m.fastForwardLastRead(ctx, m.db, *ownerIdP, chatId)
+			if err != nil {
+				return fmt.Errorf("error during increasing unread messages: %w", err)
 			}
 
-			// not owners
-			if len(participantIdsWithoutMessageOwner) > 0 && increaseOn > 0 {
-				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, participantIdsWithoutMessageOwner, chatId, increaseOn)
-				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
-				}
+			err = m.fastForwardParticipantMessageReadId(ctx, m.db, *ownerIdP, chatId, additionalData.CreatedAt)
+			if err != nil {
+				return fmt.Errorf("error during increasing unread messages: %w", err)
 			}
 
-			// owner
-			if ownerIdP != nil {
-				err := m.fastForwardLastRead(ctx, tx, *ownerIdP, chatId)
-				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
-				}
-
-				err = m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, additionalData.CreatedAt)
-				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
-				}
-
-				// update red dot
-				err = m.updateHasUnreads(ctx, tx, []int64{*ownerIdP})
-				if err != nil {
-					return err
-				}
-			}
-
-			wasUpdated = true
-		} else if unreadMessagesAction == UnreadMessagesActionRefresh {
-			err := m.setUnreadMessages(ctx, tx, participantIds, chatId, 0, true, true)
+			// update red dot
+			err = m.updateHasUnreads(ctx, m.db, []int64{*ownerIdP})
 			if err != nil {
 				return err
 			}
-
-			wasUpdated = true
 		}
 
-		// it's not forgotten else, it's the different action
-		if lastMessageAction == LastMessageActionRefresh {
-			err := m.setLastMessage(ctx, tx, chatId)
+		// not owners
+		if len(participantIdsWithoutMessageOwner) > 0 && increaseOn > 0 {
+			err := m.increaseUnreadsAndSetHasUnreads(ctx, m.db, participantIdsWithoutMessageOwner, chatId, increaseOn)
 			if err != nil {
-				return err
+				return fmt.Errorf("error during increasing unread messages: %w", err)
 			}
-
-			wasUpdated = true
 		}
 
-		if chatAction == ChatActionRefresh {
-			// for the cases like renaming chat, ...
-			// the db was updated earlier, here we need to update chat_user_view.update_date_time
-			wasUpdated = true
+		wasUpdated = true
+	} else if unreadMessagesAction == UnreadMessagesActionRefresh {
+		err := m.setUnreadMessages(ctx, m.db, participantIds, chatId, 0, true, true)
+		if err != nil {
+			return err
 		}
 
-		// to eliminate unnecessary chat_user_view writes in participant changed
-		if wasUpdated {
-			_, err := tx.ExecContext(ctx, `
+		wasUpdated = true
+	}
+
+	// it's not forgotten else, it's the different action
+	if lastMessageAction == LastMessageActionRefresh {
+		err := m.setLastMessage(ctx, m.db, chatId)
+		if err != nil {
+			return err
+		}
+
+		wasUpdated = true
+	}
+
+	if chatAction == ChatActionRefresh {
+		// for the cases like renaming chat, ...
+		// the db was updated earlier, here we need to update chat_user_view.update_date_time
+		wasUpdated = true
+	}
+
+	// to eliminate unnecessary chat_user_view writes in participant changed
+	if wasUpdated {
+		_, err := m.db.ExecContext(ctx, `
 				update chat_user_view set update_date_time = $3 where user_id = any($1) and id = $2
 			`, participantIds, chatId, additionalData.CreatedAt)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
 		}
-
-		return nil
-	})
-
-	if errOuter != nil {
-		return errOuter
 	}
+
 	return nil
 }
 

@@ -1003,8 +1003,8 @@ func (m *CommonProjection) OnMessagePublished(ctx context.Context, event *Messag
 	return res.count, nil
 }
 
-func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId int64) error {
-	_, err := tx.ExecContext(ctx, `
+func (m *CommonProjection) setLastMessage(ctx context.Context, co db.CommonOperations, chatId int64) error {
+	_, err := co.ExecContext(ctx, `
 		with last_message as (
 			select 
 				m.id,
@@ -1027,8 +1027,8 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId
 	return nil
 }
 
-func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, participantIds []int64, chatId, messageId int64, needSet, needRefresh bool) error {
-	_, err := tx.ExecContext(ctx, `
+func (m *CommonProjection) setUnreadMessages(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId, messageId int64, needSet, needRefresh bool) error {
+	_, err := co.ExecContext(ctx, `
 		with 
 		chat_messages as (
 			select m.id from message m where m.chat_id = $2
@@ -1096,7 +1096,7 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 		return err
 	}
 
-	err = m.updateHasUnreads(ctx, tx, participantIds)
+	err = m.updateHasUnreads(ctx, co, participantIds)
 	if err != nil {
 		return err
 	}
@@ -1223,8 +1223,8 @@ func (m *CommonProjection) fastForwardLastRead(ctx context.Context, co db.Common
 }
 
 // should be called after upserting into unread_messages_user_view otherwise it's going to reset has to false
-func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, participantIds []int64) error {
-	_, err := tx.ExecContext(ctx, `
+func (m *CommonProjection) updateHasUnreads(ctx context.Context, co db.CommonOperations, participantIds []int64) error {
+	_, err := co.ExecContext(ctx, `
 	with
 	normalized_user as (
 		select unnest(cast ($1 as bigint[])) as user_id
