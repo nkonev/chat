@@ -336,11 +336,18 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 // called in cases when chat should lift because of changing update_date_time
 // in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
 func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, increaseOn int, messageOwnerId int64, chatAction ChatAction) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+	type txRes struct {
+		needToIncreaseUnreadsAndSetHasUnreads               bool
+		needToIncreaseUnreadsAndSetHasUnreadsParticipantIds []int64
+		needToSetWasUpdated                                 bool
+	}
+	res, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*txRes, error) {
 		// in oder not to have a potential race condition
 		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
 		// we shouldn't upsert into chat_user_view
 		// we can only update it here
+
+		tr := txRes{}
 
 		wasUpdated := false
 		if unreadMessagesAction == UnreadMessagesActionIncrease {
@@ -352,28 +359,26 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 			// not owners
 			if len(participantIdsWithoutMessageOwner) > 0 && increaseOn > 0 {
-				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, participantIdsWithoutMessageOwner, chatId, increaseOn)
-				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
-				}
+				tr.needToIncreaseUnreadsAndSetHasUnreads = true
+				tr.needToIncreaseUnreadsAndSetHasUnreadsParticipantIds = participantIdsWithoutMessageOwner
 			}
 
 			// owner
 			if ownerIdP != nil {
 				err := m.fastForwardLastRead(ctx, tx, *ownerIdP, chatId)
 				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
+					return nil, fmt.Errorf("error during increasing unread messages: %w", err)
 				}
 
 				err = m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, additionalData.CreatedAt)
 				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
+					return nil, fmt.Errorf("error during increasing unread messages: %w", err)
 				}
 
 				// update red dot
 				err = m.updateHasUnreads(ctx, tx, []int64{*ownerIdP})
 				if err != nil {
-					return err
+					return nil, err
 				}
 			}
 
@@ -381,7 +386,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 		} else if unreadMessagesAction == UnreadMessagesActionRefresh {
 			err := m.setUnreadMessages(ctx, tx, participantIds, chatId, 0, true, true)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			wasUpdated = true
@@ -391,7 +396,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 		if lastMessageAction == LastMessageActionRefresh {
 			err := m.setLastMessage(ctx, tx, chatId)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			wasUpdated = true
@@ -403,22 +408,34 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 			wasUpdated = true
 		}
 
-		// to eliminate unnecessary chat_user_view writes in participant changed
-		if wasUpdated {
-			_, err := tx.ExecContext(ctx, `
-				update chat_user_view set update_date_time = $3 where user_id = any($1) and id = $2
-			`, participantIds, chatId, additionalData.CreatedAt)
-			if err != nil {
-				return err
-			}
-		}
+		tr.needToSetWasUpdated = wasUpdated
 
-		return nil
+		return &tr, nil
 	})
 
 	if errOuter != nil {
 		return errOuter
 	}
+
+	// to eliminate citus deadlock (1/2)
+	if res.needToIncreaseUnreadsAndSetHasUnreads && len(res.needToIncreaseUnreadsAndSetHasUnreadsParticipantIds) > 0 {
+		err := m.increaseUnreadsAndSetHasUnreads(ctx, m.db, res.needToIncreaseUnreadsAndSetHasUnreadsParticipantIds, chatId, increaseOn)
+		if err != nil {
+			return fmt.Errorf("error during increasing unread messages: %w", err)
+		}
+	}
+
+	// to eliminate citus deadlock (2/2)
+	// to eliminate unnecessary chat_user_view writes in participant changed
+	if res.needToSetWasUpdated {
+		_, err := m.db.ExecContext(ctx, `
+			update chat_user_view set update_date_time = $3 where user_id = any($1) and id = $2
+		`, participantIds, chatId, additionalData.CreatedAt)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
