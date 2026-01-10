@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
+	wcqrs "github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/ThreeDotsLabs/watermill/message"
 	wotel "github.com/nkonev/watermill-opentelemetry/pkg/opentelemetry"
 	"go.opentelemetry.io/otel/propagation"
@@ -150,30 +151,28 @@ func RunCqrsRouter(
 	return nil
 }
 
-func ConfigureCqrsMarshaller() *CqrsMarshalerDecorator {
-	// We are decorating ProtobufMarshaler to add extra metadata to the message.
-	return &CqrsMarshalerDecorator{
-		cqrs.JSONMarshaler{
-			NewUUID: func() string {
-				uuidV7, err := uuid.NewV7()
-				if err != nil {
-					panic(err)
-				}
-				return uuidV7.String()
-			},
-			// It will generate topic names based on the event/command type.
-			// So for example, for "RoomBooked" name will be "RoomBooked".
-			GenerateName: cqrs.NamedStruct(func(v interface{}) string {
-				panic(fmt.Sprintf("not implemented Name() for %T", v))
-			}),
-		}}
+func ConfigureCqrsMarshaller() *wcqrs.JSONMarshaler {
+	return &cqrs.JSONMarshaler{
+		NewUUID: func() string {
+			uuidV7, err := uuid.NewV7()
+			if err != nil {
+				panic(err)
+			}
+			return uuidV7.String()
+		},
+		// It will generate topic names based on the event/command type.
+		// So for example, for "RoomBooked" name will be "RoomBooked".
+		GenerateName: cqrs.NamedStruct(func(v interface{}) string {
+			panic(fmt.Sprintf("not implemented Name() for %T", v))
+		}),
+	}
 }
 
 func ConfigureEventBus(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	publisher message.Publisher,
-	cqrsMarshaler *CqrsMarshalerDecorator,
+	cqrsMarshaler *wcqrs.JSONMarshaler,
 	watermillLoggerAdapter watermill.LoggerAdapter,
 ) (*PartitionAwareEventBus, error) {
 	eventBusRoot, err := cqrs.NewEventBusWithConfig(publisher, cqrs.EventBusConfig{
@@ -222,7 +221,7 @@ func ConfigureEventProcessor(
 	cqrsRouter *message.Router,
 	watermillLoggerAdapter watermill.LoggerAdapter,
 	kafkaMarshaler kafka.MarshalerUnmarshaler,
-	cqrsMarshaler *CqrsMarshalerDecorator,
+	cqrsMarshaler *wcqrs.JSONMarshaler,
 	commonProjection *CommonProjection,
 	cqrsEventHandler *EventHandler,
 ) (*cqrs.EventGroupProcessor, error) {
