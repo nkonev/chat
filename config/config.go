@@ -21,10 +21,12 @@ const configShortPrefix = "-c"
 type KafkaConfig struct {
 	BootstrapServers  []string
 	Topic             string
+	Topic2            string
 	NumPartitions     int32
 	ReplicationFactor int16
 	Retention         string
 	ConsumerGroup     string
+	ConsumerGroup2    string
 	Producer          KafkaProducerConfig
 	Consumer          KafkaConsumerConfig
 }

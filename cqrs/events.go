@@ -305,12 +305,38 @@ type TechnicalAbandonedChatRemoved struct {
 	ChatId int64 `json:"chatId"`
 }
 
+type UserEvented struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ChatId         int64           `json:"chatId"`
+	UserId         int64           `json:"userId"`
+}
+
 func GenerateMessageAdditionalData(correlationId *string, behalfUserId int64) *AdditionalData {
 	return &AdditionalData{
 		CreatedAt:     time.Now().UTC(),
 		CorrelationId: correlationId,
 		BehalfUserId:  behalfUserId,
 	}
+}
+
+type EventKind int16
+
+const (
+	EventKindUnspecified = iota
+	EventKindChat
+	EventKindUser
+)
+
+func (k EventKind) String() string {
+	switch k {
+	case EventKindUnspecified:
+		return "unspecified"
+	case EventKindChat:
+		return "chat"
+	case EventKindUser:
+		return "user"
+	}
+	return "unknown"
 }
 
 func (s *ChatCreated) GetPartitionKey() string {
@@ -389,6 +415,10 @@ func (s *TechnicalAbandonedChatRemoved) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
+func (s *UserEvented) GetPartitionKey() string {
+	return utils.ToString(s.UserId)
+}
+
 func (s *ChatCreated) Name() string {
 	return "chatCreated"
 }
@@ -463,4 +493,88 @@ func (s *MessageReactionFlipped) Name() string {
 
 func (s *TechnicalAbandonedChatRemoved) Name() string {
 	return "technicalAbandonedChatRemoved"
+}
+
+func (s *UserEvented) Name() string {
+	return "userEvented"
+}
+
+func (s *ChatCreated) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ChatEdited) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ChatDeleted) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ParticipantsAdded) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ParticipantDeleted) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ParticipantChanged) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ProjectionsTruncated) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ChatPinned) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ChatNotificationSettingsSetted) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *MessageCreated) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *MessageEdited) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ChatViewRefreshed) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *MessageReaded) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *MessageBlogPostMade) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *MessageDeleted) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *MessagePinned) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *MessagePublished) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *MessageReactionFlipped) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *TechnicalAbandonedChatRemoved) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *UserEvented) GetEventKind() EventKind {
+	return EventKindUser
 }

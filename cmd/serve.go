@@ -95,6 +95,7 @@ func RunServe(args []string) {
 			listener.CreateAndListenInternalEventsChannel,
 			listener.CreateAndListenAaaChannel,
 			kafka.RunCreateTopic,
+			kafka.RunCreateTopic2,
 			cqrs.RunMigrateFromOldDb,
 			cqrs.RunCqrsRouter,
 			kafka.WaitForAllEventsProcessed,

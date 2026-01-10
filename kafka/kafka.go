@@ -5,15 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/IBM/sarama"
-	"github.com/Jeffail/gabs/v2"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
-	"go.uber.org/fx"
 	"io"
 	"os"
 	"time"
+
+	"github.com/IBM/sarama"
+	"github.com/Jeffail/gabs/v2"
+	"go.uber.org/fx"
 )
 
 func ConfigureKafkaAdmin(
@@ -51,6 +52,34 @@ func RunCreateTopic(
 	retention := cfg.Kafka.Retention
 	topicName := cfg.Kafka.Topic
 	lgr.Info("Creating topic", "topic", topicName)
+
+	err := kafkaAdmin.CreateTopic(topicName, &sarama.TopicDetail{
+		NumPartitions:     cfg.Kafka.NumPartitions,
+		ReplicationFactor: cfg.Kafka.ReplicationFactor,
+		ConfigEntries: map[string]*string{
+			// https://kafka.apache.org/documentation/#topicconfigs_retention.ms
+			"retention.ms": &retention,
+		},
+	}, false)
+	if errors.Is(err, sarama.ErrTopicAlreadyExists) {
+		lgr.Info("Topic is already exists", "topic", topicName)
+	} else if err != nil {
+		return err
+	} else {
+		lgr.Info("Topic was successfully created", "topic", topicName)
+	}
+
+	return nil
+}
+
+func RunCreateTopic2(
+	lgr *logger.LoggerWrapper,
+	cfg *config.AppConfig,
+	kafkaAdmin sarama.ClusterAdmin,
+) error {
+	retention := cfg.Kafka.Retention // TODO
+	topicName := cfg.Kafka.Topic2
+	lgr.Info("Creating topic2", "topic", topicName)
 
 	err := kafkaAdmin.CreateTopic(topicName, &sarama.TopicDetail{
 		NumPartitions:     cfg.Kafka.NumPartitions,

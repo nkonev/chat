@@ -178,17 +178,33 @@ func ConfigureEventBus(
 ) (*PartitionAwareEventBus, error) {
 	eventBusRoot, err := cqrs.NewEventBusWithConfig(publisher, cqrs.EventBusConfig{
 		GeneratePublishTopic: func(params cqrs.GenerateEventPublishTopicParams) (string, error) {
-			// We are using one topic for all events to maintain the order of events.
-			return cfg.Kafka.Topic, nil
+			pm, ok := params.Event.(PartitionableMessage)
+			if !ok {
+				return "", fmt.Errorf("Wrong type %T of event, it should be PartitionableMessage", params.Event)
+			}
+
+			switch pm.GetEventKind() {
+			case EventKindChat:
+				return cfg.Kafka.Topic, nil
+			case EventKindUser:
+				return cfg.Kafka.Topic2, nil
+			}
+
+			return "", fmt.Errorf("Wrong kind %v of event", pm.GetEventKind())
 		},
 		Marshaler: cqrsMarshaler,
 		Logger:    watermillLoggerAdapter,
 		OnPublish: func(params cqrs.OnEventSendParams) error {
+			pm, ok := params.Event.(PartitionableMessage)
+			if !ok {
+				return fmt.Errorf("Wrong type %T of event, it should be PartitionableMessage", params.Event)
+			}
+
 			if cfg.Cqrs.Dump {
 				if cfg.Cqrs.PrettyLog && !cfg.Logger.Json {
-					fmt.Printf("[kafka publisher] Sending message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), params.Message.Metadata, string(params.Message.Payload))
+					fmt.Printf("[kafka publisher] Sending message: trace_id=%s, kind=%v, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), pm.GetEventKind(), params.Message.Metadata, string(params.Message.Payload))
 				} else {
-					lgr.InfoContext(params.Message.Context(), fmt.Sprintf("[kafka publisher] Sending message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), params.Message.Metadata, string(params.Message.Payload)))
+					lgr.InfoContext(params.Message.Context(), fmt.Sprintf("[kafka publisher] Sending message: trace_id=%s, kind=%v, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), pm.GetEventKind(), params.Message.Metadata, string(params.Message.Payload)))
 				}
 			}
 			return nil
@@ -221,7 +237,14 @@ func ConfigureEventProcessor(
 		cqrsRouter,
 		cqrs.EventGroupProcessorConfig{
 			GenerateSubscribeTopic: func(params cqrs.EventGroupProcessorGenerateSubscribeTopicParams) (string, error) {
-				return cfg.Kafka.Topic, nil
+				switch params.EventGroupName {
+				case cfg.Kafka.ConsumerGroup:
+					return cfg.Kafka.Topic, nil
+
+				case cfg.Kafka.ConsumerGroup2:
+					return cfg.Kafka.Topic2, nil
+				}
+				return "", fmt.Errorf("Unknown eventGroup: %v", params.EventGroupName)
 			},
 			SubscriberConstructor: func(params cqrs.EventGroupProcessorSubscriberConstructorParams) (message.Subscriber, error) {
 				return kafka.NewSubscriber(
@@ -267,6 +290,14 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessagePublished),
 		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalProjectionsTruncated),
 		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalAbandonedChatRemoved),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	err = eventProcessor.AddHandlersGroup(
+		cfg.Kafka.ConsumerGroup2,
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserEvented),
 	)
 	if err != nil {
 		return nil, err

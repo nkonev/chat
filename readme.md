@@ -25,13 +25,13 @@ make package
 # Play with
 ```bash
 # create a chat
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat' -d '{"title": "new chat"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat' -d '{"name": "new chat"}'
 
 # create a chat with extra participants
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat' -d '{"title": "new chat", "participantIds":[2,3,4]}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat' -d '{"name": "new chat", "participantIds":[2,3,4]}'
 
 # rename the chat
-curl -i -X PUT -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat' -d '{"id": 1, "title": "super new chat"}'
+curl -i -X PUT -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat' -d '{"id": 1, "name": "super new chat"}'
 
 # show chats
 curl -Ss -X GET -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/search' | jq
@@ -82,7 +82,7 @@ curl -i -X PUT -H 'X-Auth-Userid: 2' --url 'http://localhost:1235/api/chat/1/mes
 curl -i -X PUT -H 'Content-Type: application/json' -H 'X-Auth-Userid: 2' --url 'http://localhost:1235/api/chat/2/notification' -d '{"considerMessagesOfThisChatAsUnread": false}'
 
 # make blog
-curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:1235/api/chat' -d '{"id": 1, "title": "new chat", "blog": true}'
+curl -i -X PUT -H 'Content-Type: application/json' --url 'http://localhost:1235/api/chat' -d '{"id": 1, "name": "new chat", "blog": true}'
 curl -i -X PUT --url 'http://localhost:1235/api/chat/1/message/1/blog-post'
 
 # show blog
@@ -91,7 +91,7 @@ curl -Ss -X GET --url 'http://localhost:1235/api/blog/1' | jq
 curl -Ss -X GET --url 'http://localhost:1235/api/blog/1/comment/search' | jq
 
 # with correlation id
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' -H 'X-CorrelationId: 9e49b4dd-4068-4c6a-ada0-da78f44bdeba' --url 'http://localhost:1235/api/chat' -d '{"title": "new chat"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' -H 'X-CorrelationId: 9e49b4dd-4068-4c6a-ada0-da78f44bdeba' --url 'http://localhost:1235/api/chat' -d '{"name": "new chat"}'
 # then see kafka
 
 # reset offsets for consumer groups

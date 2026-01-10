@@ -2,10 +2,12 @@ kafka:
   bootstrapServers:
     - 127.0.0.1:9092
   topic: event
+  topic2: user
   numPartitions: 3
   replicationFactor: 1
   retention: "-1"
   consumerGroup: CommonProjection
+  consumerGroup2: UserProjection
   producer:
     retryMax: 10
     returnSuccess: true
@@ -123,12 +125,13 @@ redis:
   db: 5
   maxRetries: 10000
 
+# TODO restore
 schedulers:
   cleanAbandonedChatsTask:
-    enabled: true
+    enabled: false
     cron: "0 * * * * *"
     expiration: "30m"
   cleanDeletedUsersDataTask:
-    enabled: true
+    enabled: false
     cron: "30 * * * * *"
     expiration: "30m"

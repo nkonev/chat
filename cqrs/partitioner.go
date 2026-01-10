@@ -3,10 +3,11 @@ package cqrs
 import (
 	"context"
 	"errors"
+	"go-cqrs-chat-example/logger"
+
 	"github.com/ThreeDotsLabs/watermill-kafka/v3/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/ThreeDotsLabs/watermill/message"
-	"go-cqrs-chat-example/logger"
 )
 
 const partitionKey = "partition_key"
@@ -20,12 +21,13 @@ type PartitionAwareEventBus struct {
 }
 
 func (w *PartitionAwareEventBus) Publish(ctx context.Context, pm PartitionableMessage) error {
-	// we put partition key into context in order tot to duplicate partition key, stored in kafka key into headers
+	// we put partition key into context in order not to duplicate partition key, stored in kafka key into headers
 	return w.eventBus.Publish(makeContextWithPartitionKey(ctx, pm), pm)
 }
 
 type PartitionableMessage interface {
 	GetPartitionKey() string
+	GetEventKind() EventKind
 }
 
 // GenerateKafkaPartitionKey is a function that generates a partition key for Kafka messages.

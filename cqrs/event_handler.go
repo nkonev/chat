@@ -1897,3 +1897,9 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 
 	return nil
 }
+
+func (m *EventHandler) OnUserEvented(ctx context.Context, event *UserEvented) error {
+	m.lgr.Logger.WarnContext(ctx, fmt.Sprintf("Got user evented %v", event))
+
+	return nil
+}

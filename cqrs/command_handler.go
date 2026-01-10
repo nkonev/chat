@@ -7,6 +7,9 @@ package cqrs
 // See comments about it in TestUnreads()
 // Also, in order to keep these command's response times fast we should avoid iterations over db rows here. The best place for it is event_handler, projection.
 
+// To have a happens-before relationship, it's strongly not recommended to send user events (EventKindUser), which depend on chat data from here (command_handler).
+// It's recommended to (re)send them from event_handler
+
 import (
 	"context"
 	"errors"
@@ -423,6 +426,18 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 	err = eventBus.Publish(ctx, pa)
 	if err != nil {
 		return 0, err
+	}
+
+	for _, participantId := range copyCommand.ParticipantIds {
+		ue := &UserEvented{
+			AdditionalData: copyCommand.AdditionalData,
+			ChatId:         chatId,
+			UserId:         participantId,
+		}
+		err = eventBus.Publish(ctx, ue)
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	return chatId, nil
