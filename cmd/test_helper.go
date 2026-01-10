@@ -63,10 +63,12 @@ func resetInfra(lgr *logger.LoggerWrapper, cfg *config.AppConfig) {
 		),
 		fx.Invoke(
 			db.RunResetDatabaseHard,
-			kafka.RunDeleteTopic,
+			kafka.RunDeleteTopicChat,
+			kafka.RunDeleteTopicUser,
 			listener.DeleteTestEventQueue,
 			db.RunMigrations,
-			kafka.RunCreateTopic,
+			kafka.RunCreateTopicChat,
+			kafka.RunCreateTopicUser,
 			app.Shutdown,
 		),
 	)

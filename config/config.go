@@ -18,15 +18,19 @@ import (
 const configLongPrefix = "--config"
 const configShortPrefix = "-c"
 
-type KafkaConfig struct {
-	BootstrapServers  []string
+type KafkaTopicConfig struct {
 	Topic             string
-	Topic2            string
 	NumPartitions     int32
 	ReplicationFactor int16
 	Retention         string
-	ConsumerGroup     string
-	ConsumerGroup2    string
+}
+
+type KafkaConfig struct {
+	BootstrapServers  []string
+	TopicChat         KafkaTopicConfig
+	TopicUser         KafkaTopicConfig
+	ConsumerGroupChat string
+	ConsumerGroupUser string
 	Producer          KafkaProducerConfig
 	Consumer          KafkaConsumerConfig
 }

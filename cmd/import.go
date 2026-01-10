@@ -47,7 +47,8 @@ func RunImport(args []string) {
 		),
 		fx.Invoke(
 			db.RunMigrations,
-			kafka.RunCreateTopic,
+			kafka.RunCreateTopicChat,
+			kafka.RunCreateTopicUser,
 			kafka.Import,
 			cqrs.SetIsNeedToFastForwardSequences,
 			app.Shutdown,

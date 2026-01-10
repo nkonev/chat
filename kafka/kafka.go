@@ -17,6 +17,11 @@ import (
 	"go.uber.org/fx"
 )
 
+const pseudoFileStdout = "stdout"
+const pseudoFileStdin = "stdin"
+
+const kafkaConfigRetentionMs = "retention.ms"
+
 func ConfigureKafkaAdmin(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
@@ -44,21 +49,21 @@ func ConfigureKafkaAdmin(
 	return kafkaAdmin, nil
 }
 
-func RunCreateTopic(
+func RunCreateTopicChat(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	kafkaAdmin sarama.ClusterAdmin,
 ) error {
-	retention := cfg.Kafka.Retention
-	topicName := cfg.Kafka.Topic
+	retention := cfg.Kafka.TopicChat.Retention
+	topicName := cfg.Kafka.TopicChat.Topic
 	lgr.Info("Creating topic", "topic", topicName)
 
 	err := kafkaAdmin.CreateTopic(topicName, &sarama.TopicDetail{
-		NumPartitions:     cfg.Kafka.NumPartitions,
-		ReplicationFactor: cfg.Kafka.ReplicationFactor,
+		NumPartitions:     cfg.Kafka.TopicChat.NumPartitions,
+		ReplicationFactor: cfg.Kafka.TopicChat.ReplicationFactor,
 		ConfigEntries: map[string]*string{
 			// https://kafka.apache.org/documentation/#topicconfigs_retention.ms
-			"retention.ms": &retention,
+			kafkaConfigRetentionMs: &retention,
 		},
 	}, false)
 	if errors.Is(err, sarama.ErrTopicAlreadyExists) {
@@ -72,21 +77,21 @@ func RunCreateTopic(
 	return nil
 }
 
-func RunCreateTopic2(
+func RunCreateTopicUser(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	kafkaAdmin sarama.ClusterAdmin,
 ) error {
-	retention := cfg.Kafka.Retention // TODO
-	topicName := cfg.Kafka.Topic2
-	lgr.Info("Creating topic2", "topic", topicName)
+	retention := cfg.Kafka.TopicUser.Retention
+	topicName := cfg.Kafka.TopicUser.Topic
+	lgr.Info("Creating topic", "topic", topicName)
 
 	err := kafkaAdmin.CreateTopic(topicName, &sarama.TopicDetail{
-		NumPartitions:     cfg.Kafka.NumPartitions,
-		ReplicationFactor: cfg.Kafka.ReplicationFactor,
+		NumPartitions:     cfg.Kafka.TopicUser.NumPartitions,
+		ReplicationFactor: cfg.Kafka.TopicUser.ReplicationFactor,
 		ConfigEntries: map[string]*string{
 			// https://kafka.apache.org/documentation/#topicconfigs_retention.ms
-			"retention.ms": &retention,
+			kafkaConfigRetentionMs: &retention,
 		},
 	}, false)
 	if errors.Is(err, sarama.ErrTopicAlreadyExists) {
@@ -100,36 +105,76 @@ func RunCreateTopic2(
 	return nil
 }
 
-func RunDeleteTopic(
+func RunDeleteTopicChat(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	kafkaAdmin sarama.ClusterAdmin,
 ) error {
-	lgr.Warn("Removing topic", "topic", cfg.Kafka.Topic)
-	err := kafkaAdmin.DeleteTopic(cfg.Kafka.Topic)
+	lgr.Warn("Removing topic", "topic", cfg.Kafka.TopicChat.Topic)
+	err := kafkaAdmin.DeleteTopic(cfg.Kafka.TopicChat.Topic)
 	if err != nil {
 		if errors.Is(err, sarama.ErrUnknownTopicOrPartition) {
-			lgr.Warn("Topic does not exists", "topic", cfg.Kafka.Topic)
+			lgr.Warn("Topic does not exists", "topic", cfg.Kafka.TopicChat.Topic)
 		} else {
 			return err
 		}
 	}
-	lgr.Warn("Topic was removed", "topic", cfg.Kafka.Topic)
+	lgr.Warn("Topic was removed", "topic", cfg.Kafka.TopicChat.Topic)
 	return nil
 }
 
-func RunResetPartitions(
+func RunDeleteTopicUser(
+	lgr *logger.LoggerWrapper,
+	cfg *config.AppConfig,
+	kafkaAdmin sarama.ClusterAdmin,
+) error {
+	lgr.Warn("Removing topic", "topic", cfg.Kafka.TopicUser.Topic)
+	err := kafkaAdmin.DeleteTopic(cfg.Kafka.TopicUser.Topic)
+	if err != nil {
+		if errors.Is(err, sarama.ErrUnknownTopicOrPartition) {
+			lgr.Warn("Topic does not exists", "topic", cfg.Kafka.TopicUser.Topic)
+		} else {
+			return err
+		}
+	}
+	lgr.Warn("Topic was removed", "topic", cfg.Kafka.TopicUser.Topic)
+	return nil
+}
+
+func RunResetPartitionsChat(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	kafkaAdmin sarama.ClusterAdmin,
 ) error {
 	lgr.Info("Start reset partitions")
 
-	err := kafkaAdmin.DeleteConsumerGroup(cfg.Kafka.ConsumerGroup)
+	err := kafkaAdmin.DeleteConsumerGroup(cfg.Kafka.ConsumerGroupChat)
 
 	if err != nil {
 		if errors.Is(err, sarama.ErrGroupIDNotFound) {
-			lgr.Info("There is no consumer group", "consumer_group", cfg.Kafka.ConsumerGroup)
+			lgr.Info("There is no consumer group", "consumer_group", cfg.Kafka.ConsumerGroupChat)
+		} else {
+			return err
+		}
+	}
+
+	lgr.Info("Finished reset partitions")
+
+	return nil
+}
+
+func RunResetPartitionsUser(
+	lgr *logger.LoggerWrapper,
+	cfg *config.AppConfig,
+	kafkaAdmin sarama.ClusterAdmin,
+) error {
+	lgr.Info("Start reset partitions")
+
+	err := kafkaAdmin.DeleteConsumerGroup(cfg.Kafka.ConsumerGroupUser)
+
+	if err != nil {
+		if errors.Is(err, sarama.ErrGroupIDNotFound) {
+			lgr.Info("There is no consumer group", "consumer_group", cfg.Kafka.ConsumerGroupUser)
 		} else {
 			return err
 		}
@@ -166,12 +211,51 @@ func ConfigureSaramaClient(
 	return client, nil
 }
 
-// https://github.com/IBM/sarama/wiki/Frequently-Asked-Questions#how-do-i-consume-until-the-end-of-a-partition
-func WaitForAllEventsProcessed(
+type topicKind int16
+
+const (
+	topicKindUnspecified = iota
+	topicKindChat
+	topicKindUser
+)
+
+func (t topicKind) String() string {
+	switch t {
+	case topicKindUnspecified:
+		return "unspecified"
+	case topicKindChat:
+		return "chat"
+	case topicKindUser:
+		return "user"
+	}
+	return "unknown"
+}
+
+func WaitForAllEventsProcessedChat(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	saramaClient sarama.Client,
 	lc fx.Lifecycle,
+) error {
+	return waitForAllEventsProcessed(lgr, cfg, saramaClient, lc, topicKindChat)
+}
+
+func WaitForAllEventsProcessedUser(
+	lgr *logger.LoggerWrapper,
+	cfg *config.AppConfig,
+	saramaClient sarama.Client,
+	lc fx.Lifecycle,
+) error {
+	return waitForAllEventsProcessed(lgr, cfg, saramaClient, lc, topicKindUser)
+}
+
+// https://github.com/IBM/sarama/wiki/Frequently-Asked-Questions#how-do-i-consume-until-the-end-of-a-partition
+func waitForAllEventsProcessed(
+	lgr *logger.LoggerWrapper,
+	cfg *config.AppConfig,
+	saramaClient sarama.Client,
+	lc fx.Lifecycle,
+	topicKind topicKind,
 ) error {
 	stoppingCtx, cancelFunc := context.WithCancel(context.Background())
 
@@ -186,24 +270,24 @@ func WaitForAllEventsProcessed(
 	du := cfg.Cqrs.CheckAreEventsProcessedInterval
 
 	for {
-		lgr.Info("Checking for the current offsets will be equal to the latest ones for all partitions")
-		isEnd, errE := isEndOnAllPartitions(lgr, cfg, saramaClient)
+		lgr.Info("Checking for the current offsets will be equal to the latest ones for all partitions", "topic_kind", topicKind.String())
+		isEnd, errE := isEndOnAllPartitions(lgr, cfg, saramaClient, topicKind)
 		if errE != nil {
 			lgr.Error("Error during checking isEndOnAllPartitions", "err", errE)
 			return errE
 		}
 		if isEnd {
-			lgr.Info("All the events was processed")
+			lgr.Info("All the events was processed", "topic_kind", topicKind.String())
 			cancelFunc()
 		} else {
 			lgr.Info("The current offsets still aren't equal to the latest ones")
 		}
 
 		if errors.Is(stoppingCtx.Err(), context.Canceled) {
-			lgr.Info("Exiting from waiter")
+			lgr.Info("Exiting from waiter", "topic_kind", topicKind.String())
 			break
 		} else {
-			lgr.Info("Will wait before the next check iteration", "duration", du)
+			lgr.Info("Will wait before the next check iteration", "duration", du, "topic_kind", topicKind.String())
 			time.Sleep(du)
 		}
 	}
@@ -215,11 +299,22 @@ func getMaxOffsets(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	client sarama.Client,
+	topicKind topicKind,
 ) ([]int64, error) {
-	maxOffsets := make([]int64, cfg.Kafka.NumPartitions)
+	var ktc config.KafkaTopicConfig
+	switch topicKind {
+	case topicKindChat:
+		ktc = cfg.Kafka.TopicChat
+	case topicKindUser:
+		ktc = cfg.Kafka.TopicUser
+	default:
+		return nil, fmt.Errorf("Unknown topicKind: %v", topicKind)
+	}
 
-	for i := range cfg.Kafka.NumPartitions {
-		offset, err := client.GetOffset(cfg.Kafka.Topic, i, sarama.OffsetNewest)
+	maxOffsets := make([]int64, ktc.NumPartitions)
+
+	for i := range ktc.NumPartitions {
+		offset, err := client.GetOffset(ktc.Topic, i, sarama.OffsetNewest)
 		if err != nil {
 			return maxOffsets, err
 		}
@@ -233,9 +328,10 @@ func isEndOnAllPartitions(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	client sarama.Client,
+	topicKind topicKind,
 ) (bool, error) {
 
-	maxOffsets, err := getMaxOffsets(lgr, cfg, client)
+	maxOffsets, err := getMaxOffsets(lgr, cfg, client, topicKind)
 	if err != nil {
 		if errors.Is(err, sarama.ErrNotLeaderForPartition) {
 			return false, nil
@@ -255,15 +351,28 @@ func isEndOnAllPartitions(
 		return true, nil
 	}
 
-	offsetManager, err := sarama.NewOffsetManagerFromClient(cfg.Kafka.ConsumerGroup, client)
+	var consumerGroup string
+	var ktc config.KafkaTopicConfig
+	switch topicKind {
+	case topicKindChat:
+		consumerGroup = cfg.Kafka.ConsumerGroupChat
+		ktc = cfg.Kafka.TopicChat
+	case topicKindUser:
+		consumerGroup = cfg.Kafka.ConsumerGroupUser
+		ktc = cfg.Kafka.TopicUser
+	default:
+		return false, fmt.Errorf("Unknown topicKind: %v", topicKind)
+	}
+
+	offsetManager, err := sarama.NewOffsetManagerFromClient(consumerGroup, client)
 	if err != nil {
 		return false, err
 	}
 	defer offsetManager.Close()
 
-	givenOffsets := make([]int64, cfg.Kafka.NumPartitions)
-	for i := range cfg.Kafka.NumPartitions {
-		partitionManager, err := offsetManager.ManagePartition(cfg.Kafka.Topic, i)
+	givenOffsets := make([]int64, ktc.NumPartitions)
+	for i := range ktc.NumPartitions {
+		partitionManager, err := offsetManager.ManagePartition(ktc.Topic, i)
 		if err != nil {
 			if errors.Is(err, sarama.ErrIncompleteResponse) {
 				lgr.Info("Skipping partition", "partition", i)
@@ -282,7 +391,7 @@ func isEndOnAllPartitions(
 	}
 
 	hasOneInitialized := false
-	for i := range cfg.Kafka.NumPartitions {
+	for i := range ktc.NumPartitions {
 		if givenOffsets[i] == -1 {
 			continue
 		} else {
@@ -310,7 +419,7 @@ func Export(
 	saramaClient sarama.Client,
 ) error {
 
-	maxOffsets, err := getMaxOffsets(lgr, cfg, saramaClient)
+	maxOffsets, err := getMaxOffsets(lgr, cfg, saramaClient, topicKindChat)
 	if err != nil {
 		return err
 	}
@@ -326,7 +435,7 @@ func Export(
 
 	var writer io.Writer
 	var f *os.File
-	if cfg.Cqrs.Export.File == "stdout" {
+	if cfg.Cqrs.Export.File == pseudoFileStdout {
 		writer = os.Stdout
 	} else {
 		f, err = os.Create(cfg.Cqrs.Export.File)
@@ -339,7 +448,7 @@ func Export(
 		defer f.Close()
 	}
 
-	for i := range cfg.Kafka.NumPartitions {
+	for i := range cfg.Kafka.TopicChat.NumPartitions {
 		partitionMaxOffset := maxOffsets[i]
 		if partitionMaxOffset == 0 {
 			lgr.Info("Skipping partition because absence of messages", "partition", i)
@@ -348,7 +457,7 @@ func Export(
 
 		lgr.Info("Reading partition and it's max offset", "partition", i, "offset", partitionMaxOffset)
 
-		partitionConsumer, err := newConsumer.ConsumePartition(cfg.Kafka.Topic, i, sarama.OffsetOldest)
+		partitionConsumer, err := newConsumer.ConsumePartition(cfg.Kafka.TopicChat.Topic, i, sarama.OffsetOldest)
 		if err != nil {
 			return err
 		}
@@ -423,7 +532,7 @@ func Import(
 
 	var reader io.Reader
 	var f *os.File
-	if cfg.Cqrs.Import.File == "stdin" {
+	if cfg.Cqrs.Import.File == pseudoFileStdin {
 		reader = os.Stdin
 	} else {
 		f, err = os.Open(cfg.Cqrs.Import.File)
@@ -460,7 +569,7 @@ func Import(
 		}
 
 		msg := &sarama.ProducerMessage{
-			Topic:     cfg.Kafka.Topic,
+			Topic:     cfg.Kafka.TopicChat.Topic,
 			Key:       sarama.ByteEncoder(aKey),
 			Value:     sarama.ByteEncoder(aValue),
 			Partition: int32(partition),

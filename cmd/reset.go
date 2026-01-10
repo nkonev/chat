@@ -47,9 +47,11 @@ func RunReset(args []string) {
 		),
 		fx.Invoke(
 			db.RunResetDatabaseSoft,
-			kafka.RunResetPartitions,
+			kafka.RunResetPartitionsChat,
+			kafka.RunResetPartitionsUser,
 			db.RunMigrations,
-			kafka.RunCreateTopic,
+			kafka.RunCreateTopicChat,
+			kafka.RunCreateTopicUser,
 			cqrs.SetIsNeedToFastForwardSequences,
 			app.Shutdown,
 		),

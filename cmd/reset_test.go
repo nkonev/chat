@@ -72,12 +72,14 @@ func TestReset(t *testing.T) {
 		chat1Id, err = testRestClient.CreateChat(ctx, user1, chat1Name)
 		require.NoError(t, err, "error in creating chat")
 		assert.True(t, chat1Id > 0)
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		message1Id, err = testRestClient.CreateMessage(ctx, user1, chat1Id, message1Text)
 		require.NoError(t, err, "error in creating message")
 
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		user1Chats, _, err := testRestClient.GetChats(ctx, user1)
 		require.NoError(t, err, "error in getting chats")
@@ -120,9 +122,11 @@ func TestReset(t *testing.T) {
 		),
 		fx.Invoke(
 			db.RunResetDatabaseSoft,
-			kafka.RunResetPartitions,
+			kafka.RunResetPartitionsChat,
+			kafka.RunResetPartitionsUser,
 			db.RunMigrations,
-			kafka.RunCreateTopic,
+			kafka.RunCreateTopicChat,
+			kafka.RunCreateTopicUser,
 			cqrs.SetIsNeedToFastForwardSequences,
 			app.Shutdown,
 		),
@@ -145,7 +149,8 @@ func TestReset(t *testing.T) {
 
 		ctx := context.Background()
 
-		require.NoError(t, kafka.WaitForAllEventsProcessed(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		user1Chats, _, err := testRestClient.GetChats(ctx, user1)
 		require.NoError(t, err, "error in getting chats")

@@ -185,9 +185,9 @@ func ConfigureEventBus(
 
 			switch pm.GetEventKind() {
 			case EventKindChat:
-				return cfg.Kafka.Topic, nil
+				return cfg.Kafka.TopicChat.Topic, nil
 			case EventKindUser:
-				return cfg.Kafka.Topic2, nil
+				return cfg.Kafka.TopicUser.Topic, nil
 			}
 
 			return "", fmt.Errorf("Wrong kind %v of event", pm.GetEventKind())
@@ -238,11 +238,11 @@ func ConfigureEventProcessor(
 		cqrs.EventGroupProcessorConfig{
 			GenerateSubscribeTopic: func(params cqrs.EventGroupProcessorGenerateSubscribeTopicParams) (string, error) {
 				switch params.EventGroupName {
-				case cfg.Kafka.ConsumerGroup:
-					return cfg.Kafka.Topic, nil
+				case cfg.Kafka.ConsumerGroupChat:
+					return cfg.Kafka.TopicChat.Topic, nil
 
-				case cfg.Kafka.ConsumerGroup2:
-					return cfg.Kafka.Topic2, nil
+				case cfg.Kafka.ConsumerGroupUser:
+					return cfg.Kafka.TopicUser.Topic, nil
 				}
 				return "", fmt.Errorf("Unknown eventGroup: %v", params.EventGroupName)
 			},
@@ -270,7 +270,7 @@ func ConfigureEventProcessor(
 	// All messages from this group will have one subscription.
 	// When message arrives, Watermill will match it with the correct handler.
 	err = eventProcessor.AddHandlersGroup(
-		cfg.Kafka.ConsumerGroup,
+		cfg.Kafka.ConsumerGroupChat,
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatCreated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatEdited),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatRemoved),
@@ -296,7 +296,7 @@ func ConfigureEventProcessor(
 	}
 
 	err = eventProcessor.AddHandlersGroup(
-		cfg.Kafka.ConsumerGroup2,
+		cfg.Kafka.ConsumerGroupUser,
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserEvented),
 	)
 	if err != nil {

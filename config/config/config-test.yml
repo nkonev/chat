@@ -1,11 +1,18 @@
 kafka:
   bootstrapServers:
     - 127.0.0.1:9092
-  topic: event
-  numPartitions: 3
-  replicationFactor: 1
-  retention: "-1"
-  consumerGroup: CommonProjection
+  topicChat:
+    topic: event-chat
+    numPartitions: 3
+    replicationFactor: 1
+    retention: "-1" # infinity
+  topicUser:
+    topic: event-user
+    numPartitions: 3
+    replicationFactor: 1
+    retention: "86400000" # 1 day
+  consumerGroupChat: ChatProjection
+  consumerGroupUser: UserProjection
   producer:
     retryMax: 10
     returnSuccess: true
@@ -30,6 +37,9 @@ postgresql:
   migration:
     migrationTable: "go_migrate"
     statementDuration: 15m
+
+performMigration: false
+
 server:
   address: ":8080"
   readTimeout: "10s"
