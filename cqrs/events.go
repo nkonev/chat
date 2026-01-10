@@ -305,7 +305,14 @@ type TechnicalAbandonedChatRemoved struct {
 	ChatId int64 `json:"chatId"`
 }
 
-type UserEvented struct {
+type UserChatViewCreated struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ChatId         int64           `json:"chatId"`
+	UserId         int64           `json:"userId"`
+	TetATet        bool            `json:"tetATet"`
+}
+
+type UserChatViewUpdated struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`
 	UserId         int64           `json:"userId"`
@@ -415,7 +422,11 @@ func (s *TechnicalAbandonedChatRemoved) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
-func (s *UserEvented) GetPartitionKey() string {
+func (s *UserChatViewCreated) GetPartitionKey() string {
+	return utils.ToString(s.UserId)
+}
+
+func (s *UserChatViewUpdated) GetPartitionKey() string {
 	return utils.ToString(s.UserId)
 }
 
@@ -495,8 +506,12 @@ func (s *TechnicalAbandonedChatRemoved) Name() string {
 	return "technicalAbandonedChatRemoved"
 }
 
-func (s *UserEvented) Name() string {
-	return "userEvented"
+func (s *UserChatViewCreated) Name() string {
+	return "userChatViewCreated"
+}
+
+func (s *UserChatViewUpdated) Name() string {
+	return "userChatViewUpdated"
 }
 
 func (s *ChatCreated) GetEventKind() EventKind {
@@ -575,6 +590,10 @@ func (s *TechnicalAbandonedChatRemoved) GetEventKind() EventKind {
 	return EventKindChat
 }
 
-func (s *UserEvented) GetEventKind() EventKind {
+func (s *UserChatViewCreated) GetEventKind() EventKind {
+	return EventKindUser
+}
+
+func (s *UserChatViewUpdated) GetEventKind() EventKind {
 	return EventKindUser
 }

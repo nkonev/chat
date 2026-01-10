@@ -428,18 +428,6 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		return 0, err
 	}
 
-	for _, participantId := range copyCommand.ParticipantIds {
-		ue := &UserEvented{
-			AdditionalData: copyCommand.AdditionalData,
-			ChatId:         chatId,
-			UserId:         participantId,
-		}
-		err = eventBus.Publish(ctx, ue)
-		if err != nil {
-			return 0, err
-		}
-	}
-
 	return chatId, nil
 }
 

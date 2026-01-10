@@ -31,54 +31,18 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		}
 
 		_, err = tx.ExecContext(ctx, `
-		with input_data as (
-			select * from unnest(cast ($1 as bigint[]), cast ($2 as boolean[])) as t(user_id, chat_admin)
-		)
-		insert into chat_participant(user_id, chat_admin, chat_id, create_date_time)
-		select idt.user_id, idt.chat_admin, $3, $4 from input_data idt
-		on conflict(user_id, chat_id) do nothing
-	`, GetParticipantIds(event.Participants), getParticipantChatAdmins(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-
-		// no problems here because
-		// a) we've already added participants in the previous step
-		// b) there is no batching-with-pagination among addable participants
-		//      which would cause gaps in participants_count for the participants of current and previous iterations
-
-		// because we select chat_common, inserted from this consumer group in ChatCreated handler
-		_, err = tx.ExecContext(ctx, `
-		with 
-		user_input as (
-			select unnest(cast ($1 as bigint[])) as user_id
-		),
-		input_data as (
-			select 
-				c.id as chat_id, 
-				false as pinned, 
-				u.user_id as user_id, 
-				cast ($3 as timestamp) as update_date_time
-			from user_input u
-			cross join (select cc.id, cc.title from chat_common cc where cc.id = $2) c 
-		)
-		insert into chat_user_view(id, pinned, user_id, update_date_time) 
-			select chat_id, pinned, user_id, update_date_time from input_data
-		on conflict(user_id, id) do update set
-			pinned = excluded.pinned
-			, update_date_time = excluded.update_date_time 
-		`, GetParticipantIds(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
+			with input_data as (
+				select * from unnest(cast ($1 as bigint[]), cast ($2 as boolean[])) as t(user_id, chat_admin)
+			)
+			insert into chat_participant(user_id, chat_admin, chat_id, create_date_time)
+			select idt.user_id, idt.chat_admin, $3, $4 from input_data idt
+			on conflict(user_id, chat_id) do nothing
+		`, GetParticipantIds(event.Participants), getParticipantChatAdmins(event.Participants), event.ChatId, event.AdditionalData.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
 
 		err = m.updateViewableParticipants(ctx, tx, event.ChatId)
-		if err != nil {
-			return nil, err
-		}
-
-		// recalc in case an user was added after
-		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, GetParticipantIds(event.Participants), event.ChatId)
 		if err != nil {
 			return nil, err
 		}
@@ -98,6 +62,47 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	)
 
 	return res, nil
+}
+
+func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userIds []int64, chatId int64, additionalData *AdditionalData) error {
+	return db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		// no problems here because
+		// a) we've already added participants in the previous step
+		// b) there is no batching-with-pagination among addable participants
+		//      which would cause gaps in participants_count for the participants of current and previous iterations
+
+		// because we select chat_common, inserted from this consumer group in ChatCreated handler
+		_, err := tx.ExecContext(ctx, `
+		with 
+		user_input as (
+			select unnest(cast ($1 as bigint[])) as user_id
+		),
+		input_data as (
+			select 
+				c.id as chat_id, 
+				false as pinned, 
+				u.user_id as user_id, 
+				cast ($3 as timestamp) as update_date_time
+			from user_input u
+			cross join (select cc.id, cc.title from chat_common cc where cc.id = $2) c 
+		)
+		insert into chat_user_view(id, pinned, user_id, update_date_time) 
+			select chat_id, pinned, user_id, update_date_time from input_data
+		on conflict(user_id, id) do update set
+			pinned = excluded.pinned
+			, update_date_time = excluded.update_date_time 
+		`, userIds, chatId, additionalData.CreatedAt)
+		if err != nil {
+			return err
+		}
+
+		// recalc in case an user was added after
+		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, userIds, chatId)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participantIds []int64, chatId int64, isRemoveAllParticipantsFromChat, wereRemovedUsersFromAaa bool) error {

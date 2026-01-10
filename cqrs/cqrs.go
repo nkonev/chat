@@ -295,7 +295,7 @@ func ConfigureEventProcessor(
 
 	err = eventProcessor.AddHandlersGroup(
 		cfg.Kafka.ConsumerGroupUser,
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserEvented),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewCreated),
 	)
 	if err != nil {
 		return nil, err
