@@ -111,16 +111,16 @@ docker compose logs -f postgresql
 
 docker compose exec -it kafka bash
 docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --list
-docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --describe --group CommonProjection --offsets
+docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --describe --group ChatProjection --offsets
 
 # show kafka topic's messages
 docker compose exec -it kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:29092 --topic event-chat --from-beginning --property print.key=true --property print.headers=true
 
 # show offsets
-docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --group CommonProjection --describe
+docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --group ChatProjection --describe
 
 # non-actual resetting - missed fast-forwarding of sequences
-docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --group CommonProjection --reset-offsets --to-earliest --execute --topic event-chat
+docker compose exec -it kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:29092 --group ChatProjection --reset-offsets --to-earliest --execute --topic event-chat
 # reset db
 docker rm -f postgresql
 docker volume rm go-cqrs-example_postgres_data
