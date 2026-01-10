@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/components/cqrs"
-	wcqrs "github.com/ThreeDotsLabs/watermill/components/cqrs"
 	"github.com/ThreeDotsLabs/watermill/message"
 	wotel "github.com/nkonev/watermill-opentelemetry/pkg/opentelemetry"
 	"go.opentelemetry.io/otel/propagation"
@@ -151,7 +150,7 @@ func RunCqrsRouter(
 	return nil
 }
 
-func ConfigureCqrsMarshaller() *wcqrs.JSONMarshaler {
+func ConfigureCqrsMarshaller() *cqrs.JSONMarshaler {
 	return &cqrs.JSONMarshaler{
 		NewUUID: func() string {
 			uuidV7, err := uuid.NewV7()
@@ -172,7 +171,7 @@ func ConfigureEventBus(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
 	publisher message.Publisher,
-	cqrsMarshaler *wcqrs.JSONMarshaler,
+	cqrsMarshaler *cqrs.JSONMarshaler,
 	watermillLoggerAdapter watermill.LoggerAdapter,
 ) (*PartitionAwareEventBus, error) {
 	eventBusRoot, err := cqrs.NewEventBusWithConfig(publisher, cqrs.EventBusConfig{
@@ -221,7 +220,7 @@ func ConfigureEventProcessor(
 	cqrsRouter *message.Router,
 	watermillLoggerAdapter watermill.LoggerAdapter,
 	kafkaMarshaler kafka.MarshalerUnmarshaler,
-	cqrsMarshaler *wcqrs.JSONMarshaler,
+	cqrsMarshaler *cqrs.JSONMarshaler,
 	commonProjection *CommonProjection,
 	cqrsEventHandler *EventHandler,
 ) (*cqrs.EventGroupProcessor, error) {
