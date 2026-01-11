@@ -132,10 +132,10 @@ redis:
 
 schedulers:
   cleanAbandonedChatsTask:
-    enabled: false
+    enabled: true
     cron: "0 * * * * *"
     expiration: "30m"
   cleanDeletedUsersDataTask:
-    enabled: false
+    enabled: true
     cron: "30 * * * * *"
     expiration: "30m"
