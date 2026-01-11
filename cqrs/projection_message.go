@@ -1256,32 +1256,24 @@ func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, part
 // we avoid range updates for multiple participantIds, because it cause a distributed deadlock
 // stable ordering is necessary to avoid a distributed deadlock in user_id-partitioned tables and to have stable tests (3/3)
 func (m *CommonProjection) increaseUnreadsAndSetHasUnreads(ctx context.Context, co db.CommonOperations, participantId int64, chatId int64, increaseOn int) error {
-	_, err := co.ExecContext(ctx, `
+	var cmar bool
+	err := sqlscan.Get(ctx, co, &cmar, `
 		UPDATE chat_user_view 
 		SET unread_messages = unread_messages + $3
-		WHERE user_id = $1 and id = $2;
+		WHERE user_id = $1 and id = $2
+		returning consider_messages_as_unread
 	`, participantId, chatId, increaseOn)
 	if err != nil {
 		return err
 	}
 
-	// upsert only for sake using CTE
-	_, err = co.ExecContext(ctx, `
-		with input_data as (
-			SELECT
-				ch.user_id as user_id,
-				true as has
-			FROM chat_user_view ch
-			WHERE ch.id = $2 AND ch.user_id = $1 and ch.consider_messages_as_unread
-		)
-		insert into has_unread_messages(user_id, has)
-		select idt.user_id, idt.has
-		from input_data idt
-		on conflict (user_id) do update set
-		has = excluded.has
-	`, participantId, chatId)
-	if err != nil {
-		return err
+	if cmar {
+		_, err = co.ExecContext(ctx, `
+			update has_unread_messages set has = true where user_id = $1
+		`, participantId)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
