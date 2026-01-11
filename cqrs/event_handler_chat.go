@@ -462,58 +462,21 @@ func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, eve
 }
 
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
-	eventType := dto.EventTypeChatEdited
-	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
-
-	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
-	defer messageSpan.End()
 
 	processParticipantsBatch := func(participantIdsPortion []int64) error {
-		userIds := participantIdsPortion
+		for _, participantId := range participantIdsPortion {
 
-		m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
-
-		errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
-		if errp != nil {
-			return errp
-		}
-
-		chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId, false)
-		if err != nil {
-			return err
-		}
-
-		var hasUnreadMessages = map[int64]bool{}
-		if event.UnreadMessagesAction != UnreadMessagesActionUnspecified {
-			hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
+			ue := &UserChatViewUpdated{
+				AdditionalData: event.AdditionalData,
+				ChatId:         event.ChatId,
+				UserId:         participantId,
+			}
+			err := m.eventBus.Publish(ctx, ue)
 			if err != nil {
 				return err
 			}
 		}
 
-		for _, cv := range chatViews {
-			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-				UserId:           cv.BehalfUserId,
-				EventType:        eventType,
-				ChatNotification: &cv,
-			})
-			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
-			}
-
-			if event.UnreadMessagesAction != UnreadMessagesActionUnspecified {
-				err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
-					UserId:    cv.BehalfUserId,
-					EventType: eventTypeUnreadMessagesChanged,
-					HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
-						HasUnreadMessages: hasUnreadMessages[cv.BehalfUserId],
-					},
-				})
-				if err != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
-				}
-			}
-		}
 		return nil
 	}
 

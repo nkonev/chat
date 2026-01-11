@@ -313,9 +313,13 @@ type UserChatViewCreated struct {
 }
 
 type UserChatViewUpdated struct {
-	AdditionalData *AdditionalData `json:"additionalData"`
-	ChatId         int64           `json:"chatId"`
-	UserId         int64           `json:"userId"`
+	AdditionalData       *AdditionalData      `json:"additionalData"`
+	ChatId               int64                `json:"chatId"`
+	UserId               int64                `json:"userId"`
+	UnreadMessagesAction UnreadMessagesAction `json:"unreadMessagesAction"`
+	LastMessageAction    LastMessageAction    `json:"lastMessageAction"`
+	IncreaseOn           int                  `json:"increaseOn"`
+	ChatAction           ChatAction           `json:"chatAction"`
 }
 
 func GenerateMessageAdditionalData(correlationId *string, behalfUserId int64) *AdditionalData {

@@ -342,6 +342,8 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 		// we shouldn't upsert into chat_user_view
 		// we can only update it here
 
+		// TODO prepare unread counts here (from old code) and send them to chat-user topic
+
 		wasUpdated := false
 		if unreadMessagesAction == UnreadMessagesActionIncrease {
 			participantIdsWithoutMessageOwner := utils.GetSliceWithout(messageOwnerId, participantIds)
@@ -365,7 +367,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
 
-				err = m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, additionalData.CreatedAt)
+				err = m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, additionalData.CreatedAt) // TODO move to event_handler_chat
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
@@ -388,7 +390,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 		}
 
 		// it's not forgotten else, it's the different action
-		if lastMessageAction == LastMessageActionRefresh {
+		if lastMessageAction == LastMessageActionRefresh { // TODO move to event_handler_chat
 			err := m.setLastMessage(ctx, tx, chatId)
 			if err != nil {
 				return err

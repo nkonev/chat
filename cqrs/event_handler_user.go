@@ -2,6 +2,7 @@ package cqrs
 
 import (
 	"context"
+	"fmt"
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
 	"maps"
@@ -103,4 +104,60 @@ func (m *EventHandler) OnUserChatViewCreated(ctx context.Context, event *UserCha
 	}
 
 	return nil
+}
+
+func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserChatViewUpdated) error {
+	eventType := dto.EventTypeChatEdited
+	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
+	defer messageSpan.End()
+
+	userIds := []int64{event.UserId}
+
+	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
+
+	errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, userIds, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
+	if errp != nil {
+		return errp
+	}
+
+	chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId, false)
+	if err != nil {
+		return err
+	}
+
+	var hasUnreadMessages = map[int64]bool{}
+	if event.UnreadMessagesAction != UnreadMessagesActionUnspecified {
+		hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, cv := range chatViews {
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			UserId:           cv.BehalfUserId,
+			EventType:        eventType,
+			ChatNotification: &cv,
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+
+		if event.UnreadMessagesAction != UnreadMessagesActionUnspecified {
+			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+				UserId:    cv.BehalfUserId,
+				EventType: eventTypeUnreadMessagesChanged,
+				HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+					HasUnreadMessages: hasUnreadMessages[cv.BehalfUserId],
+				},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+	}
+	return nil
+
 }
