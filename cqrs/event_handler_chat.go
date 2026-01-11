@@ -464,8 +464,12 @@ func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, eve
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
 
 	processParticipantsBatch := func(participantIdsPortion []int64) error {
-		for _, participantId := range participantIdsPortion {
+		errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
+		if errp != nil {
+			return errp
+		}
 
+		for _, participantId := range participantIdsPortion {
 			ue := &UserChatViewUpdated{
 				AdditionalData: event.AdditionalData,
 				ChatId:         event.ChatId,

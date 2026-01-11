@@ -115,9 +115,9 @@ func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserCha
 
 	userIds := []int64{event.UserId}
 
-	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_ids", userIds)
+	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_id", event.UserId)
 
-	errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, userIds, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
+	errp := m.commonProjection.OnChatViewRefreshedSingle(ctx, event.AdditionalData, event.UserId, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
 	if errp != nil {
 		return errp
 	}

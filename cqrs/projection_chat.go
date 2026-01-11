@@ -342,19 +342,62 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 		// we shouldn't upsert into chat_user_view
 		// we can only update it here
 
-		// TODO prepare unread counts here (from old code) and send them to chat-user topic
-
-		wasUpdated := false
 		if unreadMessagesAction == UnreadMessagesActionIncrease {
-			participantIdsWithoutMessageOwner := utils.GetSliceWithout(messageOwnerId, participantIds)
 			var ownerIdP *int64
 			if slices.Contains(participantIds, messageOwnerId) { // for batches with[out] owner
 				ownerIdP = &messageOwnerId
 			}
 
+			// owner
+			if ownerIdP != nil {
+				err := m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, additionalData.CreatedAt)
+				if err != nil {
+					return fmt.Errorf("error during increasing unread messages: %w", err)
+				}
+			}
+		}
+
+		// it's not forgotten else, it's the different action
+		if lastMessageAction == LastMessageActionRefresh {
+			err := m.setLastMessage(ctx, tx, chatId)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if errOuter != nil {
+		return errOuter
+	}
+	return nil
+}
+
+// called in cases when chat should lift because of changing update_date_time
+// in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
+func (m *CommonProjection) OnChatViewRefreshedSingle(ctx context.Context, additionalData *AdditionalData, participantId int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, increaseOn int, messageOwnerId int64, chatAction ChatAction) error {
+	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		// in oder not to have a potential race condition
+		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
+		// we shouldn't upsert into chat_user_view
+		// we can only update it here
+
+		var participantIdWithoutMessageOwner *int64
+		var ownerIdP *int64
+
+		if participantId == messageOwnerId {
+			ownerIdP = &participantId
+		} else {
+			participantIdWithoutMessageOwner = &participantId
+		}
+
+		wasUpdated := false
+		if unreadMessagesAction == UnreadMessagesActionIncrease {
+
 			// not owners
-			if len(participantIdsWithoutMessageOwner) > 0 && increaseOn > 0 {
-				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, participantIdsWithoutMessageOwner, chatId, increaseOn)
+			if participantIdWithoutMessageOwner != nil && increaseOn > 0 {
+				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, *participantIdWithoutMessageOwner, chatId, increaseOn)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
@@ -367,13 +410,8 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
 
-				err = m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, additionalData.CreatedAt) // TODO move to event_handler_chat
-				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
-				}
-
 				// update red dot
-				err = m.updateHasUnreads(ctx, tx, []int64{*ownerIdP})
+				err = m.updateHasUnreads(ctx, tx, *ownerIdP)
 				if err != nil {
 					return err
 				}
@@ -381,17 +419,8 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 			wasUpdated = true
 		} else if unreadMessagesAction == UnreadMessagesActionRefresh {
-			err := m.setUnreadMessages(ctx, tx, participantIds, chatId, 0, true, true)
-			if err != nil {
-				return err
-			}
 
-			wasUpdated = true
-		}
-
-		// it's not forgotten else, it's the different action
-		if lastMessageAction == LastMessageActionRefresh { // TODO move to event_handler_chat
-			err := m.setLastMessage(ctx, tx, chatId)
+			err := m.setUnreadMessages(ctx, tx, participantId, chatId, 0, true, true)
 			if err != nil {
 				return err
 			}
