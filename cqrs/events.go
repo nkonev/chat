@@ -322,6 +322,13 @@ type UserChatViewUpdated struct {
 	ChatAction           ChatAction           `json:"chatAction"`
 }
 
+type UserChatViewRemoved struct {
+	AdditionalData          *AdditionalData `json:"additionalData"`
+	ChatId                  int64           `json:"chatId"`
+	UserId                  int64           `json:"userId"`
+	WereRemovedUsersFromAaa bool            `json:"wereRemovedUsersFromAaa"`
+}
+
 func GenerateMessageAdditionalData(correlationId *string, behalfUserId int64) *AdditionalData {
 	return &AdditionalData{
 		CreatedAt:     time.Now().UTC(),
@@ -383,7 +390,7 @@ func (s *ChatPinned) GetPartitionKey() string {
 }
 
 func (s *ChatNotificationSettingsSetted) GetPartitionKey() string {
-	return utils.ToString(s.ChatId)
+	return utils.ToString(s.AdditionalData.BehalfUserId)
 }
 
 func (s *MessageCreated) GetPartitionKey() string {
@@ -399,7 +406,7 @@ func (s *ChatViewRefreshed) GetPartitionKey() string {
 }
 
 func (s *MessageReaded) GetPartitionKey() string {
-	return utils.ToString(s.ChatId)
+	return utils.ToString(s.AdditionalData.BehalfUserId)
 }
 
 func (s *MessageBlogPostMade) GetPartitionKey() string {
@@ -431,6 +438,10 @@ func (s *UserChatViewCreated) GetPartitionKey() string {
 }
 
 func (s *UserChatViewUpdated) GetPartitionKey() string {
+	return utils.ToString(s.UserId)
+}
+
+func (s *UserChatViewRemoved) GetPartitionKey() string {
 	return utils.ToString(s.UserId)
 }
 
@@ -518,6 +529,10 @@ func (s *UserChatViewUpdated) Name() string {
 	return "userChatViewUpdated"
 }
 
+func (s *UserChatViewRemoved) Name() string {
+	return "userChatViewRemoved"
+}
+
 func (s *ChatCreated) GetEventKind() EventKind {
 	return EventKindChat
 }
@@ -551,7 +566,7 @@ func (s *ChatPinned) GetEventKind() EventKind {
 }
 
 func (s *ChatNotificationSettingsSetted) GetEventKind() EventKind {
-	return EventKindChat
+	return EventKindUser
 }
 
 func (s *MessageCreated) GetEventKind() EventKind {
@@ -567,7 +582,7 @@ func (s *ChatViewRefreshed) GetEventKind() EventKind {
 }
 
 func (s *MessageReaded) GetEventKind() EventKind {
-	return EventKindChat
+	return EventKindUser
 }
 
 func (s *MessageBlogPostMade) GetEventKind() EventKind {
@@ -599,5 +614,9 @@ func (s *UserChatViewCreated) GetEventKind() EventKind {
 }
 
 func (s *UserChatViewUpdated) GetEventKind() EventKind {
+	return EventKindUser
+}
+
+func (s *UserChatViewRemoved) GetEventKind() EventKind {
 	return EventKindUser
 }

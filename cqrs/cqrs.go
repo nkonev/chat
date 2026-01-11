@@ -276,11 +276,9 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantRemoved),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantChanged),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatPinned),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatNotificationSettingsSetted),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageCreated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageEdited),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatViewRefreshed),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUnreadMessageReaded),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageBlogPostMade),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageRemoved),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageReactionFlipped),
@@ -295,8 +293,11 @@ func ConfigureEventProcessor(
 
 	err = eventProcessor.AddHandlersGroup(
 		cfg.Kafka.ConsumerGroupUser,
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatNotificationSettingsSetted),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUnreadMessageReaded),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewCreated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewUpdated),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewRemoved),
 	)
 	if err != nil {
 		return nil, err

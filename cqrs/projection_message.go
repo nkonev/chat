@@ -1296,7 +1296,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 			if event.ReadMessagesAction == ReadMessagesActionOneMessage {
 
-				err := m.setUnreadMessages(ctx, tx, []int64{event.AdditionalData.BehalfUserId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
+				err := m.setUnreadMessages(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
 				if err != nil {
 					return err
 				}
@@ -1314,7 +1314,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 					return err
 				}
 
-				err = m.updateHasUnreads(ctx, tx, []int64{event.AdditionalData.BehalfUserId})
+				err = m.updateHasUnreads(ctx, tx, event.AdditionalData.BehalfUserId)
 				if err != nil {
 					return err
 				}

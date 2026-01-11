@@ -322,7 +322,7 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 			"setted", event.Setted,
 		)
 
-		err = m.updateHasUnreads(ctx, tx, []int64{event.AdditionalData.BehalfUserId})
+		err = m.updateHasUnreads(ctx, tx, event.AdditionalData.BehalfUserId)
 		if err != nil {
 			return err
 		}

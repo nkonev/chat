@@ -161,3 +161,144 @@ func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserCha
 	return nil
 
 }
+
+func (m *EventHandler) OnUserChatViewRemoved(ctx context.Context, event *UserChatViewRemoved) error {
+	// TODO move event sending from OnParticipantRemoved
+	err := m.commonProjection.OnParticipantRemovedSingle(ctx, event.UserId, event.ChatId, event.WereRemovedUsersFromAaa)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
+	userIds := []int64{event.AdditionalData.BehalfUserId}
+
+	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
+	eventTypeChatUnreadMessagesChanged := dto.EventTypeChatUnreadMessagesChanged
+
+	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventTypeChatUnreadMessagesChanged))
+	defer messageSpan.End()
+
+	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+		adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId)
+		if err != nil {
+			return err
+		}
+
+		if !CanReadMessage(adt.IsParticipant) {
+			m.lgr.InfoContext(ctx, "Skipping OnUnreadMessageReaded because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+			return nil
+		}
+	}
+
+	err := m.commonProjection.OnUnreadMessageReaded(ctx, event, func(updatedChatsPortion []dto.ChatUserViewBasic) {
+		if event.ReadMessagesAction != ReadMessagesActionAllChats {
+			m.lgr.ErrorContext(ctx, "wrong invariant: a logical error in commonProjection.OnUnreadMessageReaded")
+			return
+		}
+
+		for _, cvb := range updatedChatsPortion {
+			err := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+				UserId:    event.AdditionalData.BehalfUserId,
+				EventType: eventTypeChatUnreadMessagesChanged,
+				UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
+					ChatId:             cvb.ChatId,
+					UnreadMessages:     cvb.UnreadMessages,
+					LastUpdateDateTime: cvb.UpdateDateTime,
+				},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+	})
+	if err != nil {
+		return err
+	}
+
+	var hasUnreadMessages = map[int64]bool{}
+	hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
+	if err != nil {
+		return err
+	}
+
+	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+		// not.NotifyAboutUnreadMessage(ctx, chatId, participantId, unreadMessagesByUserId[participantId], lastUpdated)
+		cvb, err := m.commonProjection.GetChatUserViewBasic(ctx, m.db, event.ChatId, event.AdditionalData.BehalfUserId)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during getting chat UserViewBasic", "err", err)
+		} else {
+			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+				UserId:    event.AdditionalData.BehalfUserId,
+				EventType: eventTypeChatUnreadMessagesChanged,
+				UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
+					ChatId:             cvb.ChatId,
+					UnreadMessages:     cvb.UnreadMessages,
+					LastUpdateDateTime: cvb.UpdateDateTime,
+				},
+			})
+			if err != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			}
+		}
+	} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
+		// nothing, see the callback of commonProjection.OnUnreadMessageReaded()
+	} else {
+		return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
+	}
+
+	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		UserId:    event.AdditionalData.BehalfUserId,
+		EventType: eventTypeUnreadMessagesChanged,
+		HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+			HasUnreadMessages: hasUnreadMessages[event.AdditionalData.BehalfUserId],
+		},
+	})
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during IterateOverParticipantsChatIds", "err", err)
+	}
+
+	return nil
+}
+
+func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, event *ChatNotificationSettingsSetted) error {
+	// we don't check authorization here because all the participants can change their notification setting
+	err := m.commonProjection.OnChatNotificationSettingsSetted(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	d := dto.ChatNotificationSettingsChanged{
+		ChatId:                   event.ChatId,
+		ConsiderMessagesAsUnread: event.Setted,
+	}
+
+	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		UserId:                          event.AdditionalData.BehalfUserId,
+		EventType:                       dto.EventTypeChatNotificationSettingsChanged,
+		ChatNotificationSettingsChanged: &d,
+	})
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+	}
+
+	hasUnreadMessages, err := m.commonProjection.GetHasUnreadMessages(ctx, []int64{event.AdditionalData.BehalfUserId})
+	if err != nil {
+		return err
+	}
+
+	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		UserId:    event.AdditionalData.BehalfUserId,
+		EventType: dto.EventTypeHasUnreadMessagesChanged,
+		HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+			HasUnreadMessages: hasUnreadMessages[event.AdditionalData.BehalfUserId],
+		},
+	})
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+	}
+
+	return nil
+}
