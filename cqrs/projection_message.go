@@ -1301,6 +1301,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Use
 					return err
 				}
 
+				// TODO вынести на уровень event_handler_chat.go
 				err = m.updateParticipantMessageReadId(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt)
 				if err != nil {
 					return err
@@ -1319,6 +1320,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Use
 					return err
 				}
 
+				// TODO вынести на уровень event_handler_chat.go
 				err = m.fastForwardParticipantMessageReadId(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.AdditionalData.CreatedAt)
 				if err != nil {
 					return err
@@ -1342,6 +1344,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Use
 				return err
 			}
 
+			// TODO вынести на уровень event_handler_chat.go
 			err = m.fastForwardParticipantMessageReadIdInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId, utils.DefaultSize, offset, event.AdditionalData.CreatedAt)
 			if err != nil {
 				return err
