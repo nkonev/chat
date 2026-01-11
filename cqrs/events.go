@@ -327,6 +327,7 @@ type UserChatViewRemoved struct {
 	ChatId                  int64           `json:"chatId"`
 	UserId                  int64           `json:"userId"`
 	WereRemovedUsersFromAaa bool            `json:"wereRemovedUsersFromAaa"`
+	IsChatPubliclyAvailable bool            `json:"isChatPubliclyAvailable"`
 }
 
 func GenerateMessageAdditionalData(correlationId *string, behalfUserId int64) *AdditionalData {

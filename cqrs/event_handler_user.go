@@ -163,10 +163,40 @@ func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserCha
 }
 
 func (m *EventHandler) OnUserChatViewRemoved(ctx context.Context, event *UserChatViewRemoved) error {
-	// TODO move event sending from OnParticipantRemoved
+	eventType := dto.EventTypeChatDeleted
+	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
+
 	err := m.commonProjection.OnParticipantRemovedSingle(ctx, event.UserId, event.ChatId, event.WereRemovedUsersFromAaa)
 	if err != nil {
 		return err
+	}
+
+	var hasUnreadMessages = map[int64]bool{}
+	hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, []int64{event.UserId})
+	if err != nil {
+		return err
+	}
+
+	if !event.IsChatPubliclyAvailable {
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			UserId:         event.UserId,
+			EventType:      eventType,
+			ChatDeletedDto: &dto.ChatDeletedDto{Id: event.ChatId},
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		}
+	}
+
+	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		UserId:    event.UserId,
+		EventType: eventTypeUnreadMessagesChanged,
+		HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+			HasUnreadMessages: hasUnreadMessages[event.UserId],
+		},
+	})
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during IterateOverParticipantsChatIds", "err", err)
 	}
 
 	return nil

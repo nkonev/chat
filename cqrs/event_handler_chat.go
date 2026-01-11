@@ -92,8 +92,6 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 
 	eventTypeParticipantDeleted := dto.EventTypeParticipantDeleted
 
-	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
-
 	var pseudoUsers = []*dto.UserViewEnrichedDto{}
 	for _, participantIdToRemove := range userIds {
 		pseudoUsers = append(pseudoUsers, &dto.UserViewEnrichedDto{
@@ -149,6 +147,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 
 	if isPubliclyAvailable {
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsIncluding(ctx, m.db, chatId, userIds, func(participantIdsPortion []int64) error {
+			// here we invoke with "forceNonParticipant"
 			chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, participantIdsPortion, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &chatId, true)
 			if err != nil {
 				return err
@@ -178,35 +177,16 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 		return errp
 	}
 
-	var hasUnreadMessages = map[int64]bool{}
-	hasUnreadMessages, err := m.commonProjection.GetHasUnreadMessages(ctx, userIds)
-	if err != nil {
-		return err
-	}
-
-	for _, participantId := range userIds {
-		if !isPubliclyAvailable {
-			err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
-				UserId:         participantId,
-				EventType:      eventType,
-				ChatDeletedDto: &dto.ChatDeletedDto{Id: chatId},
-			})
-			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
-			}
-		}
-
-		err = m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.GlobalUserEvent{
-			UserId:    participantId,
-			EventType: eventTypeUnreadMessagesChanged,
-			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
-				HasUnreadMessages: hasUnreadMessages[participantId],
-			},
+	for _, userId := range userIds {
+		m.eventBus.Publish(ctx, &UserChatViewRemoved{
+			AdditionalData:          additionalData,
+			ChatId:                  chatId,
+			UserId:                  userId,
+			IsChatPubliclyAvailable: isPubliclyAvailable,
+			WereRemovedUsersFromAaa: wereRemovedUsersFromAaa,
 		})
-		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during IterateOverParticipantsChatIds", "err", err)
-		}
 	}
+
 	return nil
 }
 
