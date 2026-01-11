@@ -1610,6 +1610,10 @@ func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, eve
 }
 
 func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
+	err := m.commonProjection.OnChatUnreadMessageReaded(ctx, event)
+	if err != nil {
+		return err
+	}
 	return m.eventBus.Publish(ctx, &UserMessageReaded{
 		AdditionalData:     event.AdditionalData,
 		ChatId:             event.ChatId,
