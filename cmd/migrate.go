@@ -72,6 +72,7 @@ func RunMigrate(args []string) {
 		fx.Invoke(
 			db.RunMigrations,
 			kafka.RunCreateTopicChat,
+			kafka.RunCreateTopicUser,
 			cqrs.RunMigrateFromOldDb,
 			app.Shutdown,
 		),
