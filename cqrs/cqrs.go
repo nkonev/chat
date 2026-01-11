@@ -300,7 +300,7 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatNotificationSettingsSetted),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserUnreadMessageReaded),
 
-		// we introduced a dedicated event-user topic in order to eliminate the distributed deadlock,
+		// we introduced a dedicated event-user topic in order to eliminate the distributed deadlock in event_handler_chat.go::OnChatViewRefreshed(),
 		// which would be due to mutating userId-partitioned chat_user_view and has_unread_messages tables from the chatId-partitioned event-chat topic
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewCreated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewUpdated),
