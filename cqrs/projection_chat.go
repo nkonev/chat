@@ -352,10 +352,13 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 			// not owners
 			if len(participantIdsWithoutMessageOwner) > 0 && increaseOn > 0 {
-				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, participantIdsWithoutMessageOwner, chatId, increaseOn)
-				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
-				}
+				m.doOrdered(ctx, participantIdsWithoutMessageOwner, func(participantId int64) error {
+					errInn := m.increaseUnreadsAndSetHasUnreads(ctx, tx, participantId, chatId, increaseOn)
+					if errInn != nil {
+						return fmt.Errorf("error during increasing unread messages: %w", errInn)
+					}
+					return nil
+				})
 			}
 
 			// owner
@@ -405,9 +408,12 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 		// to eliminate unnecessary chat_user_view writes in participant changed
 		if wasUpdated {
-			_, err := tx.ExecContext(ctx, `
-				update chat_user_view set update_date_time = $3 where user_id = any($1) and id = $2
-			`, participantIds, chatId, additionalData.CreatedAt)
+			err := m.doOrdered(ctx, participantIds, func(participantId int64) error {
+				_, errInn := tx.ExecContext(ctx, `
+					update chat_user_view set update_date_time = $3 where user_id = $1 and id = $2
+				`, participantId, chatId, additionalData.CreatedAt)
+				return errInn
+			})
 			if err != nil {
 				return err
 			}
@@ -418,6 +424,17 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 	if errOuter != nil {
 		return errOuter
+	}
+	return nil
+}
+
+// use loop to preserve order to avoid distributed deadlock
+func (m *CommonProjection) doOrdered(ctx context.Context, participantIds []int64, f func(participantId int64) error) error {
+	for _, participantId := range participantIds {
+		err := f(participantId)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

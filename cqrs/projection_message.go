@@ -1224,71 +1224,72 @@ func (m *CommonProjection) fastForwardLastRead(ctx context.Context, co db.Common
 
 // should be called after upserting into unread_messages_user_view otherwise it's going to reset has to false
 func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, participantIds []int64) error {
-	_, err := tx.ExecContext(ctx, `
-	with
-	normalized_user as (
-		select unnest(cast ($1 as bigint[])) as user_id
-	),	
-	users_hases as (
-		select 
-			uv.user_id, 
-			(any_value(uv.unread_messages) filter (where uv.unread_messages > 0 and uv.consider_messages_as_unread)) != 0 as has 
-		from chat_user_view uv
-		where uv.user_id = any($1)
-		group by (uv.user_id)
-	),
-	input_data as (
-		select 
-			nu.user_id,
-			coalesce(uh.has, false) as has
-		from normalized_user nu
-		left join users_hases uh on nu.user_id = uh.user_id
-	)
-	insert into has_unread_messages(user_id, has)
-	select user_id, has from input_data
-	on conflict (user_id) do update
-	set has = excluded.has
-	`, participantIds)
-	return err
+	// _, err := tx.ExecContext(ctx, `
+	// with
+	// normalized_user as (
+	// 	select unnest(cast ($1 as bigint[])) as user_id
+	// ),
+	// users_hases as (
+	// 	select
+	// 		uv.user_id,
+	// 		(any_value(uv.unread_messages) filter (where uv.unread_messages > 0 and uv.consider_messages_as_unread)) != 0 as has
+	// 	from chat_user_view uv
+	// 	where uv.user_id = any($1)
+	// 	group by (uv.user_id)
+	// ),
+	// input_data as (
+	// 	select
+	// 		nu.user_id,
+	// 		coalesce(uh.has, false) as has
+	// 	from normalized_user nu
+	// 	left join users_hases uh on nu.user_id = uh.user_id
+	// )
+	// insert into has_unread_messages(user_id, has)
+	// select user_id, has from input_data
+	// on conflict (user_id) do update
+	// set has = excluded.has
+	// `, participantIds)
+	// return err
+	return nil
 }
 
-func (m *CommonProjection) increaseUnreadsAndSetHasUnreads(ctx context.Context, co db.CommonOperations, participantIds []int64, chatId int64, increaseOn int) error {
+func (m *CommonProjection) increaseUnreadsAndSetHasUnreads(ctx context.Context, co db.CommonOperations, participantId int64, chatId int64, increaseOn int) error {
 	_, err := co.ExecContext(ctx, `
 		UPDATE chat_user_view 
 		SET unread_messages = unread_messages + $3
-		WHERE user_id = any($1) and id = $2;
-	`, participantIds, chatId, increaseOn)
+		WHERE user_id = $1 and id = $2;
+	`, participantId, chatId, increaseOn)
 	if err != nil {
 		return err
 	}
 
 	// upsert only for sake using CTE
-	_, err = co.ExecContext(ctx, `
-		with input_data as (
-			SELECT 
-				ch.user_id as user_id, 
-				true as has
-			FROM chat_user_view ch 
-			WHERE ch.id = $2 AND ch.user_id = any($1) and ch.consider_messages_as_unread
-		)	
-		insert into has_unread_messages(user_id, has)
-		select idt.user_id, idt.has
-		from input_data idt
-		on conflict (user_id) do update set
-		has = excluded.has
-	`, participantIds, chatId)
-	if err != nil {
-		return err
-	}
+	// _, err = co.ExecContext(ctx, `
+	// 	with input_data as (
+	// 		SELECT
+	// 			ch.user_id as user_id,
+	// 			true as has
+	// 		FROM chat_user_view ch
+	// 		WHERE ch.id = $2 AND ch.user_id = any($1) and ch.consider_messages_as_unread
+	// 	)
+	// 	insert into has_unread_messages(user_id, has)
+	// 	select idt.user_id, idt.has
+	// 	from input_data idt
+	// 	on conflict (user_id) do update set
+	// 	has = excluded.has
+	// `, participantIds, chatId)
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
 
 func (m *CommonProjection) setHasNoUnreadsInAllChats(ctx context.Context, co db.CommonOperations, userId int64) error {
-	_, err := co.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", userId)
-	if err != nil {
-		return err
-	}
+	// _, err := co.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", userId)
+	// if err != nil {
+	// 	return err
+	// }
 	return nil
 }
 
