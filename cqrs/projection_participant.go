@@ -952,6 +952,7 @@ func getParticipantsCount(ctx context.Context, co db.CommonOperations, chatId in
 	return res, nil
 }
 
+// stable ordering is necessary to avoid deadlock in user_id-partitioned tables and to have stable tests (1/2)
 func getParticipantsCommonExcepting(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]*ParticipantWithAdmin, error) {
 	list := make([]*ParticipantWithAdmin, 0)
 

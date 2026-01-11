@@ -429,6 +429,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 }
 
 // use loop to preserve order to avoid distributed deadlock
+// stable ordering is necessary to avoid deadlock in user_id-partitioned tables and to have stable tests (2/2)
 func (m *CommonProjection) doOrdered(ctx context.Context, participantIds []int64, f func(participantId int64) error) error {
 	for _, participantId := range participantIds {
 		err := f(participantId)
