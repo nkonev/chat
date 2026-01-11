@@ -92,8 +92,6 @@ func RunServe(args []string) {
 		),
 		fx.Invoke(
 			db.RunMigrations,
-			listener.CreateAndListenInternalEventsChannel,
-			listener.CreateAndListenAaaChannel,
 			kafka.RunCreateTopicChat,
 			kafka.RunCreateTopicUser,
 			cqrs.RunMigrateFromOldDb,
@@ -102,6 +100,8 @@ func RunServe(args []string) {
 			kafka.WaitForAllEventsProcessedUser,
 			cqrs.RunSequenceFastforwarder,
 			producer.EnableOutputEvents,
+			listener.CreateAndListenInternalEventsChannel,
+			listener.CreateAndListenAaaChannel,
 			tasks.RunScheduler,
 			handlers.RunHttpServer,
 		),
