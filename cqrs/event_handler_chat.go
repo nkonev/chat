@@ -411,9 +411,13 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 
 		for _, participantId := range participantIdsPortion {
 			ue := &UserChatViewUpdated{
-				AdditionalData: event.AdditionalData,
-				ChatId:         event.ChatId,
-				UserId:         participantId,
+				AdditionalData:       event.AdditionalData,
+				ChatId:               event.ChatId,
+				UserId:               participantId,
+				UnreadMessagesAction: event.UnreadMessagesAction,
+				LastMessageAction:    event.LastMessageAction,
+				IncreaseOn:           event.IncreaseOn,
+				ChatAction:           event.ChatAction,
 			}
 			err := m.eventBus.Publish(ctx, ue)
 			if err != nil {

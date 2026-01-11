@@ -130,7 +130,6 @@ redis:
   db: 5
   maxRetries: 10000
 
-# TODO restore
 schedulers:
   cleanAbandonedChatsTask:
     enabled: false

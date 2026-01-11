@@ -136,11 +136,6 @@ func TestUnreads(t *testing.T) {
 		// 2 separate calls to guarantee order
 		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user2})
 		require.NoError(t, err, "error in adding participants")
-		// by not adding kafka.WaitForAllEventsProcessed() we test a potential race condition effect due to still not applied chat participant_added event
-		// in short - we shouldn't iterate over chat participants on the command handler side
-		// we can iterate only on the kafka output - e. g. in event handler
-		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user3})
-		require.NoError(t, err, "error in adding participants")
 		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
@@ -166,6 +161,11 @@ func TestUnreads(t *testing.T) {
 					e.HasUnreadMessagesChanged.HasUnreadMessages == true
 			},
 		}))
+
+		err = testRestClient.AddChatParticipants(ctx, user1, chat1Id, []int64{user3})
+		require.NoError(t, err, "error in adding participants")
+		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
 		chat1Participants, _, err := testRestClient.GetChatParticipants(ctx, user1, chat1Id)
 		require.NoError(t, err, "error in chat participants")
