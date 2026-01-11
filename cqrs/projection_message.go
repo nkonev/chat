@@ -1110,7 +1110,7 @@ func (m *CommonProjection) getCommonInputDataForAllChats() string {
 			select
 				uv.id as chat_id
 				,uv.user_id
-				,cc.last_message_id
+				,coalesce(cc.last_message_id, 0) as last_message_id
 			from chat_user_view uv
 			join chat_common cc on uv.id = cc.id
 			where uv.user_id = $1 
