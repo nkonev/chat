@@ -14,7 +14,7 @@ func (m *EventHandler) OnUserChatViewCreated(ctx context.Context, event *UserCha
 
 	userIds := []int64{event.UserId}
 
-	err := m.commonProjection.OnUserChatViewCreated(ctx, userIds, event.ChatId, event.AdditionalData)
+	err := m.commonProjection.OnUserChatViewCreated(ctx, event.UserId, event.ChatId, event.AdditionalData)
 	if err != nil {
 		return err
 	}

@@ -408,8 +408,8 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 		// to eliminate unnecessary chat_user_view writes in participant changed
 		if wasUpdated {
 			_, err := tx.ExecContext(ctx, `
-				update chat_user_view set update_date_time = $3 where user_id = any($1) and id = $2
-			`, participantIds, chatId, additionalData.CreatedAt)
+				update chat_user_view set update_date_time = $3 where user_id = $1 and id = $2
+			`, participantId, chatId, additionalData.CreatedAt)
 			if err != nil {
 				return err
 			}

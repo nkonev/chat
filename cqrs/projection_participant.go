@@ -64,7 +64,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	return res, nil
 }
 
-func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userIds []int64, chatId int64, additionalData *AdditionalData) error {
+func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userId int64, chatId int64, additionalData *AdditionalData) error {
 	return db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// no problems here because
 		// a) we've already added participants in the previous step
@@ -74,30 +74,26 @@ func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userIds []
 		// because we select chat_common, inserted from this consumer group in ChatCreated handler
 		_, err := tx.ExecContext(ctx, `
 		with 
-		user_input as (
-			select unnest(cast ($1 as bigint[])) as user_id
-		),
 		input_data as (
 			select 
 				c.id as chat_id, 
 				false as pinned, 
-				u.user_id as user_id, 
+				cast ($1 as bigint) as user_id, 
 				cast ($3 as timestamp) as update_date_time
-			from user_input u
-			cross join (select cc.id, cc.title from chat_common cc where cc.id = $2) c 
+			from (select cc.id from chat_common cc where cc.id = $2) c 
 		)
 		insert into chat_user_view(id, pinned, user_id, update_date_time) 
 			select chat_id, pinned, user_id, update_date_time from input_data
 		on conflict(user_id, id) do update set
 			pinned = excluded.pinned
 			, update_date_time = excluded.update_date_time 
-		`, userIds, chatId, additionalData.CreatedAt)
+		`, userId, chatId, additionalData.CreatedAt)
 		if err != nil {
 			return err
 		}
 
 		// recalc in case an user was added after
-		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, userIds, chatId)
+		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, userId, chatId)
 		if err != nil {
 			return err
 		}
