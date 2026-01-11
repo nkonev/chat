@@ -117,7 +117,7 @@ func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserCha
 
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, "user_id", event.UserId)
 
-	errp := m.commonProjection.OnChatViewRefreshedSingle(ctx, event.AdditionalData, event.UserId, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
+	errp := m.commonProjection.OnChatViewRefreshedForPartitionUser(ctx, event.AdditionalData, event.UserId, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
 	if errp != nil {
 		return errp
 	}
@@ -288,6 +288,16 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 	})
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error during IterateOverParticipantsChatIds", "err", err)
+	}
+
+	return nil
+}
+
+func (m *EventHandler) OnChatPinned(ctx context.Context, event *ChatPinned) error {
+	// we don't check authorization here because all the participants can pin chat (their chat_user_view)
+	err := m.commonProjection.OnChatPinned(ctx, event)
+	if err != nil {
+		return err
 	}
 
 	return nil

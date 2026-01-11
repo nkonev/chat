@@ -391,20 +391,10 @@ func (m *EventHandler) notifyParticipantsReloadCommand(ctx context.Context, chat
 	}
 }
 
-func (m *EventHandler) OnChatPinned(ctx context.Context, event *ChatPinned) error {
-	// we don't check authorization here because all the participants can pin chat (their chat_user_view)
-	err := m.commonProjection.OnChatPinned(ctx, event)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
 
 	processParticipantsBatch := func(participantIdsPortion []int64) error {
-		errp := m.commonProjection.OnChatViewRefreshed(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
+		errp := m.commonProjection.OnChatViewRefreshedForPartitionChat(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
 		if errp != nil {
 			return errp
 		}

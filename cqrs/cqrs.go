@@ -275,7 +275,6 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantAdded),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantRemoved),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantChanged),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatPinned),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageCreated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageEdited),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatViewRefreshed),
@@ -293,6 +292,7 @@ func ConfigureEventProcessor(
 
 	err = eventProcessor.AddHandlersGroup(
 		cfg.Kafka.ConsumerGroupUser,
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatPinned), // TODO pass OnChatPinned, OnChatNotificationSettingsSetted thru persistent topic in order to be able to restore them from backup
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatNotificationSettingsSetted),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUnreadMessageReaded),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewCreated),

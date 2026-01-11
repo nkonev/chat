@@ -387,7 +387,7 @@ func (s *ProjectionsTruncated) GetPartitionKey() string {
 }
 
 func (s *ChatPinned) GetPartitionKey() string {
-	return utils.ToString(s.ChatId)
+	return utils.ToString(s.AdditionalData.BehalfUserId)
 }
 
 func (s *ChatNotificationSettingsSetted) GetPartitionKey() string {
@@ -563,7 +563,7 @@ func (s *ProjectionsTruncated) GetEventKind() EventKind {
 }
 
 func (s *ChatPinned) GetEventKind() EventKind {
-	return EventKindChat
+	return EventKindUser
 }
 
 func (s *ChatNotificationSettingsSetted) GetEventKind() EventKind {
