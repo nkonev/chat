@@ -734,7 +734,7 @@ func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterfa
 }
 
 func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error {
-	cp := &UserChatPinned{
+	cp := &ChatPinned{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
 		Pinned:         s.Pin,
@@ -761,7 +761,7 @@ func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error 
 }
 
 func (s *ChatNotificationSettingsSet) Handle(ctx context.Context, eventBus EventBusInterface) error {
-	cp := &UserChatNotificationSettingsSetted{
+	cp := &ChatNotificationSettingsSetted{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
 		Setted:         s.Set,
@@ -901,7 +901,7 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 			return NewUnauthorizedError(fmt.Sprintf("user %v is not a participant of chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
 		}
 
-		cp := &UserMessageReaded{
+		cp := &MessageReaded{
 			AdditionalData:     s.AdditionalData,
 			ReadMessagesAction: ReadMessagesActionAllMessagesInOneChat,
 			ChatId:             s.ChatId,
@@ -931,7 +931,7 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 		}
 		// Optimizations in order to not send useless messages in Kafka
 		if (lastMessgeReadedExists && messageIdToMark > lastMessageReadedId) || (!lastMessgeReadedExists && lastMessageReadedId == 0) {
-			cp := &UserMessageReaded{
+			cp := &MessageReaded{
 				AdditionalData:     s.AdditionalData,
 				ChatId:             s.ChatId,
 				MessageId:          messageIdToMark,
@@ -1017,7 +1017,7 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 
 		return nil
 	} else if s.ReadMessagesAction == ReadMessagesActionAllChats {
-		cp := &UserMessageReaded{
+		cp := &MessageReaded{
 			AdditionalData:     s.AdditionalData,
 			ReadMessagesAction: ReadMessagesActionAllChats,
 		}
