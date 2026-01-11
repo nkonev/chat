@@ -302,6 +302,8 @@ func ConfigureEventProcessor(
 
 		// we introduced a dedicated event-user topic in order to eliminate the distributed deadlock in event_handler_chat.go::OnChatViewRefreshed(),
 		// which would be due to mutating userId-partitioned chat_user_view and has_unread_messages tables from the chatId-partitioned event-chat topic
+		// see also https://docs.citusdata.com/en/v13.0/reference/common_errors.html#canceling-the-transaction-since-it-was-involved-in-a-distributed-deadlock
+		// https://www.cybertec-postgresql.com/en/postgresql-understanding-deadlocks/
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewCreated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewUpdated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewRemoved),
