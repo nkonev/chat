@@ -227,8 +227,8 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 	}
 }
 
-func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx context.Context, tx *db.Tx, participantIds []int64, chatId int64) error {
-	err := m.setUnreadMessages(ctx, tx, participantIds, chatId, 0, true, false)
+func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx context.Context, tx *db.Tx, participantId int64, chatId int64) error {
+	err := m.setUnreadMessages(ctx, tx, participantId, chatId, 0, true, false)
 	if err != nil {
 		return err
 	}
@@ -1027,7 +1027,7 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId
 	return nil
 }
 
-func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, participantIds []int64, chatId, messageId int64, needSet, needRefresh bool) error {
+func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, participantId int64, chatId, messageId int64, needSet, needRefresh bool) error {
 	_, err := tx.ExecContext(ctx, `
 		with 
 		chat_messages as (
@@ -1037,7 +1037,7 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 			select max(m.id) as max from chat_messages m
 		),
 		normalized_user as (
-			select unnest(cast ($1 as bigint[])) as user_id
+			select cast ($1 as bigint) as user_id
 		),
 		last_message as (
 			select 
@@ -1054,7 +1054,7 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 					end) as last_message_id,
 					w.user_id
 				from chat_user_view w 
-				where w.id = $2 and w.user_id = any($1)
+				where w.id = $2 and w.user_id = $1
 			) ww
 			right join normalized_user nu on ww.user_id = nu.user_id
 		),
@@ -1091,12 +1091,12 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 		when matched then update set 
 		   unread_messages = idt.unread_messages
 		  ,cuv_last_read_message_id = idt.last_read_message_id
-	`, participantIds, chatId, messageId, needSet, needRefresh)
+	`, participantId, chatId, messageId, needSet, needRefresh)
 	if err != nil {
 		return err
 	}
 
-	err = m.updateHasUnreads(ctx, tx, participantIds)
+	err = m.updateHasUnreads(ctx, tx, participantId)
 	if err != nil {
 		return err
 	}
@@ -1222,37 +1222,39 @@ func (m *CommonProjection) fastForwardLastRead(ctx context.Context, co db.Common
 	return err
 }
 
+// we avoid range updates for multiple participantIds, because it cause a distributed deadlock
 // should be called after upserting into unread_messages_user_view otherwise it's going to reset has to false
-func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, participantIds []int64) error {
-	// _, err := tx.ExecContext(ctx, `
-	// with
-	// normalized_user as (
-	// 	select unnest(cast ($1 as bigint[])) as user_id
-	// ),
-	// users_hases as (
-	// 	select
-	// 		uv.user_id,
-	// 		(any_value(uv.unread_messages) filter (where uv.unread_messages > 0 and uv.consider_messages_as_unread)) != 0 as has
-	// 	from chat_user_view uv
-	// 	where uv.user_id = any($1)
-	// 	group by (uv.user_id)
-	// ),
-	// input_data as (
-	// 	select
-	// 		nu.user_id,
-	// 		coalesce(uh.has, false) as has
-	// 	from normalized_user nu
-	// 	left join users_hases uh on nu.user_id = uh.user_id
-	// )
-	// insert into has_unread_messages(user_id, has)
-	// select user_id, has from input_data
-	// on conflict (user_id) do update
-	// set has = excluded.has
-	// `, participantIds)
-	// return err
-	return nil
+func (m *CommonProjection) updateHasUnreads(ctx context.Context, tx *db.Tx, participantId int64) error {
+	_, err := tx.ExecContext(ctx, `
+	with
+	normalized_user as (
+		select cast ($1 as bigint) as user_id
+	),
+	users_hases as (
+		select
+			uv.user_id,
+			(any_value(uv.unread_messages) filter (where uv.unread_messages > 0 and uv.consider_messages_as_unread)) != 0 as has
+		from chat_user_view uv
+		where uv.user_id = $1
+		group by (uv.user_id)
+	),
+	input_data as (
+		select
+			nu.user_id,
+			coalesce(uh.has, false) as has
+		from normalized_user nu
+		left join users_hases uh on nu.user_id = uh.user_id
+	)
+	insert into has_unread_messages(user_id, has)
+	select user_id, has from input_data
+	on conflict (user_id) do update
+	set has = excluded.has
+	`, participantId)
+	return err
 }
 
+// we avoid range updates for multiple participantIds, because it cause a distributed deadlock
+// stable ordering is necessary to avoid a distributed deadlock in user_id-partitioned tables and to have stable tests (3/3)
 func (m *CommonProjection) increaseUnreadsAndSetHasUnreads(ctx context.Context, co db.CommonOperations, participantId int64, chatId int64, increaseOn int) error {
 	_, err := co.ExecContext(ctx, `
 		UPDATE chat_user_view 
@@ -1264,32 +1266,32 @@ func (m *CommonProjection) increaseUnreadsAndSetHasUnreads(ctx context.Context, 
 	}
 
 	// upsert only for sake using CTE
-	// _, err = co.ExecContext(ctx, `
-	// 	with input_data as (
-	// 		SELECT
-	// 			ch.user_id as user_id,
-	// 			true as has
-	// 		FROM chat_user_view ch
-	// 		WHERE ch.id = $2 AND ch.user_id = any($1) and ch.consider_messages_as_unread
-	// 	)
-	// 	insert into has_unread_messages(user_id, has)
-	// 	select idt.user_id, idt.has
-	// 	from input_data idt
-	// 	on conflict (user_id) do update set
-	// 	has = excluded.has
-	// `, participantIds, chatId)
-	// if err != nil {
-	// 	return err
-	// }
+	_, err = co.ExecContext(ctx, `
+		with input_data as (
+			SELECT
+				ch.user_id as user_id,
+				true as has
+			FROM chat_user_view ch
+			WHERE ch.id = $2 AND ch.user_id = $1 and ch.consider_messages_as_unread
+		)
+		insert into has_unread_messages(user_id, has)
+		select idt.user_id, idt.has
+		from input_data idt
+		on conflict (user_id) do update set
+		has = excluded.has
+	`, participantId, chatId)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 func (m *CommonProjection) setHasNoUnreadsInAllChats(ctx context.Context, co db.CommonOperations, userId int64) error {
-	// _, err := co.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", userId)
-	// if err != nil {
-	// 	return err
-	// }
+	_, err := co.ExecContext(ctx, "update has_unread_messages set has = false where user_id = $1", userId)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1302,7 +1304,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 			if event.ReadMessagesAction == ReadMessagesActionOneMessage {
 
-				err := m.setUnreadMessages(ctx, tx, []int64{event.AdditionalData.BehalfUserId}, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
+				err := m.setUnreadMessages(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
 				if err != nil {
 					return err
 				}
@@ -1320,7 +1322,7 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Mes
 					return err
 				}
 
-				err = m.updateHasUnreads(ctx, tx, []int64{event.AdditionalData.BehalfUserId})
+				err = m.updateHasUnreads(ctx, tx, event.AdditionalData.BehalfUserId)
 				if err != nil {
 					return err
 				}

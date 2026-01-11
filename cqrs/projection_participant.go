@@ -78,7 +78,9 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 		}
 
 		// recalc in case an user was added after
-		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, GetParticipantIds(event.Participants), event.ChatId)
+		err = m.doOrderedByUserIdToPreventDeadlock(ctx, GetParticipantIds(event.Participants), func(participantId int64) error {
+			return m.initializeMessageUnreadMultipleParticipants(ctx, tx, participantId, event.ChatId)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -133,7 +135,9 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participant
 		}
 
 		if !wereRemovedUsersFromAaa {
-			err = m.updateHasUnreads(ctx, tx, participantIds)
+			m.doOrderedByUserIdToPreventDeadlock(ctx, participantIds, func(participantId int64) error {
+				return m.updateHasUnreads(ctx, tx, participantId)
+			})
 			if err != nil {
 				return err
 			}
@@ -952,7 +956,7 @@ func getParticipantsCount(ctx context.Context, co db.CommonOperations, chatId in
 	return res, nil
 }
 
-// stable ordering is necessary to avoid deadlock in user_id-partitioned tables and to have stable tests (1/2)
+// stable ordering is necessary to avoid a distributed deadlock in user_id-partitioned tables and to have stable tests (1/3)
 func getParticipantsCommonExcepting(ctx context.Context, co db.CommonOperations, chatId int64, excluding []int64, participantsSize int32, participantsOffset int64, reverseOrder bool) ([]*ParticipantWithAdmin, error) {
 	list := make([]*ParticipantWithAdmin, 0)
 

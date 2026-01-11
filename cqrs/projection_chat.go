@@ -322,7 +322,7 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 			"setted", event.Setted,
 		)
 
-		err = m.updateHasUnreads(ctx, tx, []int64{event.AdditionalData.BehalfUserId})
+		err = m.updateHasUnreads(ctx, tx, event.AdditionalData.BehalfUserId)
 		if err != nil {
 			return err
 		}
@@ -352,7 +352,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 			// not owners
 			if len(participantIdsWithoutMessageOwner) > 0 && increaseOn > 0 {
-				m.doOrdered(ctx, participantIdsWithoutMessageOwner, func(participantId int64) error {
+				m.doOrderedByUserIdToPreventDeadlock(ctx, participantIdsWithoutMessageOwner, func(participantId int64) error {
 					errInn := m.increaseUnreadsAndSetHasUnreads(ctx, tx, participantId, chatId, increaseOn)
 					if errInn != nil {
 						return fmt.Errorf("error during increasing unread messages: %w", errInn)
@@ -374,7 +374,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 				}
 
 				// update red dot
-				err = m.updateHasUnreads(ctx, tx, []int64{*ownerIdP})
+				err = m.updateHasUnreads(ctx, tx, *ownerIdP)
 				if err != nil {
 					return err
 				}
@@ -382,7 +382,9 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 			wasUpdated = true
 		} else if unreadMessagesAction == UnreadMessagesActionRefresh {
-			err := m.setUnreadMessages(ctx, tx, participantIds, chatId, 0, true, true)
+			err := m.doOrderedByUserIdToPreventDeadlock(ctx, participantIds, func(participantId int64) error {
+				return m.setUnreadMessages(ctx, tx, participantId, chatId, 0, true, true)
+			})
 			if err != nil {
 				return err
 			}
@@ -408,7 +410,7 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 
 		// to eliminate unnecessary chat_user_view writes in participant changed
 		if wasUpdated {
-			err := m.doOrdered(ctx, participantIds, func(participantId int64) error {
+			err := m.doOrderedByUserIdToPreventDeadlock(ctx, participantIds, func(participantId int64) error {
 				_, errInn := tx.ExecContext(ctx, `
 					update chat_user_view set update_date_time = $3 where user_id = $1 and id = $2
 				`, participantId, chatId, additionalData.CreatedAt)
@@ -429,8 +431,8 @@ func (m *CommonProjection) OnChatViewRefreshed(ctx context.Context, additionalDa
 }
 
 // use loop to preserve order to avoid distributed deadlock
-// stable ordering is necessary to avoid deadlock in user_id-partitioned tables and to have stable tests (2/2)
-func (m *CommonProjection) doOrdered(ctx context.Context, participantIds []int64, f func(participantId int64) error) error {
+// stable ordering is necessary to avoid a distributed deadlock in user_id-partitioned tables and to have stable tests (2/3)
+func (m *CommonProjection) doOrderedByUserIdToPreventDeadlock(ctx context.Context, participantIds []int64, f func(participantId int64) error) error {
 	for _, participantId := range participantIds {
 		err := f(participantId)
 		if err != nil {
