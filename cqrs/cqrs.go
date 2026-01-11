@@ -285,6 +285,10 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessagePublished),
 		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalProjectionsTruncated),
 		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalAbandonedChatRemoved),
+		// event need to be in event-chat topic, because only this topic is backupable
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatPinned),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatNotificationSettingsSetted),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUnreadMessageReaded),
 	)
 	if err != nil {
 		return nil, err
@@ -292,9 +296,11 @@ func ConfigureEventProcessor(
 
 	err = eventProcessor.AddHandlersGroup(
 		cfg.Kafka.ConsumerGroupUser,
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatPinned), // TODO pass OnChatPinned, OnChatNotificationSettingsSetted thru persistent topic in order to be able to restore them from backup
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatNotificationSettingsSetted),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUnreadMessageReaded),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatPinned),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatNotificationSettingsSetted),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserUnreadMessageReaded),
+
+		// we introduced a dedicated topic in order to eliminate the distributed deadlock
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewCreated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewUpdated),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewRemoved),

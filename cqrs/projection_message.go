@@ -1291,7 +1291,7 @@ func CanReadMessage(isParticipant bool) bool {
 	return isParticipant
 }
 
-func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded, allChatsReadedConsumer func([]dto.ChatUserViewBasic)) error {
+func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *UserMessageReaded, allChatsReadedConsumer func([]dto.ChatUserViewBasic)) error {
 	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
 		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 			if event.ReadMessagesAction == ReadMessagesActionOneMessage {

@@ -259,7 +259,7 @@ func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted
 	return nil
 }
 
-func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) error {
+func (m *CommonProjection) OnChatPinned(ctx context.Context, event *UserChatPinned) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
@@ -294,7 +294,7 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *ChatPinned) 
 	return nil
 }
 
-func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context, event *ChatNotificationSettingsSetted) error {
+func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context, event *UserChatNotificationSettingsSetted) error {
 
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)

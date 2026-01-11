@@ -113,6 +113,18 @@ type ParticipantChanged struct {
 type ProjectionsTruncated struct {
 }
 
+type UserChatPinned struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ChatId         int64           `json:"chatId"`
+	Pinned         bool            `json:"pinned"`
+}
+
+type UserChatNotificationSettingsSetted struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ChatId         int64           `json:"chatId"`
+	Setted         bool            `json:"setted"`
+}
+
 type ChatPinned struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`
@@ -260,6 +272,13 @@ type ChatViewRefreshed struct {
 	ChatAction                 ChatAction           `json:"chatAction"`
 }
 
+type UserMessageReaded struct {
+	AdditionalData     *AdditionalData    `json:"additionalData"`
+	ChatId             int64              `json:"chatId"`
+	MessageId          int64              `json:"messageId"`
+	ReadMessagesAction ReadMessagesAction `json:"readMessagesAction"`
+}
+
 type MessageReaded struct {
 	AdditionalData     *AdditionalData    `json:"additionalData"`
 	ChatId             int64              `json:"chatId"`
@@ -386,12 +405,20 @@ func (s *ProjectionsTruncated) GetPartitionKey() string {
 	return utils.ToString(0)
 }
 
+func (s *UserChatPinned) GetPartitionKey() string {
+	return utils.ToString(s.AdditionalData.BehalfUserId)
+}
+
 func (s *ChatPinned) GetPartitionKey() string {
+	return utils.ToString(s.ChatId)
+}
+
+func (s *UserChatNotificationSettingsSetted) GetPartitionKey() string {
 	return utils.ToString(s.AdditionalData.BehalfUserId)
 }
 
 func (s *ChatNotificationSettingsSetted) GetPartitionKey() string {
-	return utils.ToString(s.AdditionalData.BehalfUserId)
+	return utils.ToString(s.ChatId)
 }
 
 func (s *MessageCreated) GetPartitionKey() string {
@@ -406,8 +433,12 @@ func (s *ChatViewRefreshed) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
-func (s *MessageReaded) GetPartitionKey() string {
+func (s *UserMessageReaded) GetPartitionKey() string {
 	return utils.ToString(s.AdditionalData.BehalfUserId)
+}
+
+func (s *MessageReaded) GetPartitionKey() string {
+	return utils.ToString(s.ChatId)
 }
 
 func (s *MessageBlogPostMade) GetPartitionKey() string {
@@ -474,8 +505,16 @@ func (s *ProjectionsTruncated) Name() string {
 	return "projectionsResetted"
 }
 
+func (s *UserChatPinned) Name() string {
+	return "userChatPinned"
+}
+
 func (s *ChatPinned) Name() string {
 	return "chatPinned"
+}
+
+func (s *UserChatNotificationSettingsSetted) Name() string {
+	return "userChatNotificationSettingsSetted"
 }
 
 func (s *ChatNotificationSettingsSetted) Name() string {
@@ -492,6 +531,10 @@ func (s *MessageEdited) Name() string {
 
 func (s *ChatViewRefreshed) Name() string {
 	return "chatViewRefreshed"
+}
+
+func (s *UserMessageReaded) Name() string {
+	return "userMessageReaded"
 }
 
 func (s *MessageReaded) Name() string {
@@ -562,12 +605,20 @@ func (s *ProjectionsTruncated) GetEventKind() EventKind {
 	return EventKindChat
 }
 
-func (s *ChatPinned) GetEventKind() EventKind {
+func (s *UserChatPinned) GetEventKind() EventKind {
 	return EventKindUser
 }
 
-func (s *ChatNotificationSettingsSetted) GetEventKind() EventKind {
+func (s *UserChatNotificationSettingsSetted) GetEventKind() EventKind {
 	return EventKindUser
+}
+
+func (s *ChatPinned) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ChatNotificationSettingsSetted) GetEventKind() EventKind {
+	return EventKindChat
 }
 
 func (s *MessageCreated) GetEventKind() EventKind {
@@ -582,8 +633,12 @@ func (s *ChatViewRefreshed) GetEventKind() EventKind {
 	return EventKindChat
 }
 
-func (s *MessageReaded) GetEventKind() EventKind {
+func (s *UserMessageReaded) GetEventKind() EventKind {
 	return EventKindUser
+}
+
+func (s *MessageReaded) GetEventKind() EventKind {
+	return EventKindChat
 }
 
 func (s *MessageBlogPostMade) GetEventKind() EventKind {

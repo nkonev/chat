@@ -1592,3 +1592,28 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 
 	return nil
 }
+
+func (m *EventHandler) OnChatPinned(ctx context.Context, event *ChatPinned) error {
+	return m.eventBus.Publish(ctx, &UserChatPinned{
+		AdditionalData: event.AdditionalData,
+		ChatId:         event.ChatId,
+		Pinned:         event.Pinned,
+	})
+}
+
+func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, event *ChatNotificationSettingsSetted) error {
+	return m.eventBus.Publish(ctx, &UserChatNotificationSettingsSetted{
+		AdditionalData: event.AdditionalData,
+		ChatId:         event.ChatId,
+		Setted:         event.Setted,
+	})
+}
+
+func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
+	return m.eventBus.Publish(ctx, &UserMessageReaded{
+		AdditionalData:     event.AdditionalData,
+		ChatId:             event.ChatId,
+		MessageId:          event.MessageId,
+		ReadMessagesAction: event.ReadMessagesAction,
+	})
+}

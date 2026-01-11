@@ -490,7 +490,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 		}
 
 		for _, oldChatPinned := range oldChatPinneds {
-			chpin := &ChatPinned{
+			chpin := &UserChatPinned{
 				AdditionalData: GenerateMessageAdditionalData(nil, oldChatPinned.UserId),
 				ChatId:         oldChatPinned.ChatId,
 				Pinned:         true,
@@ -538,7 +538,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 		}
 
 		for _, oldParticipantId := range oldParticipants {
-			cp := &MessageReaded{
+			cp := &UserMessageReaded{
 				AdditionalData:     GenerateMessageAdditionalData(nil, oldParticipantId),
 				ReadMessagesAction: ReadMessagesActionAllChats,
 			}

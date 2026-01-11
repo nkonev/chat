@@ -202,7 +202,7 @@ func (m *EventHandler) OnUserChatViewRemoved(ctx context.Context, event *UserCha
 	return nil
 }
 
-func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
+func (m *EventHandler) OnUserUnreadMessageReaded(ctx context.Context, event *UserMessageReaded) error {
 	userIds := []int64{event.AdditionalData.BehalfUserId}
 
 	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
@@ -293,7 +293,7 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 	return nil
 }
 
-func (m *EventHandler) OnChatPinned(ctx context.Context, event *ChatPinned) error {
+func (m *EventHandler) OnUserChatPinned(ctx context.Context, event *UserChatPinned) error {
 	// we don't check authorization here because all the participants can pin chat (their chat_user_view)
 	err := m.commonProjection.OnChatPinned(ctx, event)
 	if err != nil {
@@ -303,7 +303,7 @@ func (m *EventHandler) OnChatPinned(ctx context.Context, event *ChatPinned) erro
 	return nil
 }
 
-func (m *EventHandler) OnChatNotificationSettingsSetted(ctx context.Context, event *ChatNotificationSettingsSetted) error {
+func (m *EventHandler) OnUserChatNotificationSettingsSetted(ctx context.Context, event *UserChatNotificationSettingsSetted) error {
 	// we don't check authorization here because all the participants can change their notification setting
 	err := m.commonProjection.OnChatNotificationSettingsSetted(ctx, event)
 	if err != nil {
