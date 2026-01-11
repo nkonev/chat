@@ -420,21 +420,6 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 
 					lgr.InfoContext(ctx, "Finishing migrating reactions on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id, "message_id", oldMessage.Id)
 
-					ui := &ChatViewRefreshed{
-						AdditionalData:             GenerateMessageAdditionalData(nil, oldMessage.OwnerId),
-						ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
-						AllParticipantIdsExcepting: []int64{},
-						ChatId:                     oldChat.Id,
-						UnreadMessagesAction:       UnreadMessagesActionIncrease,
-						IncreaseOn:                 1,
-						LastMessageAction:          LastMessageActionRefresh,
-					}
-
-					err = eventBus.Publish(ctx, ui)
-					if err != nil {
-						return err
-					}
-
 					lgr.InfoContext(ctx, "Finishing migrating message on the offset", "chat_offset", chatOffset, "message_offset", messageOffset, "chat_id", oldChat.Id, "message_id", oldMessage.Id)
 				}
 
@@ -499,19 +484,6 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 			if err != nil {
 				return err
 			}
-
-			chui := &ChatViewRefreshed{
-				AdditionalData:     GenerateMessageAdditionalData(nil, oldChatPinned.UserId),
-				ParticipantsMode:   ParticipantsModeOnlyParticipantIds,
-				OnlyParticipantIds: []int64{oldChatPinned.UserId},
-				ChatId:             oldChatPinned.ChatId,
-				ChatAction:         ChatActionRefresh,
-			}
-
-			err = eventBus.Publish(ctx, chui)
-			if err != nil {
-				return err
-			}
 		}
 
 		lgr.InfoContext(ctx, "Finishing migrating chat pinned bunch on the offset", "chat_pinned_offset", chatPinnedOffset)
@@ -521,34 +493,47 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus
 		chatPinnedOffset += utils.DefaultSize
 	}
 
-	// fix counters
+	// apply refresh to participant's chat data
 	participantOffset := 0
 	for {
-		lgr.InfoContext(ctx, "Starting fixing user's counters bunch on the offset", "participant_offset", participantOffset)
-		oldParticipants := []int64{}
+		lgr.InfoContext(ctx, "Starting setting participant's chat data bunch on the offset", "participant_offset", participantOffset)
+		type oldChatParticipant struct {
+			ChatId int64 `db:"chat_id"`
+			UserId int64 `db:"user_id"`
+		}
+		oldParticipants := []oldChatParticipant{}
 		err = pgxscan.Select(ctx, connOldDb, &oldParticipants, `
 					select
-						distinct (user_id)
+						user_id,
+						chat_id
 					from chat_participant
-					order by user_id
+					order by user_id, chat_id
 					limit $1 offset $2
 				`, utils.DefaultSize, participantOffset)
 		if err != nil {
 			return fmt.Errorf("error during get old partcipants: %w", err)
 		}
 
-		for _, oldParticipantId := range oldParticipants {
-			cp := &UserMessageReaded{
-				AdditionalData:     GenerateMessageAdditionalData(nil, oldParticipantId),
-				ReadMessagesAction: ReadMessagesActionAllChats,
+		for _, oldParticipant := range oldParticipants {
+			lgr.InfoContext(ctx, "Starting migrating participant's chat on the offset", "participant_offset", participantOffset, "chat_id", oldParticipant.ChatId, "user_id", oldParticipant.UserId)
+			ui := &ChatViewRefreshed{
+				AdditionalData:             GenerateMessageAdditionalData(nil, oldParticipant.UserId),
+				ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
+				AllParticipantIdsExcepting: []int64{},
+				ChatId:                     oldParticipant.ChatId,
+				UnreadMessagesAction:       UnreadMessagesActionRefresh,
+				LastMessageAction:          LastMessageActionRefresh,
+				ChatAction:                 ChatActionRefresh,
 			}
-			err := eventBus.Publish(ctx, cp)
+
+			err = eventBus.Publish(ctx, ui)
 			if err != nil {
 				return err
 			}
+			lgr.InfoContext(ctx, "Finishing migrating participant's chat on the offset", "participant_offset", participantOffset, "chat_id", oldParticipant.ChatId, "user_id", oldParticipant.UserId)
 		}
 
-		lgr.InfoContext(ctx, "Finishing fixing user's counters bunch on the offset", "participant_offset", participantOffset)
+		lgr.InfoContext(ctx, "Finishing setting participant's chat data bunch on the offset", "participant_offset", participantOffset)
 		if len(oldParticipants) < utils.DefaultSize {
 			break
 		}
