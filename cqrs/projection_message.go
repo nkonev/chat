@@ -1110,8 +1110,14 @@ type unreadsPreparedData struct {
 	LastMessageId int64 `db:"last_message_id"`
 }
 
-func (m *CommonProjection) getCommonInputDataForAllChats() string {
-	return `
+// see also fastForwardChatParticipantMessageReadIdInAllChats()
+func (m *CommonProjection) setNoUnreadsInAllChats(ctx context.Context, co db.CommonOperations, userId int64, size int) ([]dto.ChatUserViewBasic, error) {
+	updatedChatsPortion := []dto.ChatUserViewBasic{}
+
+	const noOffset = 0
+
+	q := `
+		with
 		input_data as (
 			select
 				uv.id as chat_id
@@ -1124,17 +1130,6 @@ func (m *CommonProjection) getCommonInputDataForAllChats() string {
 			order by uv.id 
 			limit $2 offset $3
 		)
-	`
-}
-
-func (m *CommonProjection) setNoUnreadsInAllChats(ctx context.Context, co db.CommonOperations, userId int64, size int) ([]dto.ChatUserViewBasic, error) {
-	updatedChatsPortion := []dto.ChatUserViewBasic{}
-
-	const noOffset = 0
-
-	q := fmt.Sprintf(`
-		with
-		%s
 		update chat_user_view cuv 
 		set (unread_messages, cuv_last_read_message_id) = (
 			select 0, idt.last_message_id 
@@ -1143,7 +1138,7 @@ func (m *CommonProjection) setNoUnreadsInAllChats(ctx context.Context, co db.Com
 		)
 		where (cuv.id, cuv.user_id) in (select idtt.chat_id, idtt.user_id from input_data idtt) -- to avoid null. merge with return isn't supported
 		returning cuv.id, cuv.unread_messages, cuv.update_date_time
-	`, m.getCommonInputDataForAllChats())
+	`
 
 	err := sqlscan.Select(ctx, co, &updatedChatsPortion, q, userId, size, noOffset)
 	if err != nil {
@@ -1198,12 +1193,25 @@ func (m *CommonProjection) fastForwardParticipantMessageReadId(ctx context.Conte
 	return err
 }
 
+// see also setNoUnreadsInAllChats()
 func (m *CommonProjection) fastForwardChatParticipantMessageReadIdInAllChats(ctx context.Context, co db.CommonOperations, userId int64, size int, offset int64, lastReadMessageDateTime time.Time) ([]int64, error) {
+	// TODO remove chat_user_view
 	// here with limit and offset
 	resChatIds := []int64{}
-	q := fmt.Sprintf(`
+	q := `
 		with
-		%s
+		input_data as (
+			select
+				uv.id as chat_id
+				,uv.user_id
+				,coalesce(cc.last_message_id, 0) as last_message_id
+			from chat_user_view uv
+			join chat_common cc on uv.id = cc.id
+			where uv.user_id = $1 
+				and uv.unread_messages > 0 -- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
+			order by uv.id 
+			limit $2 offset $3
+		)
 		update chat_participant cpa 
 		set 
 		cp_last_read_message_id = (
@@ -1214,7 +1222,7 @@ func (m *CommonProjection) fastForwardChatParticipantMessageReadIdInAllChats(ctx
 		,cp_last_read_message_date_time = $4
 		where (cpa.chat_id, cpa.user_id) in (select idtt.chat_id, idtt.user_id from input_data idtt)
 		returning cpa.chat_id
-	`, m.getCommonInputDataForAllChats())
+	`
 
 	err := sqlscan.Select(ctx, co, &resChatIds, q, userId, size, offset, lastReadMessageDateTime)
 	if err != nil {
