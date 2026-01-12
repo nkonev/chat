@@ -1110,10 +1110,8 @@ type unreadsPreparedData struct {
 	LastMessageId int64 `db:"last_message_id"`
 }
 
-func (m *CommonProjection) getNoUnreadsInAllChatsPreparedDataPortion(ctx context.Context, co db.CommonOperations, userId int64, size int) ([]unreadsPreparedData, error) {
-	preparedDatas := []unreadsPreparedData{}
-	err := sqlscan.Select(ctx, co, &preparedDatas, fmt.Sprintf(`
-		with 
+func (m *CommonProjection) getCommonInputDataForAllChats() string {
+	return `
 		input_data as (
 			select
 				uv.id as chat_id
@@ -1124,20 +1122,15 @@ func (m *CommonProjection) getNoUnreadsInAllChatsPreparedDataPortion(ctx context
 			where uv.user_id = $1 
 				and uv.unread_messages > 0 -- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
 			order by uv.id 
-			limit $2
+			limit $2 offset $3
 		)
-		select idt.chat_id, idt.user_id, idt.last_message_id
-		from input_data idt
-	`), userId, size)
-	if err != nil {
-		return nil, err
-	}
-
-	return preparedDatas, nil
+	`
 }
 
 func (m *CommonProjection) setNoUnreadsInAllChats(ctx context.Context, co db.CommonOperations, userId int64, size int) ([]dto.ChatUserViewBasic, error) {
 	updatedChatsPortion := []dto.ChatUserViewBasic{}
+
+	const noOffset = 0
 
 	q := fmt.Sprintf(`
 		with
@@ -1152,7 +1145,7 @@ func (m *CommonProjection) setNoUnreadsInAllChats(ctx context.Context, co db.Com
 		returning cuv.id, cuv.unread_messages, cuv.update_date_time
 	`, m.getCommonInputDataForAllChats())
 
-	err := sqlscan.Select(ctx, co, &updatedChatsPortion, q, userId, size)
+	err := sqlscan.Select(ctx, co, &updatedChatsPortion, q, userId, size, noOffset)
 	if err != nil {
 		return nil, err
 	}
@@ -1205,27 +1198,30 @@ func (m *CommonProjection) fastForwardParticipantMessageReadId(ctx context.Conte
 	return err
 }
 
-func (m *CommonProjection) fastForwardParticipantMessageReadIdInAllChats(ctx context.Context, co db.CommonOperations, userId int64, size int, lastReadMessageDateTime time.Time) error {
+func (m *CommonProjection) fastForwardChatParticipantMessageReadIdInAllChats(ctx context.Context, co db.CommonOperations, userId int64, size int, offset int64, lastReadMessageDateTime time.Time) ([]int64, error) {
+	// here with limit and offset
+	resChatIds := []int64{}
 	q := fmt.Sprintf(`
 		with
 		%s
-		update chat_participant cuv 
+		update chat_participant cpa 
 		set 
 		cp_last_read_message_id = (
 			select idt.last_message_id 
 			from input_data idt
-			where (idt.chat_id, idt.user_id) = (cuv.chat_id, cuv.user_id)
+			where (idt.chat_id, idt.user_id) = (cpa.chat_id, cpa.user_id)
 		)
-		,cp_last_read_message_date_time = $3
-		where (cuv.chat_id, cuv.user_id) in (select idtt.chat_id, idtt.user_id from input_data idtt)
+		,cp_last_read_message_date_time = $4
+		where (cpa.chat_id, cpa.user_id) in (select idtt.chat_id, idtt.user_id from input_data idtt)
+		returning cpa.chat_id
 	`, m.getCommonInputDataForAllChats())
 
-	_, err := co.ExecContext(ctx, q, userId, size, lastReadMessageDateTime)
+	err := sqlscan.Select(ctx, co, &resChatIds, q, userId, size, offset, lastReadMessageDateTime)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return resChatIds, nil
 }
 
 func (m *CommonProjection) fastForwardLastRead(ctx context.Context, co db.CommonOperations, userId, chatId int64) error {
@@ -1306,18 +1302,12 @@ func CanReadMessage(isParticipant bool) bool {
 	return isParticipant
 }
 
-func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *UserMessageReaded, allChatsReadedConsumer func([]dto.ChatUserViewBasic)) error {
+func (m *CommonProjection) OnUserUnreadMessageReaded(ctx context.Context, event *UserMessageReaded, allChatsReadedConsumer func([]dto.ChatUserViewBasic)) error {
 	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
 		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 			if event.ReadMessagesAction == ReadMessagesActionOneMessage {
 
 				err := m.setUnreadMessages(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
-				if err != nil {
-					return err
-				}
-
-				// TODO вынести на уровень event_handler_chat.go
-				err = m.updateParticipantMessageReadId(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt)
 				if err != nil {
 					return err
 				}
@@ -1335,8 +1325,55 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Use
 					return err
 				}
 
-				// TODO вынести на уровень event_handler_chat.go
-				err = m.fastForwardParticipantMessageReadId(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.AdditionalData.CreatedAt)
+				return nil
+			} else {
+				return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
+			}
+		})
+		if errOuter != nil {
+			return fmt.Errorf("error during read messages: %w", errOuter)
+		}
+	} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
+		for {
+			// deliberately don't use transaction in order not to span transaction over all the loop iterations
+			updatedChatsPortion, err := m.setNoUnreadsInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId, utils.DefaultSize)
+			if err != nil {
+				return err
+			}
+
+			allChatsReadedConsumer(updatedChatsPortion)
+
+			// we cannot use offset-limit because we update what we return
+			// so we iteratevily update it by portions until we have zero returned rows
+			if len(updatedChatsPortion) == 0 {
+				break
+			}
+		}
+
+		err := m.setHasNoUnreadsInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId)
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
+	}
+	return nil
+}
+
+func (m *CommonProjection) OnChatUnreadMessageReaded(ctx context.Context, event *MessageReaded) error {
+	if event.ReadMessagesAction == ReadMessagesActionOneMessage || event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+			if event.ReadMessagesAction == ReadMessagesActionOneMessage {
+
+				err := m.updateParticipantMessageReadId(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, event.AdditionalData.CreatedAt)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			} else if event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
+
+				err := m.fastForwardParticipantMessageReadId(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.AdditionalData.CreatedAt)
 				if err != nil {
 					return err
 				}
@@ -1350,41 +1387,20 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Use
 			return fmt.Errorf("error during read messages: %w", errOuter)
 		}
 	} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
+		offset := int64(0)
 		for {
-			// TODO нужно эту порцию получить дважды и одинаково, чтобы обновить chat_user_view и chat_participant
-			// простое решение - сначала обновляем chat_participant по алгоритму с пагинацией
-			// затем обновляем chat_user_view до тех пор, пока не получим 0 returned rows
-			portion, err := m.getNoUnreadsInAllChatsPreparedDataPortion(ctx, m.db, event.AdditionalData.BehalfUserId, utils.DefaultSize)
+
+			updatedParticipantsPortion, err := m.fastForwardChatParticipantMessageReadIdInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId, utils.DefaultSize, offset, event.AdditionalData.CreatedAt)
 			if err != nil {
 				return err
 			}
 
-			// we cannot use offset-limit because we update what we return
-			// so we iteratevily update it by portions until we have zero returned rows
-			if len(portion) == 0 {
+			if len(updatedParticipantsPortion) < utils.DefaultSize {
 				break
 			}
-
-			// deliberately don't use transaction in order not to span transaction over all the loop iterations
-			updatedChatsPortion, err := m.setNoUnreadsInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId, utils.DefaultSize)
-			if err != nil {
-				return err
-			}
-
-			// TODO вынести на уровень event_handler_chat.go
-			err = m.fastForwardParticipantMessageReadIdInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId, utils.DefaultSize, event.AdditionalData.CreatedAt)
-			if err != nil {
-				return err
-			}
-
-			allChatsReadedConsumer(updatedChatsPortion)
-
+			offset += utils.DefaultSize
 		}
 
-		err := m.setHasNoUnreadsInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId)
-		if err != nil {
-			return err
-		}
 	} else {
 		return fmt.Errorf("Unknown action: %T", event.ReadMessagesAction)
 	}
