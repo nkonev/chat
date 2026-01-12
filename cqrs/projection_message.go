@@ -1104,8 +1104,16 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 	return nil
 }
 
-func (m *CommonProjection) getCommonInputDataForAllChats() string {
-	return `
+type unreadsPreparedData struct {
+	ChatId        int64 `db:"chat_id"`
+	UserId        int64 `db:"user_id"`
+	LastMessageId int64 `db:"last_message_id"`
+}
+
+func (m *CommonProjection) getNoUnreadsInAllChatsPreparedDataPortion(ctx context.Context, co db.CommonOperations, userId int64, size int) ([]unreadsPreparedData, error) {
+	preparedDatas := []unreadsPreparedData{}
+	err := sqlscan.Select(ctx, co, &preparedDatas, fmt.Sprintf(`
+		with 
 		input_data as (
 			select
 				uv.id as chat_id
@@ -1118,7 +1126,14 @@ func (m *CommonProjection) getCommonInputDataForAllChats() string {
 			order by uv.id 
 			limit $2
 		)
-	`
+		select idt.chat_id, idt.user_id, idt.last_message_id
+		from input_data idt
+	`), userId, size)
+	if err != nil {
+		return nil, err
+	}
+
+	return preparedDatas, nil
 }
 
 func (m *CommonProjection) setNoUnreadsInAllChats(ctx context.Context, co db.CommonOperations, userId int64, size int) ([]dto.ChatUserViewBasic, error) {
@@ -1336,6 +1351,19 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Use
 		}
 	} else if event.ReadMessagesAction == ReadMessagesActionAllChats {
 		for {
+			// TODO нужно эту порцию получить дважды и одинаково, чтобы обновить chat_user_view и chat_participant
+			// простое решение - сначала обновляем chat_participant по алгоритму с пагинацией
+			// затем обновляем chat_user_view до тех пор, пока не получим 0 returned rows
+			portion, err := m.getNoUnreadsInAllChatsPreparedDataPortion(ctx, m.db, event.AdditionalData.BehalfUserId, utils.DefaultSize)
+			if err != nil {
+				return err
+			}
+
+			// we cannot use offset-limit because we update what we return
+			// so we iteratevily update it by portions until we have zero returned rows
+			if len(portion) == 0 {
+				break
+			}
 
 			// deliberately don't use transaction in order not to span transaction over all the loop iterations
 			updatedChatsPortion, err := m.setNoUnreadsInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId, utils.DefaultSize)
@@ -1351,11 +1379,6 @@ func (m *CommonProjection) OnUnreadMessageReaded(ctx context.Context, event *Use
 
 			allChatsReadedConsumer(updatedChatsPortion)
 
-			// we cannot use offset-limit because we update what we return
-			// so we iteratevily update it by portions until we have zero returned rows
-			if len(updatedChatsPortion) == 0 {
-				break
-			}
 		}
 
 		err := m.setHasNoUnreadsInAllChats(ctx, m.db, event.AdditionalData.BehalfUserId)
