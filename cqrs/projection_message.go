@@ -1126,7 +1126,9 @@ func (m *CommonProjection) setNoUnreadsInAllChats(ctx context.Context, co db.Com
 			from chat_user_view uv
 			join chat_common cc on uv.id = cc.id
 			where uv.user_id = $1 
-				and uv.unread_messages > 0 -- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
+				-- optimization to not process all the chats and
+				-- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
+				and uv.unread_messages > 0 
 			order by uv.id 
 			limit $2 offset $3
 		)
@@ -1195,31 +1197,37 @@ func (m *CommonProjection) fastForwardParticipantMessageReadId(ctx context.Conte
 
 // see also setNoUnreadsInAllChats()
 func (m *CommonProjection) fastForwardChatParticipantMessageReadIdInAllChats(ctx context.Context, co db.CommonOperations, userId int64, size int, offset int64, lastReadMessageDateTime time.Time) ([]int64, error) {
-	// TODO remove chat_user_view
 	// here with limit and offset
 	resChatIds := []int64{}
 	q := `
 		with
 		input_data as (
 			select
-				uv.id as chat_id
+				uv.chat_id
 				,uv.user_id
 				,coalesce(cc.last_message_id, 0) as last_message_id
-			from chat_user_view uv
-			join chat_common cc on uv.id = cc.id
+			from chat_participant uv
+			join chat_common cc on uv.chat_id = cc.id
+			left join (
+				select max(id) as max_message_id, chat_id from message group by chat_id
+			) mm on mm.chat_id = uv.chat_id
 			where uv.user_id = $1 
-				and uv.unread_messages > 0 -- inn.unread_messages > 0 is required to always return pass pages to uv.id and, consequently, to return the full pages in returning
-			order by uv.id 
+				-- optimization to not process all the chats
+				and (
+					mm.max_message_id is null -- corner - all the messages were removed
+					or coalesce(uv.cp_last_read_message_id, 0) < mm.max_message_id
+				)
+			order by uv.chat_id 
 			limit $2 offset $3
 		)
 		update chat_participant cpa 
 		set 
-		cp_last_read_message_id = (
-			select idt.last_message_id 
-			from input_data idt
-			where (idt.chat_id, idt.user_id) = (cpa.chat_id, cpa.user_id)
-		)
-		,cp_last_read_message_date_time = $4
+			cp_last_read_message_id = (
+				select idt.last_message_id 
+				from input_data idt
+				where (idt.chat_id, idt.user_id) = (cpa.chat_id, cpa.user_id)
+			)
+			,cp_last_read_message_date_time = $4
 		where (cpa.chat_id, cpa.user_id) in (select idtt.chat_id, idtt.user_id from input_data idtt)
 		returning cpa.chat_id
 	`
