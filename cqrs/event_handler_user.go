@@ -223,10 +223,6 @@ func (m *EventHandler) OnUserUnreadMessageReaded(ctx context.Context, event *Use
 		}
 	}
 
-	// TODO обновляется "Пометить все прочитанными со второго раза"
-	// Быстрое воспрозведение:
-	// docker exec -it chat-postgresql-citus-coordinator-1-1  psql -U postgres -d chat
-	// update chat_user_view set unread_messages = 123 where user_id = 1;
 	err := m.commonProjection.OnUnreadMessageReaded(ctx, event, func(updatedChatsPortion []dto.ChatUserViewBasic) {
 		if event.ReadMessagesAction != ReadMessagesActionAllChats {
 			m.lgr.ErrorContext(ctx, "wrong invariant: a logical error in commonProjection.OnUnreadMessageReaded")
