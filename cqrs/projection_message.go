@@ -1212,7 +1212,7 @@ func (m *CommonProjection) fastForwardChatParticipantMessageReadIdInAllChats(ctx
 				select max(id) as max_message_id, chat_id from message group by chat_id
 			) mm on mm.chat_id = uv.chat_id
 			where uv.user_id = $1 
-				-- optimization to not process all the chats
+				-- optimization to not process all the chats, "max(id) as max_message_id" is a part of the optimization
 				and (
 					mm.max_message_id is null -- corner - all the messages were removed
 					or coalesce(uv.cp_last_read_message_id, 0) < mm.max_message_id
