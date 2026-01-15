@@ -34,7 +34,7 @@ infra_up:
 infra_down:
 	docker compose down -v
 
-run: package-go infra
+run: infra package-go
 	./$(EXECUTABLE) serve --cqrs.testhelpermethods=true
 
 .PHONY: test
