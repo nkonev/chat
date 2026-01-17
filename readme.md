@@ -130,6 +130,9 @@ docker compose up -d postgresql
 ./chat export --cqrs.export.file=/tmp/export.json
 # or
 ./chat export --cqrs.export.file=stdout > /tmp/export.json
+
+# set env
+CHAT_LOGGER_LEVEL=debug ./chat serve
 ```
 
 ```sql
