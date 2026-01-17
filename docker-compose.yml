@@ -22,6 +22,10 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      KAFKA_LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS: 100
+      KAFKA_LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS: 100
+      KAFKA_OFFSETS_COMMIT_TIMEOUT_MS: 100
+      KAFKA_LOG_FLUSH_INTERVAL_MS: 100
       # Replace CLUSTER_ID with a unique base64 UUID using "bin/kafka-storage.sh random-uuid"
       # See https://docs.confluent.io/kafka/operations-tools/kafka-tools.html#kafka-storage-sh
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'

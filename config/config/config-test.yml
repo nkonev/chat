@@ -51,7 +51,7 @@ cqrs:
   # sleepBeforeEvent: 500ms
   sleepBeforeEvent: 0
   # default 2s
-  checkAreEventsProcessedInterval: 100ms
+  checkAreEventsProcessedInterval: 250ms
   dump: true
   prettyLog: true
   import:
