@@ -32,8 +32,8 @@ postgresql:
   maxOpenConnections: 16
   maxIdleConnections: 4
   maxLifetime: 30s
-  prettyLog: true
   dump: true
+  logLevel: "debug"
   migration:
     migrationTable: "go_migrate"
     statementDuration: 15m

@@ -3,81 +3,31 @@ package db
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"embed"
 	"fmt"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/logger"
 	"net/http"
-	"strings"
-	"time"
 
-	"github.com/XSAM/otelsql"
+	"github.com/exaring/otelpgx"
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
+	pgxMigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/httpfs"
-	pgxStd "github.com/jackc/pgx/v4/stdlib"
-	proxy "github.com/shogo82148/go-sql-proxy"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/multitracer"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/tracelog"
+	pgxSlog "github.com/mcosta74/pgx-slog"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
+
 	"go.uber.org/fx"
 )
 
-func makeLoggingDriver(cfg *config.AppConfig, lgr *logger.LoggerWrapper) driver.Driver {
-	return proxy.NewProxyContext(&pgxStd.Driver{}, &proxy.HooksContext{
-		PreExec: func(_ context.Context, _ *proxy.Stmt, _ []driver.NamedValue) (interface{}, error) {
-			return time.Now(), nil
-		},
-		PostExec: func(c context.Context, ctx interface{}, stmt *proxy.Stmt, args []driver.NamedValue, _ driver.Result, err error) error {
-			if cfg.PostgreSQL.Dump {
-				s := fmt.Sprintf("Exec: %s; args = %v (%s)\n", stmt.QueryString, writeNamedValues(args), time.Since(ctx.(time.Time)))
-				if cfg.PostgreSQL.PrettyLog && !cfg.Logger.Json {
-					fmt.Printf("[SQL] trace_id=%s: %s\n", logger.GetTraceId(c), s)
-				} else {
-					lgr.InfoContext(c, s)
-				}
-			}
-			return err
-		},
-
-		PreQuery: func(c context.Context, stmt *proxy.Stmt, args []driver.NamedValue) (interface{}, error) {
-			return time.Now(), nil
-		},
-		PostQuery: func(c context.Context, ctx interface{}, stmt *proxy.Stmt, args []driver.NamedValue, rows driver.Rows, err error) error {
-			if cfg.PostgreSQL.Dump {
-				s := fmt.Sprintf("Query: %s; args = %v (%s)\n", stmt.QueryString, writeNamedValues(args), time.Since(ctx.(time.Time)))
-				if cfg.PostgreSQL.PrettyLog && !cfg.Logger.Json {
-					fmt.Printf("[SQL] trace_id=%s: %s\n", logger.GetTraceId(c), s)
-				} else {
-					lgr.InfoContext(c, s)
-				}
-			}
-			return err
-		},
-	})
-}
-
-func writeNamedValues(args []driver.NamedValue) string {
-	sb := strings.Builder{}
-	sb.WriteString("[")
-	for i, arg := range args {
-		if i != 0 {
-			sb.WriteString(fmt.Sprintf(", "))
-		}
-		if len(arg.Name) > 0 {
-			sb.WriteString(arg.Name)
-			sb.WriteString(":")
-		}
-		sb.WriteString(fmt.Sprintf("%#v", arg.Value))
-	}
-	sb.WriteString("]")
-
-	return sb.String()
-}
-
 type DB struct {
+	pool *pgxpool.Pool
+	lgr  *logger.LoggerWrapper
 	*sql.DB
-	lgr *logger.LoggerWrapper
 }
 
 type Tx struct {
@@ -179,49 +129,68 @@ func ConfigureDatabase(
 	tp *sdktrace.TracerProvider,
 	lc fx.Lifecycle,
 ) (*DB, error) {
-	dri := makeLoggingDriver(cfg, lgr)
+	lgr.Info("Creating database pool")
 
-	otDriver := otelsql.WrapDriver(dri, otelsql.WithAttributes(
-		semconv.DBSystemPostgreSQL,
-	))
-
-	connector, err := otDriver.(driver.DriverContext).OpenConnector(cfg.PostgreSQL.Url)
-	if err != nil {
-		return nil, err
-	}
-	db := sql.OpenDB(connector)
-
-	err = otelsql.RegisterDBStatsMetrics(db, otelsql.WithAttributes(
-		semconv.DBSystemPostgreSQL,
-	), otelsql.WithTracerProvider(tp))
-	if err != nil {
-		return nil, err
-	}
-	db.SetConnMaxLifetime(cfg.PostgreSQL.MaxLifetime)
-	db.SetMaxIdleConns(cfg.PostgreSQL.MaxIdleConnections)
-	db.SetMaxOpenConns(cfg.PostgreSQL.MaxOpenConnections)
-
-	err = db.Ping()
+	config, err := pgxpool.ParseConfig(cfg.PostgreSQL.Url)
 	if err != nil {
 		return nil, err
 	}
 
-	dbWrapper := &DB{
-		DB:  db,
-		lgr: lgr,
+	config.MaxConns = int32(cfg.PostgreSQL.MaxOpenConnections)
+	config.MinIdleConns = int32(cfg.PostgreSQL.MaxIdleConnections)
+	config.MaxConnLifetime = cfg.PostgreSQL.MaxLifetime
+
+	// https://github.com/mcosta74/pgx-slog
+	adapterLogger := pgxSlog.NewLogger(lgr.Logger)
+
+	tracers := []pgx.QueryTracer{
+		otelpgx.NewTracer(otelpgx.WithTracerProvider(tp)),
 	}
+
+	if cfg.PostgreSQL.Dump {
+		ll, err := tracelog.LogLevelFromString(cfg.PostgreSQL.LogLevel)
+		if err != nil {
+			return nil, err
+		}
+
+		tracers = append(tracers, &tracelog.TraceLog{
+			Logger:   adapterLogger,
+			LogLevel: ll,
+			Config: &tracelog.TraceLogConfig{
+				TimeKey: "duration",
+			},
+		},
+		)
+	}
+
+	// https://github.com/jackc/pgx/discussions/1677#discussioncomment-12253699
+	m := multitracer.New(tracers...)
+
+	config.ConnConfig.Tracer = m
+
+	ctx := context.Background()
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := pool.Ping(ctx); err != nil {
+		return nil, err
+	}
+
+	stdDb := stdlib.OpenDBFromPool(pool)
 
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
-			lgr.Info("Stopping database")
-			if err := db.Close(); err != nil {
-				lgr.Error("Error shutting down database", "err", err)
-			}
+			lgr.Info("Stopping database pool")
+			stdDb.Close()
+			pool.Close()
 			return nil
 		},
 	})
 
-	return dbWrapper, nil
+	return &DB{pool, lgr, stdDb}, nil
 }
 
 //go:embed migrations
@@ -235,7 +204,7 @@ func (db *DB) Migrate(mc config.MigrationConfig) error {
 		return err
 	}
 
-	pgInstance, err := postgres.WithInstance(db.DB, &postgres.Config{
+	pgInstance, err := pgxMigrate.WithInstance(db.DB, &pgxMigrate.Config{
 		MigrationsTable:  mc.MigrationTable,
 		StatementTimeout: mc.StatementDuration,
 	})
