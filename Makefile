@@ -39,7 +39,6 @@ run: infra package-go
 
 .PHONY: test
 test: export CHAT_LOGGER.LEVEL = warn
-test: export CHAT_POSTGRESQL.PRETTYLOG = false
 test: export CHAT_POSTGRESQL.DUMP = false
 test: export CHAT_CQRS.PRETTYLOG = false
 test: export CHAT_CQRS.DUMP = false

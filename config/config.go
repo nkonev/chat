@@ -74,8 +74,8 @@ type PostgreSQLConfig struct {
 	MaxIdleConnections int
 	MaxLifetime        time.Duration
 	Migration          MigrationConfig
-	PrettyLog          bool
 	Dump               bool
+	LogLevel           string
 }
 
 type CommandsConfig struct {
