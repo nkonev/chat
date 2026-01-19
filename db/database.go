@@ -204,6 +204,7 @@ func (db *DB) Migrate(mc config.MigrationConfig) error {
 		return err
 	}
 
+	// here we acquire a dedicated sql db in order to properly close it to prevent hanging on the app shutdown
 	stdDb := stdlib.OpenDBFromPool(db.pool)
 	defer stdDb.Close()
 
