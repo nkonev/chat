@@ -204,7 +204,10 @@ func (db *DB) Migrate(mc config.MigrationConfig) error {
 		return err
 	}
 
-	pgInstance, err := pgxMigrate.WithInstance(db.DB, &pgxMigrate.Config{
+	stdDb := stdlib.OpenDBFromPool(db.pool)
+	defer stdDb.Close()
+
+	pgInstance, err := pgxMigrate.WithInstance(stdDb, &pgxMigrate.Config{
 		MigrationsTable:  mc.MigrationTable,
 		StatementTimeout: mc.StatementDuration,
 	})
@@ -216,7 +219,7 @@ func (db *DB) Migrate(mc config.MigrationConfig) error {
 	if err != nil {
 		return err
 	}
-	//defer m.Close()
+	defer m.Close()
 	if err := m.Up(); err != nil && err.Error() != "no change" {
 		return err
 	}
