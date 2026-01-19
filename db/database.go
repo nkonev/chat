@@ -215,6 +215,7 @@ func (db *DB) Migrate(mc config.MigrationConfig) error {
 	if err != nil {
 		return err
 	}
+	defer pgInstance.Close()
 
 	m, err := migrate.NewWithInstance("httpfs", src, "", pgInstance)
 	if err != nil {
