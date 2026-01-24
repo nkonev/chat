@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/logger"
@@ -222,7 +223,7 @@ func (db *DB) Migrate(mc config.MigrationConfig) error {
 		return err
 	}
 	defer m.Close()
-	if err := m.Up(); err != nil && err.Error() != "no change" {
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err
 	}
 	db.lgr.Info("Migration successfully completed")
