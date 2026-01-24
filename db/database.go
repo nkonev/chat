@@ -186,11 +186,12 @@ func (tl *TraceLogWrapper) TraceConnectEnd(ctx context.Context, data pgx.TraceCo
 }
 
 func (tl *TraceLogWrapper) TracePrepareStart(ctx context.Context, conn *pgx.Conn, data pgx.TracePrepareStartData) context.Context {
-	return tl.delegate.TracePrepareStart(ctx, conn, data)
+	// return tl.delegate.TracePrepareStart(ctx, conn, data)
+	return ctx
 }
 
 func (tl *TraceLogWrapper) TracePrepareEnd(ctx context.Context, conn *pgx.Conn, data pgx.TracePrepareEndData) {
-	tl.delegate.TracePrepareEnd(ctx, conn, data)
+	// tl.delegate.TracePrepareEnd(ctx, conn, data)
 }
 
 func (tl *TraceLogWrapper) TraceAcquireStart(ctx context.Context, pool *pgxpool.Pool, data pgxpool.TraceAcquireStartData) context.Context {
