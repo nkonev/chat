@@ -13,6 +13,7 @@ var AllCommands = Commands{
 	CommandHelpName,
 	CommandServeName,
 	CommandMigrateName,
+	CommandRewindName,
 }
 
 func (c *Commands) String() string {

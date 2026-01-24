@@ -26,6 +26,8 @@ func main() {
 		cmd.RunHelp(remainingArgs)
 	case cmd.CommandMigrateName:
 		cmd.RunMigrate(remainingArgs)
+	case cmd.CommandRewindName:
+		cmd.RunRewind(remainingArgs)
 	case cmd.CommandServeName:
 		cmd.RunServe(remainingArgs)
 	default:

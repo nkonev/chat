@@ -7,16 +7,12 @@ import (
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
-	"go-cqrs-chat-example/handlers"
 	"go-cqrs-chat-example/kafka"
-	"go-cqrs-chat-example/listener"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/otel"
 	"go-cqrs-chat-example/producer"
 	"go-cqrs-chat-example/rabbitmq"
 	"go-cqrs-chat-example/sanitizer"
-	"go-cqrs-chat-example/services"
-	"go-cqrs-chat-example/tasks"
 	"go-cqrs-chat-example/type_registry"
 	"log/slog"
 	"os"
@@ -25,16 +21,14 @@ import (
 	"go.uber.org/fx/fxevent"
 )
 
-const CommandServeName = "serve"
+const CommandRewindName = "rewind"
 
-func RunServe(args []string) {
+func RunRewind(args []string) {
 	if app.IsHelp(args) {
 		fmt.Println(`
-Starts normal serving api requests.
-Http server starts when all the events from the Kafka events topic were consumed and
+Consumes all the events from the Kafka events topic and processes
 the 'need_to_fast_forward_sequences' and 'need_to_fast_forward_sequences' tasks
-in "technical" PostgreSQL table are finished.
-Also starts schedulers and RabbitMQ listeners.
+in "technical" PostgreSQL table.
 		`)
 
 		return
@@ -47,7 +41,7 @@ Also starts schedulers and RabbitMQ listeners.
 	lgr := logger.NewLogger(os.Stdout, cfg)
 	defer lgr.CloseLogger()
 
-	lgr.Info("Start serve command")
+	lgr.Info("Start rewind command")
 
 	appFx := fx.New(
 		fx.Supply(cfg),
@@ -72,37 +66,16 @@ Also starts schedulers and RabbitMQ listeners.
 			cqrs.ConfigureEventProcessor,
 			cqrs.ConfigureCommonProjection,
 			cqrs.NewEnrichingProjection,
-			handlers.NewChatHandler,
-			handlers.NewParticipantHandler,
-			handlers.NewMessageHandler,
-			handlers.NewBlogHandler,
-			handlers.NewTechnicalHandler,
-			handlers.CreateHttpRouter,
-			handlers.ConfigureHttpServer,
 			kafka.ConfigureSaramaClient,
 			client.NewAAARestClient,
 			sanitizer.CreateSanitizer,
 			sanitizer.CreateStripTags,
 			sanitizer.CreateStripSource,
-			services.NewAuthorizationService,
-			services.NewMessageService,
-			services.NewAsyncMessageService,
-			services.NewInputEventHandler,
 			producer.NewRabbitOutputEventsPublisher,
 			producer.NewRabbitNotificationEventsPublisher,
-			producer.NewRabbitInternalEventsPublisher,
 			rabbitmq.CreateRabbitMqConnection,
 			cqrs.NewEventHandler,
-			listener.CreateRabbitInternalEventsListener,
-			listener.CreateRabbitAaaUserProfileUpdateListener,
 			type_registry.NewTypeRegistryInstance,
-			tasks.RedisV9,
-			tasks.RedisLocker,
-			tasks.Scheduler,
-			tasks.CleanAbandonedChatsScheduler,
-			tasks.CleanDeletedUserDataScheduler,
-			tasks.NewCleanAbandonedChatsService,
-			tasks.NewCleanDeletedUserDataService,
 		),
 		fx.Invoke(
 			db.RunMigrations,
@@ -113,13 +86,9 @@ Also starts schedulers and RabbitMQ listeners.
 			kafka.WaitForAllEventsProcessedChat,
 			kafka.WaitForAllEventsProcessedUser,
 			cqrs.RunSequenceFastforwarder,
-			producer.EnableOutputEvents,
-			listener.CreateAndListenInternalEventsChannel,
-			listener.CreateAndListenAaaChannel,
-			tasks.RunScheduler,
-			handlers.RunHttpServer,
+			app.Shutdown,
 		),
 	)
 	appFx.Run()
-	lgr.Info("Exit serve command")
+	lgr.Info("Exit rewind command")
 }
