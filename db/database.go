@@ -91,10 +91,10 @@ func TransactWithResult[T any](ctx context.Context, db *DB, txFunc func(*Tx) (T,
 	}
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
+			tx.SafeRollback()
 			panic(p) // re-throw panic after Rollback
 		} else if err != nil {
-			tx.Rollback() // err is non-nil; don't change it
+			tx.SafeRollback() // err is non-nil; don't change it
 		} else {
 			err = tx.Commit() // err is nil; if Commit returns error update err
 		}
@@ -112,10 +112,10 @@ func Transact(ctx context.Context, db *DB, txFunc func(*Tx) error) (err error) {
 	}
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
+			tx.SafeRollback()
 			panic(p) // re-throw panic after Rollback
 		} else if err != nil {
-			tx.Rollback() // err is non-nil; don't change it
+			tx.SafeRollback() // err is non-nil; don't change it
 		} else {
 			err = tx.Commit() // err is nil; if Commit returns error update err
 		}
