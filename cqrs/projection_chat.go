@@ -19,7 +19,7 @@ import (
 	"github.com/jackc/pgtype"
 )
 
-func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32, offset int64) ([]int64, error) {
+func (m *CommonProjection) GetChatIds(ctx context.Context, tx *sql.Tx, size int32, offset int64) ([]int64, error) {
 	ma := []int64{}
 
 	err := sqlscan.Select(ctx, tx, &ma, `
@@ -38,7 +38,7 @@ func (m *CommonProjection) GetChatIds(ctx context.Context, tx *db.Tx, size int32
 func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated) error {
 	// we don't check chat existence for the chat creation
 
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+	errOuter := db.Transact(ctx, m.db.DB, func(tx *sql.Tx) error {
 		if event.TetATet {
 			if event.TetATetOppositeUserId != nil {
 				tetATetTwoExists, _, errInner := m.IsExistsTetATetTwo(ctx, tx, event.AdditionalData.BehalfUserId, *event.TetATetOppositeUserId)
@@ -146,7 +146,7 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 
 func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) (*int64, error) {
 	var previousBlogAbout *int64
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+	errOuter := db.Transact(ctx, m.db.DB, func(tx *sql.Tx) error {
 		chatExists, err := m.checkChatExists(ctx, tx, event.ChatId)
 		if err != nil {
 			return err
@@ -215,7 +215,7 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 }
 
 func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+	errOuter := db.Transact(ctx, m.db.DB, func(tx *sql.Tx) error {
 		// we don't check IsChatAdmin because a participant was already removed
 
 		blog, errInner := m.isChatBlog(ctx, tx, event.ChatId)
@@ -260,7 +260,7 @@ func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted
 }
 
 func (m *CommonProjection) OnChatPinned(ctx context.Context, event *UserChatPinned) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+	errOuter := db.Transact(ctx, m.db.DB, func(tx *sql.Tx) error {
 		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err
@@ -296,7 +296,7 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *UserChatPinn
 
 func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context, event *UserChatNotificationSettingsSetted) error {
 
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+	errOuter := db.Transact(ctx, m.db, func(tx *sql.Tx) error {
 		participant, err := m.IsParticipant(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 		if err != nil {
 			return err

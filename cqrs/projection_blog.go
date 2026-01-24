@@ -21,7 +21,7 @@ import (
 	"github.com/georgysavva/scany/v2/sqlscan"
 )
 
-func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId int64, createdTime time.Time, blogAboutP *bool) (*int64, error) {
+func (m *CommonProjection) refreshBlog(ctx context.Context, tx *sql.Tx, chatId int64, createdTime time.Time, blogAboutP *bool) (*int64, error) {
 	var blogInpData = struct {
 		ChatId      int64   `db:"chat_id"`
 		MessageId   *int64  `db:"message_id"`
@@ -136,7 +136,7 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 	return previousBlogAbout, nil
 }
 
-func (m *CommonProjection) removeBlog(ctx context.Context, tx *db.Tx, chatId int64) error {
+func (m *CommonProjection) removeBlog(ctx context.Context, tx *sql.Tx, chatId int64) error {
 	_, errInner := tx.ExecContext(ctx, `
 				delete from blog where id = $1
 			`, chatId)
@@ -155,7 +155,7 @@ func isBlogInternal(chatIsBlog bool) bool {
 }
 
 func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *MessageBlogPostMade) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+	errOuter := db.Transact(ctx, m.db.DB, func(tx *sql.Tx) error {
 		chatExists, errInner := m.checkChatExists(ctx, tx, event.ChatId)
 		if errInner != nil {
 			return errInner
@@ -425,7 +425,7 @@ func (m *CommonProjection) GetBlogs(ctx context.Context, size int32, offset int6
 		return nil, 0, nil, fmt.Errorf("Unknown order by: %v", orderBy)
 	}
 
-	pwc, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (*postsWithCount, error) {
+	pwc, errOuter := db.TransactWithResult(ctx, m.db.DB, func(tx *sql.Tx) (*postsWithCount, error) {
 		ma := []BlogListViewDto{}
 
 		errInner := sqlscan.Select(ctx, tx, &ma, fmt.Sprintf(`
@@ -480,7 +480,7 @@ func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64)
 		reactions    []dto.ReactionDto
 		blogAbout    *blogAbout
 	}
-	dd, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*dbDto, error) {
+	dd, errOuter := db.TransactWithResult(ctx, m.cp.db.DB, func(tx *sql.Tx) (*dbDto, error) {
 		blog, chatBasic, b, errInn := m.cp.GetBlog(ctx, tx, blogId)
 		if errInn != nil {
 			m.lgr.ErrorContext(ctx, "Error getting blog", "err", errInn)
@@ -730,7 +730,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 		reactions               map[int64][]dto.ReactionDto
 	}
 
-	cwd, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*commentsWithData, error) {
+	cwd, errOuter := db.TransactWithResult(ctx, m.cp.db.DB, func(tx *sql.Tx) (*commentsWithData, error) {
 		postMessageId, errInn := m.cp.getBlogPostMessageId(ctx, tx, blogId)
 		if postMessageId == nil {
 			return &commentsWithData{

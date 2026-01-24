@@ -2,6 +2,7 @@ package cqrs
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/logger"
@@ -336,7 +337,7 @@ func RunSequenceFastforwarder(
 	ctx := context.Background()
 
 	lgr.Info("Attempting to fast-forward sequences")
-	txErr := db.Transact(ctx, dba, func(tx *db.Tx) error {
+	txErr := db.Transact(ctx, dba.DB, func(tx *sql.Tx) error {
 		xerr := commonProjection.SetXactFastForwardSequenceLock(ctx, tx)
 		if xerr != nil {
 			return xerr

@@ -7,12 +7,12 @@ import (
 )
 
 func (m *CommonProjection) OnTechnicalProjectionsTruncated(ctx context.Context, event *ProjectionsTruncated) error {
-	err := db.RunResetDatabaseSoft(m.db, m.cfg)
+	err := db.RunResetDatabaseSoft(m.db, m.cfg, m.lgr)
 	if err != nil {
 		return fmt.Errorf("Error during resetting: %w", err)
 	}
 
-	err = db.RunMigrations(m.db, m.cfg)
+	err = db.RunMigrations(m.db, m.cfg, m.lgr)
 	if err != nil {
 		return fmt.Errorf("Error during migrating: %w", err)
 	}

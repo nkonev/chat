@@ -52,7 +52,7 @@ func NewEnrichingProjection(cp *CommonProjection, lgr *logger.LoggerWrapper, aaa
 	}
 }
 
-func (m *CommonProjection) GetNextChatId(ctx context.Context, tx *db.Tx) (int64, error) {
+func (m *CommonProjection) GetNextChatId(ctx context.Context, tx *sql.Tx) (int64, error) {
 	var nid int64
 	err := sqlscan.Get(ctx, tx, &nid, "select nextval('chat_id_sequence')")
 	if err != nil {
@@ -61,7 +61,7 @@ func (m *CommonProjection) GetNextChatId(ctx context.Context, tx *db.Tx) (int64,
 	return nid, nil
 }
 
-func (m *CommonProjection) InitializeChatIdSequenceIfNeed(ctx context.Context, tx *db.Tx) error {
+func (m *CommonProjection) InitializeChatIdSequenceIfNeed(ctx context.Context, tx *sql.Tx) error {
 	var called bool
 	err := sqlscan.Get(ctx, tx, &called, "SELECT is_called FROM chat_id_sequence")
 	if err != nil {
@@ -101,7 +101,7 @@ func (m *CommonProjection) GetNextMessageId(ctx context.Context, co db.CommonOpe
 	return messageId, nil
 }
 
-func (m *CommonProjection) InitializeMessageIdSequenceIfNeed(ctx context.Context, tx *db.Tx, chatId int64) error {
+func (m *CommonProjection) InitializeMessageIdSequenceIfNeed(ctx context.Context, tx *sql.Tx, chatId int64) error {
 	var currentGeneratedMessageId int64
 
 	err := sqlscan.Get(ctx, tx, &currentGeneratedMessageId, "SELECT coalesce(last_generated_message_id, 0) from chat_common where id = $1", chatId)
@@ -175,7 +175,7 @@ func (m *CommonProjection) GetIsTruncatingCompleted(ctx context.Context, co db.C
 const lockIdKey1 = 1
 const lockIdKey2 = 2
 
-func (m *CommonProjection) SetXactFastForwardSequenceLock(ctx context.Context, tx *db.Tx) error {
+func (m *CommonProjection) SetXactFastForwardSequenceLock(ctx context.Context, tx *sql.Tx) error {
 	_, err := tx.ExecContext(ctx, "select pg_advisory_xact_lock($1, $2)", lockIdKey1, lockIdKey2)
 	return err
 }

@@ -12,6 +12,7 @@ package cqrs
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"go-cqrs-chat-example/config"
@@ -375,7 +376,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		}
 	}
 
-	chatId, err := db.TransactWithResult(ctx, dba, func(tx *db.Tx) (int64, error) {
+	chatId, err := db.TransactWithResult(ctx, dba.DB, func(tx *sql.Tx) (int64, error) {
 		return commonProjection.GetNextChatId(ctx, tx)
 	})
 	if err != nil {
@@ -781,7 +782,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		chatHasMessages bool
 	}
 
-	ad, err := db.TransactWithResult(ctx, dba, func(tx *db.Tx) (*authDto, error) {
+	ad, err := db.TransactWithResult(ctx, dba.DB, func(tx *sql.Tx) (*authDto, error) {
 		adt, errInn := commonProjection.GetMessageDataForAuthorization(ctx, tx, copyCommand.AdditionalData.BehalfUserId, copyCommand.ChatId, dto.NoId)
 		if errInn != nil {
 			return nil, errInn

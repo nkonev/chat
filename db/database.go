@@ -26,14 +26,8 @@ import (
 )
 
 type DB struct {
-	pool *pgxpool.Pool
-	lgr  *logger.LoggerWrapper
+	Pool *pgxpool.Pool
 	*sql.DB
-}
-
-type Tx struct {
-	*sql.Tx
-	lgr *logger.LoggerWrapper
 }
 
 // Transactional and non- operations
@@ -43,49 +37,10 @@ type CommonOperations interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
-func (dbR *DB) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	return dbR.DB.QueryContext(ctx, query, args...)
-}
-
-func (txR *Tx) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	return txR.Tx.QueryContext(ctx, query, args...)
-}
-
-func (dbR *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	return dbR.DB.QueryRowContext(ctx, query, args...)
-}
-
-func (txR *Tx) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	return txR.Tx.QueryRowContext(ctx, query, args...)
-}
-
-func (dbR *DB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return dbR.DB.ExecContext(ctx, query, args...)
-}
-
-func (txR *Tx) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return txR.Tx.ExecContext(ctx, query, args...)
-}
-
-// Begin starts and returns a new transaction.
-func (db *DB) Begin(ctx context.Context, lgr *logger.LoggerWrapper) (*Tx, error) {
-	if tx, err := db.DB.BeginTx(ctx, nil); err != nil {
-		return nil, fmt.Errorf("error during interacting with db: %w", err)
-	} else {
-		return &Tx{tx, lgr}, nil
-	}
-}
-
-func (tx *Tx) SafeRollback() {
-	if err0 := tx.Rollback(); err0 != nil {
-		tx.lgr.Error("Error during rollback tx ", "err", err0)
-	}
-}
-
 // Performs txFunc transactionally with the result.
 // Deliberately doesn't support "nesting" to keep the code simple - to have only one place with TransactWithResult().
-func TransactWithResult[T any](ctx context.Context, db *DB, txFunc func(*Tx) (T, error)) (ret T, err error) {
-	tx, err := db.Begin(ctx, db.lgr)
+func TransactWithResult[T any](ctx context.Context, db *sql.DB, txFunc func(*sql.Tx) (T, error)) (ret T, err error) {
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return
 	}
@@ -105,8 +60,8 @@ func TransactWithResult[T any](ctx context.Context, db *DB, txFunc func(*Tx) (T,
 
 // Performs txFunc transactionally without any result.
 // Deliberately doesn't support "nesting" to keep the code simple - to have only one place with Transact().
-func Transact(ctx context.Context, db *DB, txFunc func(*Tx) error) (err error) {
-	tx, err := db.Begin(ctx, db.lgr)
+func Transact(ctx context.Context, db *sql.DB, txFunc func(*sql.Tx) error) (err error) {
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return
 	}
@@ -191,14 +146,14 @@ func ConfigureDatabase(
 		},
 	})
 
-	return &DB{pool, lgr, stdDb}, nil
+	return &DB{pool, stdDb}, nil
 }
 
 //go:embed migrations
 var embeddedMigrationFiles embed.FS
 
-func (db *DB) Migrate(mc config.MigrationConfig) error {
-	db.lgr.Info("Starting migration")
+func (db *DB) Migrate(mc config.MigrationConfig, lgr *logger.LoggerWrapper) error {
+	lgr.Info("Starting migration")
 	staticDir := http.FS(embeddedMigrationFiles)
 	src, err := httpfs.New(staticDir, "migrations")
 	if err != nil {
@@ -206,7 +161,7 @@ func (db *DB) Migrate(mc config.MigrationConfig) error {
 	}
 
 	// here we acquire a dedicated sql db in order to properly close it to prevent hanging on the app shutdown
-	stdDb := stdlib.OpenDBFromPool(db.pool)
+	stdDb := stdlib.OpenDBFromPool(db.Pool)
 	defer stdDb.Close()
 
 	pgInstance, err := pgxMigrate.WithInstance(stdDb, &pgxMigrate.Config{
@@ -226,11 +181,11 @@ func (db *DB) Migrate(mc config.MigrationConfig) error {
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err
 	}
-	db.lgr.Info("Migration successfully completed")
+	lgr.Info("Migration successfully completed")
 	return nil
 }
 
-func (db *DB) Reset(mc config.MigrationConfig, hard bool) error {
+func (db *DB) Reset(mc config.MigrationConfig, lgr *logger.LoggerWrapper, hard bool) error {
 
 	additional := ""
 	if hard { // whether to preserve techical info (need to fast-worward, need to skip old db migration and so on)
@@ -261,18 +216,18 @@ func (db *DB) Reset(mc config.MigrationConfig, hard bool) error {
 
 	drop table if exists %s;
 `, additional, mc.MigrationTable))
-	db.lgr.Info("Recreating database", "err", err)
+	lgr.Info("Recreating database", "err", err)
 	return err
 }
 
-func RunMigrations(db *DB, cfg *config.AppConfig) error {
-	return db.Migrate(cfg.PostgreSQL.Migration)
+func RunMigrations(db *DB, cfg *config.AppConfig, lgr *logger.LoggerWrapper) error {
+	return db.Migrate(cfg.PostgreSQL.Migration, lgr)
 }
 
-func RunResetDatabaseSoft(db *DB, cfg *config.AppConfig) error {
-	return db.Reset(cfg.PostgreSQL.Migration, false)
+func RunResetDatabaseSoft(db *DB, cfg *config.AppConfig, lgr *logger.LoggerWrapper) error {
+	return db.Reset(cfg.PostgreSQL.Migration, lgr, false)
 }
 
-func RunResetDatabaseHard(db *DB, cfg *config.AppConfig) error {
-	return db.Reset(cfg.PostgreSQL.Migration, true)
+func RunResetDatabaseHard(db *DB, cfg *config.AppConfig, lgr *logger.LoggerWrapper) error {
+	return db.Reset(cfg.PostgreSQL.Migration, lgr, true)
 }
