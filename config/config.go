@@ -15,9 +15,6 @@ import (
 	"github.com/traefik/paerser/flag"
 )
 
-const configLongPrefix = "--config"
-const configShortPrefix = "-c"
-
 type KafkaTopicConfig struct {
 	Topic             string
 	NumPartitions     int32
@@ -248,31 +245,18 @@ func createTypedConfig(filename string, args ...string) (*AppConfig, error) {
 
 	var argsToReadConfig []string
 
-	if len(args) > 0 && (strings.HasPrefix(args[0], configLongPrefix) || strings.HasPrefix(args[0], configShortPrefix)) {
-		// load provided config
-		stringWithConfig := args[0]
-		var thePath = stringWithConfig
-		thePath, _ = strings.CutPrefix(thePath, configLongPrefix)
-		thePath, _ = strings.CutPrefix(thePath, configShortPrefix)
+	configInArgs, configFilePath, argsToConfig, err := app.IsConfig(args)
+	if err != nil {
+		return nil, fmt.Errorf("An error occured during working with config: %w", err)
+	}
 
-		if strings.HasPrefix(thePath, "=") {
-			thePath, _ = strings.CutPrefix(thePath, "=")
-			argsToReadConfig = args[1:]
-		} else {
-			if len(args) < 2 {
-				return nil, fmt.Errorf("expected file argument")
-			}
-			thePath = args[1]
-			argsToReadConfig = args[2:]
-		}
+	if configInArgs {
+		argsToReadConfig = argsToConfig
 
-		thePath = strings.TrimSpace(thePath)
-
-		err = file.Decode(thePath, &conf)
+		err = file.Decode(configFilePath, &conf)
 		if err != nil {
 			return nil, fmt.Errorf("config file loaded failed. %v\n", err)
 		}
-
 	} else {
 		// load default embed config
 		embedBytes, err := configFs.ReadFile("config/" + filename)

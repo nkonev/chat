@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
@@ -19,6 +20,14 @@ import (
 const CommandResetName = "reset"
 
 func RunReset(args []string) {
+	if app.IsHelp(args) {
+		fmt.Println(`
+Performs reset the CQRS projections in PostgreSQL and sets the 'need_to_fast_forward_sequences' task into "technical" table.
+		`)
+
+		return
+	}
+
 	cfg, err := config.CreateTypedConfig(args)
 	if err != nil {
 		panic(err)

@@ -8,12 +8,13 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Printf("No command provided. Expected command one of %v\n", cmd.AllCommands)
+		fmt.Printf("No command provided. Expected command is one of %s\n", cmd.AllCommands.String())
 		os.Exit(1)
 	}
 
 	theCmd := os.Args[1]
 	remainingArgs := os.Args[2:]
+
 	switch theCmd {
 	case cmd.CommandImportName:
 		cmd.RunImport(remainingArgs)
@@ -28,7 +29,7 @@ func main() {
 	case cmd.CommandServeName:
 		cmd.RunServe(remainingArgs)
 	default:
-		fmt.Printf("Unknown command '%v'. Expected command one of %v\n", theCmd, cmd.AllCommands)
+		fmt.Printf("Unknown command '%v'. Expected command is one of %s\n", theCmd, cmd.AllCommands.String())
 		os.Exit(1)
 	}
 }

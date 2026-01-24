@@ -22,5 +22,12 @@ Examples:
 
 ./%s serve -c ./config/config/config-dev.yml --logger.level=debug --postgresql.prettyLog=false --logger.json=true
 ./%s -c=./config/config/config-dev.yml --server.dump=false --http.dump=false --postgresql.dump=false --cqrs.dump=false
-`, executableName, AllCommands, executableName, executableName, executableName, executableName)
+
+To get the particular command's help, use
+%s <command> [--help|-h]
+
+Examples:
+./%s import --help
+
+`, executableName, AllCommands.String(), executableName, executableName, executableName, executableName, executableName, executableName)
 }

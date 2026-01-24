@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
@@ -26,6 +28,17 @@ import (
 const CommandServeName = "serve"
 
 func RunServe(args []string) {
+	if app.IsHelp(args) {
+		fmt.Println(`
+Starts normal serving api requests.
+Http server starts when all the events from the Kafka events topic were consumed and
+the 'need_to_fast_forward_sequences' and 'need_to_fast_forward_sequences' tasks
+in "technical" PostgreSQL table are finished.
+		`)
+
+		return
+	}
+
 	cfg, err := config.CreateTypedConfig(args)
 	if err != nil {
 		panic(err)
