@@ -32,7 +32,7 @@ func RunServe(args []string) {
 		fmt.Println(`
 Starts normal serving api requests.
 Http server starts when all the events from the Kafka events topic were consumed and
-the 'need_to_fast_forward_sequences' and 'need_to_fast_forward_sequences' tasks
+the 'need_to_fast_forward_sequences' task
 in "technical" PostgreSQL table are finished.
 Also starts schedulers and RabbitMQ listeners.
 		`)

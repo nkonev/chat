@@ -27,7 +27,7 @@ func RunRewind(args []string) {
 	if app.IsHelp(args) {
 		fmt.Println(`
 Consumes all the events from the Kafka events topic and processes
-the 'need_to_fast_forward_sequences' and 'need_to_fast_forward_sequences' tasks
+the 'need_to_fast_forward_sequences' task
 in "technical" PostgreSQL table.
 		`)
 
