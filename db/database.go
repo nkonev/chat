@@ -124,6 +124,87 @@ func Transact(ctx context.Context, db *DB, txFunc func(*Tx) error) (err error) {
 	return err
 }
 
+type TraceLogWrapper struct {
+	delegate tracelog.TraceLog
+}
+
+// https://github.com/jackc/pgx/pull/2482
+func (tl *TraceLogWrapper) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	logArgs := make([]any, 0, len(data.Args))
+
+	for i, a := range data.Args {
+		if i == 0 {
+			switch a.(type) {
+			case pgx.QueryResultFormats:
+				continue
+			case pgx.QueryResultFormatsByOID:
+				continue
+			case pgx.QueryExecMode:
+				continue
+			case pgx.QueryRewriter:
+				continue
+			}
+		}
+		logArgs = append(logArgs, a)
+	}
+
+	data.Args = logArgs
+
+	return tl.delegate.TraceQueryStart(ctx, conn, data)
+}
+
+func (tl *TraceLogWrapper) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryEndData) {
+	tl.delegate.TraceQueryEnd(ctx, conn, data)
+}
+
+func (tl *TraceLogWrapper) TraceBatchStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceBatchStartData) context.Context {
+	return tl.delegate.TraceBatchStart(ctx, conn, data)
+}
+
+func (tl *TraceLogWrapper) TraceBatchQuery(ctx context.Context, conn *pgx.Conn, data pgx.TraceBatchQueryData) {
+	tl.delegate.TraceBatchQuery(ctx, conn, data)
+}
+
+func (tl *TraceLogWrapper) TraceBatchEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceBatchEndData) {
+	tl.delegate.TraceBatchEnd(ctx, conn, data)
+}
+
+func (tl *TraceLogWrapper) TraceCopyFromStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceCopyFromStartData) context.Context {
+	return tl.delegate.TraceCopyFromStart(ctx, conn, data)
+}
+
+func (tl *TraceLogWrapper) TraceCopyFromEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceCopyFromEndData) {
+	tl.delegate.TraceCopyFromEnd(ctx, conn, data)
+}
+
+func (tl *TraceLogWrapper) TraceConnectStart(ctx context.Context, data pgx.TraceConnectStartData) context.Context {
+	return tl.delegate.TraceConnectStart(ctx, data)
+}
+
+func (tl *TraceLogWrapper) TraceConnectEnd(ctx context.Context, data pgx.TraceConnectEndData) {
+	tl.delegate.TraceConnectEnd(ctx, data)
+}
+
+func (tl *TraceLogWrapper) TracePrepareStart(ctx context.Context, conn *pgx.Conn, data pgx.TracePrepareStartData) context.Context {
+	return tl.delegate.TracePrepareStart(ctx, conn, data)
+}
+
+func (tl *TraceLogWrapper) TracePrepareEnd(ctx context.Context, conn *pgx.Conn, data pgx.TracePrepareEndData) {
+	tl.delegate.TracePrepareEnd(ctx, conn, data)
+}
+
+func (tl *TraceLogWrapper) TraceAcquireStart(ctx context.Context, pool *pgxpool.Pool, data pgxpool.TraceAcquireStartData) context.Context {
+	return tl.delegate.TraceAcquireStart(ctx, pool, data)
+}
+
+func (tl *TraceLogWrapper) TraceAcquireEnd(ctx context.Context, pool *pgxpool.Pool, data pgxpool.TraceAcquireEndData) {
+	tl.delegate.TraceAcquireEnd(ctx, pool, data)
+}
+
+func (tl *TraceLogWrapper) TraceRelease(pool *pgxpool.Pool, data pgxpool.TraceReleaseData) {
+	tl.delegate.TraceRelease(pool, data)
+}
+
 func ConfigureDatabase(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
@@ -154,14 +235,13 @@ func ConfigureDatabase(
 			return nil, err
 		}
 
-		tracers = append(tracers, &tracelog.TraceLog{
+		tracers = append(tracers, &TraceLogWrapper{tracelog.TraceLog{
 			Logger:   adapterLogger,
 			LogLevel: ll,
 			Config: &tracelog.TraceLogConfig{
 				TimeKey: "duration",
 			},
-		},
-		)
+		}})
 	}
 
 	// https://github.com/jackc/pgx/discussions/1677#discussioncomment-12253699
