@@ -82,48 +82,6 @@ func (tx *Tx) SafeRollback() {
 	}
 }
 
-// Performs txFunc transactionally with the result.
-// Deliberately doesn't support "nesting" to keep the code simple - to have only one place with TransactWithResult().
-func TransactWithResult[T any](ctx context.Context, db *DB, txFunc func(*Tx) (T, error)) (ret T, err error) {
-	tx, err := db.Begin(ctx, db.lgr)
-	if err != nil {
-		return
-	}
-	defer func() {
-		if p := recover(); p != nil {
-			tx.SafeRollback()
-			panic(p) // re-throw panic after Rollback
-		} else if err != nil {
-			tx.SafeRollback() // err is non-nil; don't change it
-		} else {
-			err = tx.Commit() // err is nil; if Commit returns error update err
-		}
-	}()
-	ret, err = txFunc(tx)
-	return ret, err
-}
-
-// Performs txFunc transactionally without any result.
-// Deliberately doesn't support "nesting" to keep the code simple - to have only one place with Transact().
-func Transact(ctx context.Context, db *DB, txFunc func(*Tx) error) (err error) {
-	tx, err := db.Begin(ctx, db.lgr)
-	if err != nil {
-		return
-	}
-	defer func() {
-		if p := recover(); p != nil {
-			tx.SafeRollback()
-			panic(p) // re-throw panic after Rollback
-		} else if err != nil {
-			tx.SafeRollback() // err is non-nil; don't change it
-		} else {
-			err = tx.Commit() // err is nil; if Commit returns error update err
-		}
-	}()
-	err = txFunc(tx)
-	return err
-}
-
 type TraceLogWrapper struct {
 	delegate tracelog.TraceLog
 }
@@ -263,14 +221,16 @@ func ConfigureDatabase(
 
 	stdDb := stdlib.OpenDBFromPool(pool)
 
-	lc.Append(fx.Hook{
-		OnStop: func(ctx context.Context) error {
-			lgr.Info("Stopping database pool")
-			stdDb.Close()
-			pool.Close()
-			return nil
-		},
-	})
+	if lc != nil {
+		lc.Append(fx.Hook{
+			OnStop: func(ctx context.Context) error {
+				lgr.Info("Stopping database pool")
+				stdDb.Close()
+				pool.Close()
+				return nil
+			},
+		})
+	}
 
 	return &DB{pool, lgr, stdDb}, nil
 }
@@ -341,6 +301,13 @@ func (db *DB) Reset(mc config.MigrationConfig, hard bool) error {
 	drop FUNCTION if exists cyrillic_transliterate;
 
 	drop table if exists %s;
+
+	-- transaction_utils_test.go
+	drop table if exists t1;
+	drop table if exists t2;
+	drop table if exists tr1;
+	drop table if exists tr2;
+
 `, additional, mc.MigrationTable))
 	db.lgr.Info("Recreating database", "err", err)
 	return err
