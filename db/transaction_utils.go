@@ -26,20 +26,9 @@ func TransactWithResult[T any](ctx context.Context, db *DB, txFunc func(*Tx) (T,
 // Performs txFunc transactionally without any result.
 // Deliberately doesn't support "nesting" to keep the code simple - to have only one place with Transact().
 func Transact(ctx context.Context, db *DB, txFunc func(*Tx) error) (err error) {
-	tx, err := db.Begin(ctx, db.lgr)
-	if err != nil {
-		return
-	}
-	defer func() {
-		if p := recover(); p != nil {
-			tx.SafeRollback()
-			panic(p) // re-throw panic after Rollback
-		} else if err != nil {
-			tx.SafeRollback() // err is non-nil; don't change it
-		} else {
-			err = tx.Commit() // err is nil; if Commit returns error update err
-		}
-	}()
-	err = txFunc(tx)
+	_, err = TransactWithResult(ctx, db, func(tx *Tx) (any, error) {
+		errInn := txFunc(tx)
+		return nil, errInn
+	})
 	return err
 }
