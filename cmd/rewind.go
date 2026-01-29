@@ -25,12 +25,14 @@ const CommandRewindName = "rewind"
 
 func RunRewind(args []string) {
 	if app.IsHelp(args) {
-		fmt.Println(`
+		fmt.Printf(`
 Consumes all the events from the Kafka events topic
 hereby (re)building PostgreSQL projections
 and processes the 'need_to_fast_forward_sequences' task
 in "technical" PostgreSQL table.
-		`)
+Then exits.
+
+`)
 
 		return
 	}

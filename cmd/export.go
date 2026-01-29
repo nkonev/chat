@@ -17,10 +17,25 @@ const CommandExportName = "export"
 
 func RunExport(args []string) {
 	if app.IsHelp(args) {
-		fmt.Println(`
+		fmt.Printf(`
 Performs export of CQRS Kafka events topic to the json line file.
-See cqrs.export.file setting.
-		`)
+See cqrs.export.file setting. This settings along with /path/to/file.json also accepts a special '%s' pseudofile.
+So all the logs are written to stderr.
+
+To export to the file:
+./%s %s --cqrs.export.file=/tmp/export.json
+
+or via pipe:
+./%s %s --cqrs.export.file=%s > /tmp/export.json
+
+To export to stdout:
+./%s %s --cqrs.export.file=%s
+
+`, app.PseudoFileStdout,
+			ExecutableName, CommandExportName,
+			ExecutableName, CommandExportName, app.PseudoFileStdout,
+			ExecutableName, CommandExportName, app.PseudoFileStdout,
+		)
 
 		return
 	}

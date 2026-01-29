@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
@@ -16,9 +17,6 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"go.uber.org/fx"
 )
-
-const pseudoFileStdout = "stdout"
-const pseudoFileStdin = "stdin"
 
 const kafkaConfigRetentionMs = "retention.ms"
 
@@ -435,7 +433,7 @@ func Export(
 
 	var writer io.Writer
 	var f *os.File
-	if cfg.Cqrs.Export.File == pseudoFileStdout {
+	if cfg.Cqrs.Export.File == app.PseudoFileStdout {
 		writer = os.Stdout
 	} else {
 		f, err = os.Create(cfg.Cqrs.Export.File)
@@ -532,7 +530,7 @@ func Import(
 
 	var reader io.Reader
 	var f *os.File
-	if cfg.Cqrs.Import.File == pseudoFileStdin {
+	if cfg.Cqrs.Import.File == app.PseudoFileStdin {
 		reader = os.Stdin
 	} else {
 		f, err = os.Open(cfg.Cqrs.Import.File)

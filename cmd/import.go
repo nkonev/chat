@@ -21,10 +21,26 @@ const CommandImportName = "import"
 
 func RunImport(args []string) {
 	if app.IsHelp(args) {
-		fmt.Println(`
-Performs import to the Kafka events topic from the json line file produced by "export" command and sets the 'need_to_fast_forward_sequences' task into "technical" table.
-See cqrs.import.file setting.
-		`)
+		fmt.Printf(`
+Performs import to the Kafka events topic from the json line file produced by "export" command
+and sets the 'need_to_fast_forward_sequences' task into "technical" table.
+And also, this command doesn't build projections.
+To fast-forward Kafka offsets or "rewind" them, and build the projections,
+use '%s' command.
+
+See cqrs.import.file setting. This settings along with /path/to/file.json also accepts a special '%s' pseudofile.
+
+To import from the file:
+./%s %s --cqrs.import.file=/tmp/export.json
+
+To import from stdin via pipe:
+cat /tmp/export.json | ./%s %s --cqrs.import.file=%s
+
+`, CommandRewindName,
+			app.PseudoFileStdin,
+			ExecutableName, CommandImportName,
+			ExecutableName, CommandImportName, app.PseudoFileStdin,
+		)
 
 		return
 	}

@@ -29,13 +29,38 @@ const CommandServeName = "serve"
 
 func RunServe(args []string) {
 	if app.IsHelp(args) {
-		fmt.Println(`
+		fmt.Printf(`
 Starts normal serving api requests.
 Http server starts when all the events from the Kafka events topic were consumed and
 the 'need_to_fast_forward_sequences' task
 in "technical" PostgreSQL table is finished.
 Also starts schedulers and RabbitMQ listeners.
-		`)
+
+To run with config:
+./%s %s %s=/path/to/config.yaml
+
+To run with override log level:
+./%s %s --logger.level=debug
+
+Or via environment variable:
+CHAT_LOGGER_LEVEL=debug ./%s %s
+
+To run with override log json:
+./%s %s --logger.json=false
+
+To run on the specific port:
+./%s %s --server.address=:8888
+
+To run without schedulers:
+./%s %s --schedulers.cleanAbandonedChatsTask.enabled=false --schedulers.cleanDeletedUsersDataTask.enabled=false
+
+`, ExecutableName, CommandServeName, app.ConfigLongPrefix,
+			ExecutableName, CommandServeName,
+			ExecutableName, CommandServeName,
+			ExecutableName, CommandServeName,
+			ExecutableName, CommandServeName,
+			ExecutableName, CommandServeName,
+		)
 
 		return
 	}

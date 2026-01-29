@@ -11,6 +11,9 @@ const ConfigShortPrefix = "-c"
 const HelpLongPrefix = "--help"
 const HelpShortPrefix = "-h"
 
+const PseudoFileStdout = "stdout"
+const PseudoFileStdin = "stdin"
+
 func IsHelp(args []string) bool {
 	var help bool
 

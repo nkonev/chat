@@ -2,13 +2,23 @@ package main
 
 import (
 	"fmt"
+	"go-cqrs-chat-example/app"
 	"go-cqrs-chat-example/cmd"
 	"os"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Printf("No command provided. Expected command is one of %s\n", cmd.AllCommands.String())
+		fmt.Printf(`No command provided.
+Expected command is one of %s.
+Also %s or %s is supported, e. g.:
+
+%s %s %s
+
+`, cmd.AllCommands.String(),
+			app.HelpLongPrefix, app.HelpShortPrefix,
+			cmd.ExecutableName, cmd.CommandServeName, app.HelpLongPrefix,
+		)
 		os.Exit(1)
 	}
 
@@ -31,7 +41,7 @@ func main() {
 	case cmd.CommandServeName:
 		cmd.RunServe(remainingArgs)
 	default:
-		fmt.Printf("Unknown command '%v'. Expected command is one of %s\n", theCmd, cmd.AllCommands.String())
+		fmt.Printf("Unknown command '%v'. Expected command is one of %s.\n", theCmd, cmd.AllCommands.String())
 		os.Exit(1)
 	}
 }
