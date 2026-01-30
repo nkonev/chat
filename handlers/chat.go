@@ -82,6 +82,7 @@ func (ch *ChatHandler) CreateChat(g *gin.Context) {
 		AvatarBig:                           ccd.AvatarBig,
 		CanResend:                           utils.GetNullableBooleanOr(ccd.CanResend, dto.DefaultCanResend),
 		CanReact:                            utils.GetNullableBooleanOr(ccd.CanReact, dto.DefaultCanReact),
+		CanCreateThread:                     utils.GetNullableBooleanOr(ccd.CanReact, dto.DefaultCanCreateThread),
 		AvailableToSearch:                   utils.GetNullableBooleanOr(ccd.AvailableToSearch, dto.DefaultAvailableToSearch),
 		RegularParticipantCanPublishMessage: utils.GetNullableBooleanOr(ccd.RegularParticipantCanPublishMessage, dto.DefaultRegularParticipantCanPublishMessage),
 		RegularParticipantCanPinMessage:     utils.GetNullableBooleanOr(ccd.RegularParticipantCanPinMessage, dto.DefaultRegularParticipantCanPinMessage),
@@ -126,13 +127,14 @@ func (ch *ChatHandler) CreateTetAChat(g *gin.Context) {
 	tetATetChatName := fmt.Sprintf("tet_a_tet_%v_%v", userId, oppositeUserId)
 
 	cc := cqrs.ChatCreate{
-		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
-		Title:          tetATetChatName,
-		ParticipantIds: []int64{oppositeUserId},
-		TetATet:        true,
-		Blog:           false,
-		CanResend:      ch.cfg.Chat.TetATet.CanResend,
-		CanReact:       ch.cfg.Chat.TetATet.CanReact,
+		AdditionalData:  cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		Title:           tetATetChatName,
+		ParticipantIds:  []int64{oppositeUserId},
+		TetATet:         true,
+		Blog:            false,
+		CanResend:       ch.cfg.Chat.TetATet.CanResend,
+		CanReact:        ch.cfg.Chat.TetATet.CanReact,
+		CanCreateThread: ch.cfg.Chat.TetATet.CanCreateThread,
 	}
 
 	chatId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection, ch.stripTagsPolicy, ch.cfg, ch.rabbitmqOutputEventPublisher, ch.lgr)
@@ -182,6 +184,7 @@ func (ch *ChatHandler) EditChat(g *gin.Context) {
 		AvatarBig:                           ccd.AvatarBig,
 		CanResend:                           utils.GetNullableBooleanOr(ccd.CanResend, dto.DefaultCanResend),
 		CanReact:                            utils.GetNullableBooleanOr(ccd.CanReact, dto.DefaultCanReact),
+		CanCreateThread:                     utils.GetNullableBooleanOr(ccd.CanReact, dto.DefaultCanCreateThread),
 		AvailableToSearch:                   utils.GetNullableBooleanOr(ccd.AvailableToSearch, dto.DefaultAvailableToSearch),
 		RegularParticipantCanPublishMessage: utils.GetNullableBooleanOr(ccd.RegularParticipantCanPublishMessage, dto.DefaultRegularParticipantCanPublishMessage),
 		RegularParticipantCanPinMessage:     utils.GetNullableBooleanOr(ccd.RegularParticipantCanPinMessage, dto.DefaultRegularParticipantCanPinMessage),
@@ -235,6 +238,104 @@ func (ch *ChatHandler) DeleteChat(g *gin.Context) {
 		g.Status(http.StatusInternalServerError)
 		return
 	}
+
+	g.Status(http.StatusOK)
+}
+
+func (ch *ChatHandler) CreateThread(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mid := g.Param(dto.MessageIdParam)
+
+	messageId, err := utils.ParseInt64(mid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cc := cqrs.ThreadCreate{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		ChatId:         chatId,
+		MessageId:      messageId,
+	}
+
+	threadId, err := cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
+	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ThreadCreate command", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	ch.lgr.InfoContext(g.Request.Context(), "created the thread", logger.AttributeChatId, chatId, logger.AttributeThreadId, threadId)
+
+	m := dto.IdResponse{Id: threadId}
+
+	g.JSON(http.StatusOK, m)
+}
+
+func (ch *ChatHandler) DeleteThread(g *gin.Context) {
+	userId, err := getUserId(g)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cid := g.Param(dto.ChatIdParam)
+
+	chatId, err := utils.ParseInt64(cid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	mid := g.Param(dto.MessageIdParam)
+
+	messageId, err := utils.ParseInt64(mid)
+	if err != nil {
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding messageId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	cc := cqrs.ThreadDelete{
+		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		ChatId:         chatId,
+		MessageId:      messageId,
+	}
+
+	err = cc.Handle(g.Request.Context(), ch.eventBus, ch.dbWrapper, ch.commonProjection)
+	if err != nil {
+		if translateChatError(g, err) {
+			return
+		}
+
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ThreadDelete command", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	ch.lgr.InfoContext(g.Request.Context(), "created the thread", logger.AttributeChatId, chatId)
 
 	g.Status(http.StatusOK)
 }

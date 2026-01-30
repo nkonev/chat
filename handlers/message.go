@@ -66,10 +66,17 @@ func NewMessageHandler(
 
 func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
-
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -92,14 +99,17 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 
 	cc := cqrs.MessageCreate{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
+		ThreadId:       threadId,
 		ChatId:         chatId,
 		Content:        mcd.Content,
 		FileItemUuid:   mcd.FileItemUuid,
 	}
 	if mcd.EmbedMessageRequest != nil {
 		cc.EmbedMessage = &cqrs.EmbedMessage{
-			Id:        mcd.EmbedMessageRequest.Id,
-			ChatId:    mcd.EmbedMessageRequest.ChatId,
+			Id:     mcd.EmbedMessageRequest.Id,
+			ChatId: mcd.EmbedMessageRequest.ChatId,
+			// TODO make a http handle for the ability to resend the message to the thread (list target thread ids + the first message)
+			// TODO pass thread_id here to EmbedMessage
 			EmbedType: mcd.EmbedMessageRequest.EmbedType,
 		}
 	}
@@ -131,6 +141,14 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 		return
 	}
 
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	userId, err := getUserId(g)
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
@@ -150,6 +168,7 @@ func (mc *MessageHandler) EditMessage(g *gin.Context) {
 	cc := cqrs.MessageEdit{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		MessageId:      ccd.Id,
+		ThreadId:       threadId,
 		ChatId:         chatId,
 		Content:        ccd.Content,
 		FileItemUuid:   ccd.FileItemUuid,
@@ -192,6 +211,14 @@ func (mc *MessageHandler) SyncEmbed(g *gin.Context) {
 		return
 	}
 
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	mid := g.Param(dto.MessageIdParam)
 
 	messageId, err := utils.ParseInt64(mid)
@@ -204,6 +231,7 @@ func (mc *MessageHandler) SyncEmbed(g *gin.Context) {
 	cc := cqrs.MessageSyncEmbed{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		MessageId:      messageId,
+		ThreadId:       threadId,
 		ChatId:         chatId,
 	}
 
@@ -230,6 +258,14 @@ func (mc *MessageHandler) DeleteMessage(g *gin.Context) {
 		return
 	}
 
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	mid := g.Param(dto.MessageIdParam)
 	messageId, err := utils.ParseInt64(mid)
 	if err != nil {
@@ -248,6 +284,7 @@ func (mc *MessageHandler) DeleteMessage(g *gin.Context) {
 	cc := cqrs.MessageDelete{
 		AdditionalData: cqrs.GenerateMessageAdditionalData(getCorrelationId(g), userId),
 		MessageId:      messageId,
+		ThreadId:       threadId,
 		ChatId:         chatId,
 	}
 
@@ -267,10 +304,17 @@ func (mc *MessageHandler) DeleteMessage(g *gin.Context) {
 
 func (mc *MessageHandler) ReadMessage(g *gin.Context) {
 	cid := g.Param(dto.ChatIdParam)
-
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -393,6 +437,14 @@ func (mc *MessageHandler) GetReadMessageUsers(g *gin.Context) {
 		return
 	}
 
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	mid := g.Param(dto.MessageIdParam)
 
 	messageId, err := utils.ParseInt64(mid)
@@ -406,13 +458,13 @@ func (mc *MessageHandler) GetReadMessageUsers(g *gin.Context) {
 	size := utils.FixSizeString(g.Query(dto.SizeParam))
 	offset := utils.GetOffset(page, size)
 
-	data, err := mc.enrichingProjection.GetReadMessageUsers(g.Request.Context(), userId, chatId, messageId, size, offset)
+	data, err := mc.enrichingProjection.GetReadMessageUsers(g.Request.Context(), userId, chatId, threadId, messageId, size, offset)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
 		}
 
-		mc.lgr.ErrorContext(g.Request.Context(), "Error sending MessageRead command", logger.AttributeError, err)
+		mc.lgr.ErrorContext(g.Request.Context(), "Error GetReadMessageUsers", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -432,6 +484,14 @@ func (mc *MessageHandler) ReactionMessage(g *gin.Context) {
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -569,10 +629,17 @@ func (mc *MessageHandler) MessagesFresh(g *gin.Context) {
 	}
 
 	cid := g.Param(dto.ChatIdParam)
-
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -664,6 +731,14 @@ func (mc *MessageHandler) MessagesFilter(g *gin.Context) {
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -829,6 +904,14 @@ func (mc *MessageHandler) PinMessage(g *gin.Context) {
 		return
 	}
 
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
 	p := g.Query(dto.PinParam)
 
 	pin := utils.GetBoolean(p)
@@ -876,6 +959,14 @@ func (mc *MessageHandler) PublishMessage(g *gin.Context) {
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
 		mc.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
+		g.Status(http.StatusInternalServerError)
+		return
+	}
+
+	threadIdStr := g.Param(dto.ThreadIdParam)
+	threadId, err := utils.ParseInt64(threadIdStr)
+	if err != nil {
+		mc.lgr.ErrorContext(g.Request.Context(), "Error binding threadId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}

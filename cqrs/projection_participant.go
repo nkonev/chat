@@ -48,6 +48,11 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			return nil, err
 		}
 
+		err = m.insertLastReadParticipantChatPartitioned(ctx, tx, GetParticipantIds(event.Participants), event.ChatId, dto.RootThreadId)
+		if err != nil {
+			return nil, err
+		}
+
 		return &OnParticipantAddedResponse{
 			ChatExists: true,
 		}, nil
@@ -63,6 +68,51 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	)
 
 	return res, nil
+}
+
+func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participantIds []int64, chatId int64, isRemoveAllParticipantsFromChat, wereRemovedUsersFromAaa bool) error {
+	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+		chatExists, err := m.checkChatExists(ctx, tx, chatId)
+		if err != nil {
+			return err
+		}
+		if !chatExists {
+			m.lgr.InfoContext(ctx, "Skipping OnParticipantRemoved because there is no chat", logger.AttributeChatId, chatId)
+			return nil
+		}
+
+		_, err = tx.ExecContext(ctx, `
+			delete from chat_participant where chat_id = $2 and user_id = any($1)
+		`, participantIds, chatId)
+		if err != nil {
+			return err
+		}
+
+		err = m.deleteLastReadParticipantChatPartitioned(ctx, tx, participantIds, chatId, dto.RootThreadId)
+		if err != nil {
+			return err
+		}
+
+		if !isRemoveAllParticipantsFromChat { // an optimization for chat deletion
+			err = m.updateViewableParticipants(ctx, tx, chatId)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
+	}
+
+	m.lgr.InfoContext(ctx,
+		"Participant removed from common chat",
+		"user_ids", participantIds,
+		logger.AttributeChatId, chatId,
+	)
+
+	return nil
 }
 
 func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userId int64, chatId int64, additionalData *AdditionalData) error {
@@ -92,7 +142,7 @@ func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userId int
 		if err != nil {
 			return err
 		}
-
+		// TODO add here "insert into unread_messages_user_view" - it should be either in or moved out from initializeMessageUnreadMultipleParticipants()
 		// recalc in case an user was added after
 		err = m.initializeMessageUnreadMultipleParticipants(ctx, tx, userId, chatId)
 		if err != nil {
@@ -102,47 +152,7 @@ func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userId int
 	})
 }
 
-func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participantIds []int64, chatId int64, isRemoveAllParticipantsFromChat, wereRemovedUsersFromAaa bool) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		chatExists, err := m.checkChatExists(ctx, tx, chatId)
-		if err != nil {
-			return err
-		}
-		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping OnParticipantRemoved because there is no chat", logger.AttributeChatId, chatId)
-			return nil
-		}
-
-		_, err = tx.ExecContext(ctx, `
-			delete from chat_participant where chat_id = $2 and user_id = any($1)
-		`, participantIds, chatId)
-		if err != nil {
-			return err
-		}
-
-		if !isRemoveAllParticipantsFromChat { // an optimization for chat deletion
-			err = m.updateViewableParticipants(ctx, tx, chatId)
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-	if errOuter != nil {
-		return errOuter
-	}
-
-	m.lgr.InfoContext(ctx,
-		"Participant removed from common chat",
-		"user_ids", participantIds,
-		logger.AttributeChatId, chatId,
-	)
-
-	return nil
-}
-
-func (m *CommonProjection) OnParticipantRemovedSingle(ctx context.Context, participantId int64, chatId int64, wereRemovedUsersFromAaa bool) error {
+func (m *CommonProjection) OnUserChatViewRemoved(ctx context.Context, participantId int64, chatId int64, wereRemovedUsersFromAaa bool) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		chatExists, err := m.checkChatExists(ctx, tx, chatId)
 		if err != nil {
@@ -159,6 +169,8 @@ func (m *CommonProjection) OnParticipantRemovedSingle(ctx context.Context, parti
 		if err != nil {
 			return err
 		}
+
+		// TODO add here "delete from unread_messages_user_view"
 
 		if !wereRemovedUsersFromAaa {
 			err = m.updateHasUnreads(ctx, tx, participantId)

@@ -84,6 +84,7 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 			,avatar_big
 			,can_resend
 			,can_react
+			,can_create_thread
 			,available_to_search
 			,regular_participant_can_publish_message
 			,regular_participant_can_pin_message
@@ -103,6 +104,7 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 		    ,$11
 		    ,$12
 		    ,$13
+		    ,$14
 		)
 		on conflict(id) do update set 
 		    title = excluded.title
@@ -111,12 +113,13 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 		    ,avatar_big = excluded.avatar_big
 			,can_resend = excluded.can_resend
 			,can_react = excluded.can_react
+			,can_create_thread = excluded.can_create_thread
 			,available_to_search = excluded.available_to_search
 			,regular_participant_can_publish_message = excluded.regular_participant_can_publish_message
 			,regular_participant_can_pin_message = excluded.regular_participant_can_pin_message
 			,regular_participant_can_write_message = excluded.regular_participant_can_write_message
 			,regular_participant_can_add_participant = excluded.regular_participant_can_add_participant
-	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.TetATet, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage, event.RegularParticipantCanAddParticipant)
+	`, event.ChatId, event.Title, event.AdditionalData.CreatedAt, event.TetATet, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.CanCreateThread, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage, event.RegularParticipantCanAddParticipant)
 		if errInner != nil {
 			return errInner
 		}
@@ -169,13 +172,14 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 			    ,avatar_big = $4
 				,can_resend = $5
 				,can_react = $6
-				,available_to_search = $7
-				,regular_participant_can_publish_message = $8
-				,regular_participant_can_pin_message = $9
-				,regular_participant_can_write_message = $10
-				,regular_participant_can_add_participant = $11
+			  	,can_create_thread = $7
+				,available_to_search = $8
+				,regular_participant_can_publish_message = $9
+				,regular_participant_can_pin_message = $10
+				,regular_participant_can_write_message = $11
+				,regular_participant_can_add_participant = $12
 			where id = $1
-		`, event.ChatId, event.Title, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage, event.RegularParticipantCanAddParticipant)
+		`, event.ChatId, event.Title, event.Avatar, event.AvatarBig, event.CanResend, event.CanReact, event.CanCreateThread, event.AvailableToSearch, event.RegularParticipantCanPublishMessage, event.RegularParticipantCanPinMessage, event.RegularParticipantCanWriteMessage, event.RegularParticipantCanAddParticipant)
 		if errInner != nil {
 			return errInner
 		}
@@ -336,7 +340,7 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 
 // called in cases when chat should lift because of changing update_date_time
 // in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
-func (m *CommonProjection) OnChatViewRefreshedUnreadMessagesActionIncreaseForPartitionChat(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, unreadMessagesAction UnreadMessagesAction, messageOwnerId int64) error {
+func (m *CommonProjection) OnChatViewRefreshedUnreadMessagesActionIncreaseForPartitionChat(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId, threadId int64, unreadMessagesAction UnreadMessagesAction, messageOwnerId int64) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// in oder not to have a potential race condition
 		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
@@ -351,7 +355,7 @@ func (m *CommonProjection) OnChatViewRefreshedUnreadMessagesActionIncreaseForPar
 
 			// owner
 			if ownerIdP != nil {
-				err := m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, additionalData.CreatedAt)
+				err := m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, threadId, additionalData.CreatedAt)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
@@ -369,31 +373,33 @@ func (m *CommonProjection) OnChatViewRefreshedUnreadMessagesActionIncreaseForPar
 	return nil
 }
 
-func (m *CommonProjection) OnChatViewRefreshedLastMessageActionRefreshForPartitionChat(ctx context.Context, chatId int64, lastMessageAction LastMessageAction) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
+func (m *CommonProjection) OnChatViewRefreshedLastMessageActionRefreshForPartitionChat(ctx context.Context, chatId, threadId int64, lastMessageAction LastMessageAction) error {
+	if threadId == dto.RootThreadId { // because user-seen last message only from root thread
+		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 
-		// it's not forgotten else, it's the different action
-		if lastMessageAction == LastMessageActionRefresh {
-			err := m.setLastMessage(ctx, tx, chatId)
-			if err != nil {
-				return err
+			// it's not forgotten else, it's the different action
+			if lastMessageAction == LastMessageActionRefresh {
+				err := m.setLastMessage(ctx, tx, chatId)
+				if err != nil {
+					return err
+				}
+			} else {
+				m.lgr.ErrorContext(ctx, fmt.Sprintf("Wrong lastMessageAction = %v", lastMessageAction))
 			}
-		} else {
-			m.lgr.ErrorContext(ctx, fmt.Sprintf("Wrong lastMessageAction = %v", lastMessageAction))
+
+			return nil
+		})
+
+		if errOuter != nil {
+			return errOuter
 		}
-
-		return nil
-	})
-
-	if errOuter != nil {
-		return errOuter
 	}
 	return nil
 }
 
 // called in cases when chat should lift because of changing update_date_time
 // in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
-func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Context, additionalData *AdditionalData, participantId int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, increaseOn int, messageOwnerId int64, chatAction ChatAction) error {
+func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Context, additionalData *AdditionalData, participantId int64, chatId, threadId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, increaseOn int, messageOwnerId int64, chatAction ChatAction) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// in oder not to have a potential race condition
 		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
@@ -414,7 +420,7 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Conte
 
 			// not owners
 			if participantIdWithoutMessageOwner != nil && increaseOn > 0 {
-				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, *participantIdWithoutMessageOwner, chatId, increaseOn)
+				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, *participantIdWithoutMessageOwner, chatId, threadId, increaseOn)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
@@ -422,7 +428,7 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Conte
 
 			// owner
 			if ownerIdP != nil {
-				err := m.fastForwardLastRead(ctx, tx, *ownerIdP, chatId)
+				err := m.fastForwardLastRead(ctx, tx, *ownerIdP, chatId, threadId)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
@@ -437,7 +443,7 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Conte
 			wasUpdated = true
 		} else if unreadMessagesAction == UnreadMessagesActionRefresh {
 
-			err := m.setUnreadMessages(ctx, tx, participantId, chatId, dto.NoId, SetUnreadedMessagesActionCalculateUnreadsFromTheUsersLastSavedReadedMessage)
+			err := m.setUnreadMessages(ctx, tx, participantId, chatId, threadId, dto.NoId, SetUnreadedMessagesActionCalculateUnreadsFromTheUsersLastSavedReadedMessage)
 			if err != nil {
 				return err
 			}
@@ -946,9 +952,9 @@ func (m *EnrichingProjection) enrichChat(behalfUserId int64, ch dto.ChatViewDto,
 			oppositeUserId := che.ChatViewDto.ParticipantIds[0]
 			displayableUser = users[oppositeUserId]
 		} else {
-			tetATetOpposite := tetATetOpposite(che.ParticipantIds, behalfUserId)
-			if tetATetOpposite != nil {
-				oppositeUserId := *tetATetOpposite
+			tetATetOppositeUserId := tetATetOpposite(che.ParticipantIds, behalfUserId)
+			if tetATetOppositeUserId != nil {
+				oppositeUserId := *tetATetOppositeUserId
 				displayableUser = users[oppositeUserId]
 			}
 		}
@@ -1009,6 +1015,9 @@ func SetChatPersonalizedFields(copied *dto.ChatViewEnrichedDto, behalfUserId int
 	// yes, mutate the fields
 	copied.CanReact = CanReactOnMessage(copied.CanReact, participant)
 	copied.CanResend = CanResendMessage(copied.CanResend, participant)
+	canCreateThreadChat := copied.CanCreateThread
+	copied.CanCreateThread = CanCreateThread(canCreateThreadChat, participant)
+	copied.CanDeleteThread = CanDeleteThread(canCreateThreadChat, participant)
 
 	// participant can be false in case result from search for publicly available chats
 	copied.IsResultFromSearch = !participant
@@ -1040,6 +1049,14 @@ func CanReactOnMessage(chatCanReact bool, isParticipant bool) bool {
 
 func CanResendMessage(chatCanResend bool, isParticipant bool) bool {
 	return chatCanResend && isParticipant
+}
+
+func CanCreateThread(chatCanCreateThread, isParticipant bool) bool {
+	return chatCanCreateThread && isParticipant
+}
+
+func CanDeleteThread(chatCanCreateThread, isParticipant bool) bool {
+	return chatCanCreateThread && isParticipant
 }
 
 func (m *CommonProjection) IterateOverAllChats(ctx context.Context, co db.CommonOperations, consumer func(chatIdsPortion []int64) error) error {
@@ -1099,6 +1116,7 @@ func (m *CommonProjection) GetChatDataForAuthorization(ctx context.Context, co d
 			,coalesce(cc.tet_a_tet, false) as chat_is_tet_a_tet
 			,coalesce(cc.can_resend, false) as chat_can_resend_message
 			,coalesce(cc.can_react, false) as chat_can_react_on_message
+			,coalesce(cc.can_create_thread, false) as chat_can_create_thread
 			,coalesce(cc.available_to_search, false) as chat_is_available_to_search
 			,coalesce(cc.regular_participant_can_add_participant, false) as regular_participant_can_add_participant
 			,b.id is not null as chat_is_blog
@@ -1133,6 +1151,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		ConsiderMessagesAsUnread            bool             `db:"consider_messages_as_unread"`
 		CanResend                           bool             `db:"can_resend"`
 		CanReact                            bool             `db:"can_react"`
+		CanCreateThread                     bool             `db:"can_create_thread"`
 		RegularParticipantCanPublishMessage bool             `db:"regular_participant_can_publish_message"`
 		RegularParticipantCanPinMessage     bool             `db:"regular_participant_can_pin_message"`
 		RegularParticipantCanWriteMessage   bool             `db:"regular_participant_can_write_message"`
@@ -1228,7 +1247,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			coalesce(ch.user_id, $3) as user_id,
 		    cc.title,
 		    coalesce(ch.pinned, false) as pinned,
-		    coalesce(ch.unread_messages, 0) as unread_messages,
+		    coalesce(m.unread_messages, 0) as unread_messages,
 		    cc.last_message_id,
 		    cc.last_message_owner_id,
 		    cc.last_message_content,
@@ -1243,6 +1262,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			coalesce(ch.consider_messages_as_unread, true) as consider_messages_as_unread,
 			cc.can_resend,
 			cc.can_react,
+			cc.can_create_thread,
 			cc.regular_participant_can_publish_message,
 			cc.regular_participant_can_pin_message,
 			cc.regular_participant_can_write_message,
@@ -1251,6 +1271,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			cc.regular_participant_can_add_participant
 		from chat_common cc
 		%s chat_user_view ch on (cc.id = ch.id and ch.user_id = any($2))
+		join unread_messages_user_view m on (ch.id = m.chat_id and m.user_id = any($2))
 		left join blog b on cc.id = b.id
 		where %s
 		%s
@@ -1283,6 +1304,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			ConsiderMessagesAsUnread:            de.ConsiderMessagesAsUnread,
 			CanResend:                           de.CanResend,
 			CanReact:                            de.CanReact,
+			CanCreateThread:                     de.CanCreateThread,
 			RegularParticipantCanPublishMessage: de.RegularParticipantCanPublishMessage,
 			RegularParticipantCanPinMessage:     de.RegularParticipantCanPinMessage,
 			RegularParticipantCanWriteMessage:   de.RegularParticipantCanWriteMessage,

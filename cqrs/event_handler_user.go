@@ -167,7 +167,7 @@ func (m *EventHandler) OnUserChatViewRemoved(ctx context.Context, event *UserCha
 	eventType := dto.EventTypeChatDeleted
 	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
 
-	err := m.commonProjection.OnParticipantRemovedSingle(ctx, event.UserId, event.ChatId, event.WereRemovedUsersFromAaa)
+	err := m.commonProjection.OnUserChatViewRemoved(ctx, event.UserId, event.ChatId, event.WereRemovedUsersFromAaa)
 	if err != nil {
 		return err
 	}

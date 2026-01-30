@@ -9,6 +9,7 @@ const NoSearchString = ""
 const ReservedPublicallyAvailableForSearchChats = "__AVAILABLE_FOR_SEARCH"
 const DefaultCanReact = true
 const DefaultCanResend = false
+const DefaultCanCreateThread = true
 const DefaultAvailableToSearch = false
 const DefaultRegularParticipantCanWriteMessage = true
 const DefaultRegularParticipantCanPublishMessage = false
@@ -35,6 +36,8 @@ type ChatViewDto struct {
 	ConsiderMessagesAsUnread            bool       `json:"considerMessagesAsUnread"`
 	CanResend                           bool       `json:"canResend"`
 	CanReact                            bool       `json:"canReact"`
+	CanCreateThread                     bool       `json:"canCreateThread"`
+	CanDeleteThread                     bool       `json:"canDeleteThread"`
 	CanPin                              bool       `json:"canPin"`
 	RegularParticipantCanPublishMessage bool       `json:"regularParticipantCanPublishMessage"`
 	RegularParticipantCanPinMessage     bool       `json:"regularParticipantCanPinMessage"`
@@ -155,6 +158,7 @@ type ChatAuthorizationData struct {
 	ChatCanResendMessage                 bool `db:"chat_can_resend_message"`
 	ChatCanReactOnMessage                bool `db:"chat_can_react_on_message"`
 	ChatIsTetATet                        bool `db:"chat_is_tet_a_tet"`
+	ChatCanCreateThread                  bool `db:"chat_can_create_thread"`
 	AvailableToSearch                    bool `db:"chat_is_available_to_search"`
 	IsBlog                               bool `db:"chat_is_blog"`
 	RegularParticipantCanAddParticipants bool `db:"regular_participant_can_add_participant"`

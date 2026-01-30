@@ -54,6 +54,8 @@ func CreateHttpRouter(
 	ginRouter.POST("/api/chat/fresh", chatHandler.ChatsFresh)
 	ginRouter.POST("/api/chat/filter", chatHandler.ChatsFilter)
 
+	ginRouter.POST("/api/chat/:id/thread/message/:messageId", chatHandler.CreateThread)
+
 	ginRouter.PUT("/api/chat/:id/notification", chatHandler.PutUserChatNotificationSettings)
 	ginRouter.GET("/api/chat/:id/notification", chatHandler.GetUserChatNotificationSettings)
 	ginRouter.GET("/api/chat/has-new-messages", chatHandler.HasNewMessages)
@@ -68,28 +70,28 @@ func CreateHttpRouter(
 	ginRouter.PUT("/api/chat/:id/leave", participantHandler.LeaveChat)
 	ginRouter.PUT("/api/chat/:id/join", participantHandler.JoinChat)
 
-	ginRouter.POST("/api/chat/:id/message", messageHandler.CreateMessage)
-	ginRouter.PUT("/api/chat/:id/message", messageHandler.EditMessage)
-	ginRouter.PUT("/api/chat/:id/message/:messageId/sync-embed", messageHandler.SyncEmbed)
-	ginRouter.DELETE("/api/chat/:id/message/:messageId", messageHandler.DeleteMessage)
-	ginRouter.GET("/api/chat/:id/message/read/:messageId", messageHandler.GetReadMessageUsers)
-	ginRouter.PUT("/api/chat/:id/message/read/:messageId", messageHandler.ReadMessage)
+	ginRouter.POST("/api/chat/:id/thread/:threadId/message", messageHandler.CreateMessage)                      // thread passed
+	ginRouter.PUT("/api/chat/:id/thread/:threadId/message", messageHandler.EditMessage)                         // thread passed
+	ginRouter.PUT("/api/chat/:id/thread/:threadId/message/:messageId/sync-embed", messageHandler.SyncEmbed)     // thread passed
+	ginRouter.DELETE("/api/chat/:id/thread/:threadId/message/:messageId", messageHandler.DeleteMessage)         // thread passed
+	ginRouter.GET("/api/chat/:id/thread/:threadId/message/read/:messageId", messageHandler.GetReadMessageUsers) // thread passed
+	ginRouter.PUT("/api/chat/:id/thread/:threadId/message/read/:messageId", messageHandler.ReadMessage)         // TODO pass thread
 	ginRouter.PUT("/api/chat/:id/read", messageHandler.MarkChatAsRead)
 	ginRouter.PUT("/api/chat/read", messageHandler.MarkAsReadAllChats)
-	ginRouter.GET("/api/chat/:id/message/search", messageHandler.SearchMessages)
-	ginRouter.PUT("/api/chat/:id/message/:messageId/blog-post", messageHandler.MakeBlogPost)
-	ginRouter.PUT("/api/chat/:id/message/:messageId/reaction", messageHandler.ReactionMessage)
-	ginRouter.POST("/api/chat/:id/message/fresh", messageHandler.MessagesFresh)
-	ginRouter.POST("/api/chat/:id/message/filter", messageHandler.MessagesFilter)
+	ginRouter.GET("/api/chat/:id/message/search", messageHandler.SearchMessages)                                // TODO show messages from all the threads with the correct links
+	ginRouter.PUT("/api/chat/:id/message/:messageId/blog-post", messageHandler.MakeBlogPost)                    // TODO prohibit thread
+	ginRouter.PUT("/api/chat/:id/thread/:threadId/message/:messageId/reaction", messageHandler.ReactionMessage) // TODO pass thread
+	ginRouter.POST("/api/chat/:id/thread/:threadId/message/fresh", messageHandler.MessagesFresh)                // TODO make thread aware
+	ginRouter.POST("/api/chat/:id/thread/:threadId/message/filter", messageHandler.MessagesFilter)              // TODO pass thread
 	ginRouter.PUT("/api/chat/public/preview-without-html", messageHandler.MessagePreview)
 	ginRouter.GET("/api/chat/:id/mention/suggest", messageHandler.SearchForUsersToMention)
-	ginRouter.GET("/api/chat/:id/message/find-by-file-item-uuid/:fileItemUuid", messageHandler.FindMessageByFileItemUuid)
-	ginRouter.GET("/api/chat/:id/message/pin", messageHandler.GetPinnedMessages)
-	ginRouter.GET("/api/chat/:id/message/pin/promoted", messageHandler.GetPinnedPromotedMessage)
-	ginRouter.PUT("/api/chat/:id/message/:messageId/pin", messageHandler.PinMessage)
-	ginRouter.PUT("/api/chat/:id/message/:messageId/publish", messageHandler.PublishMessage)
-	ginRouter.GET("/api/chat/:id/message/publish", messageHandler.GetPublishedMessages)
-	ginRouter.GET("/api/chat/public/:id/message/:messageId", messageHandler.GetPublishedMessageForPublic)
+	ginRouter.GET("/api/chat/:id/message/find-by-file-item-uuid/:fileItemUuid", messageHandler.FindMessageByFileItemUuid) // TODO make thread aware
+	ginRouter.GET("/api/chat/:id/message/pin", messageHandler.GetPinnedMessages)                                          // TODO make thread aware
+	ginRouter.GET("/api/chat/:id/message/pin/promoted", messageHandler.GetPinnedPromotedMessage)                          // TODO make thread aware
+	ginRouter.PUT("/api/chat/:id/thread/:threadId/message/:messageId/pin", messageHandler.PinMessage)                     // TODO pass thread
+	ginRouter.PUT("/api/chat/:id/thread/:threadId/message/:messageId/publish", messageHandler.PublishMessage)             // TODO pass thread
+	ginRouter.GET("/api/chat/:id/message/publish", messageHandler.GetPublishedMessages)                                   // TODO make thread aware
+	ginRouter.GET("/api/chat/public/:id/message/:messageId", messageHandler.GetPublishedMessageForPublic)                 // TODO make thread aware
 
 	ginRouter.PUT("/api/chat/:id/typing", messageHandler.TypeMessage)
 	ginRouter.PUT("/api/chat/:id/broadcast", messageHandler.BroadcastMessage)

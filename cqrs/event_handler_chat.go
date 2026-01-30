@@ -940,6 +940,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
 	defer messageSpan.End()
 
+	// TODO pass here (GetMessageDataForAuthorization()) threadId, because threadId is one more coordinate as well as chatId
 	adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId)
 	if err != nil {
 		return err
@@ -949,11 +950,13 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 		return nil
 	}
 
+	// TODO pass here (GetMessageDataForAuthorization()) threadId, because threadId is one more coordinate as well as chatId
 	messageBasic, err := m.commonProjection.GetMessageBasic(ctx, m.db, event.ChatId, event.MessageId)
 	if err != nil {
 		return err
 	}
 
+	// TODO pass here (GetMessageDataForAuthorization()) threadId, because threadId is one more coordinate as well as chatId
 	reactions, err := m.commonProjection.GetReactionsOnMessage(ctx, m.db, event.ChatId, event.MessageId)
 	if err != nil {
 		return err
@@ -1631,4 +1634,104 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 		MessageId:          event.MessageId,
 		ReadMessagesAction: event.ReadMessagesAction,
 	})
+}
+
+func (m *EventHandler) OnThreadCreated(ctx context.Context, event *ThreadCreated) error {
+	adt, err := m.commonProjection.GetChatDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId)
+	if err != nil {
+		return err
+	}
+
+	if !CanCreateThread(adt.ChatCanCreateThread, adt.IsParticipant) {
+		m.lgr.InfoContext(ctx, "Skipping ThreadCreated because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId, logger.AttributeThreadId, event.ThreadId)
+		return nil
+	}
+
+	err = m.commonProjection.OnThreadCreated(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+		err = m.commonProjection.insertLastReadParticipantChatPartitioned(ctx, m.db, participantIdsPortion, event.ChatId, event.ThreadId)
+		if err != nil {
+			return err
+		}
+
+		// TODO add here "insert into unread_messages_user_view"
+
+		messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId, nil)
+		if errInn != nil {
+			return errInn
+		}
+
+		for _, messageView := range messageViews {
+			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+				EventType:           dto.EventTypeMessageEdited,
+				UserId:              messageView.BehalfUserId,
+				ChatId:              event.ChatId,
+				MessageNotification: &messageView,
+			})
+			if errInn != nil {
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
+			}
+		}
+
+		return nil
+	})
+	if errOuter != nil {
+		return errOuter
+	}
+	return nil
+}
+
+func (m *EventHandler) OnThreadDeleted(ctx context.Context, event *ThreadDeleted) error {
+	adt, err := m.commonProjection.GetChatDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId)
+	if err != nil {
+		return err
+	}
+
+	if !CanDeleteThread(adt.ChatCanCreateThread, adt.IsParticipant) {
+		m.lgr.InfoContext(ctx, "Skipping ThreadDeleted because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
+		return nil
+	}
+
+	threadId, err := m.commonProjection.OnThreadDeleted(ctx, event)
+	if err != nil {
+		return err
+	}
+
+	if threadId > 0 {
+		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
+			err = m.commonProjection.deleteLastReadParticipantChatPartitioned(ctx, m.db, participantIdsPortion, event.ChatId, threadId)
+			if err != nil {
+				return err
+			}
+
+			// TODO add here "delete from unread_messages_user_view"
+
+			messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId, nil)
+			if errInn != nil {
+				return errInn
+			}
+
+			for _, messageView := range messageViews {
+				errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+					EventType:           dto.EventTypeMessageEdited,
+					UserId:              messageView.BehalfUserId,
+					ChatId:              event.ChatId,
+					MessageNotification: &messageView,
+				})
+				if errInn != nil {
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
+				}
+			}
+
+			return nil
+		})
+		if errOuter != nil {
+			return errOuter
+		}
+	}
+	return nil
 }

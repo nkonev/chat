@@ -34,6 +34,7 @@ type ChatCreated struct {
 	AvatarBig                           *string         `json:"avatarBig"`
 	CanResend                           bool            `json:"canResend"`
 	CanReact                            bool            `json:"canReact"`
+	CanCreateThread                     bool            `json:"canCreateThread"`
 	AvailableToSearch                   bool            `json:"availableToSearch"`
 	RegularParticipantCanPublishMessage bool            `json:"regularParticipantCanPublishMessage"`
 	RegularParticipantCanPinMessage     bool            `json:"regularParticipantCanPinMessage"`
@@ -51,6 +52,7 @@ type ChatEdited struct {
 	AvatarBig                           *string         `json:"avatarBig"`
 	CanResend                           bool            `json:"canResend"`
 	CanReact                            bool            `json:"canReact"`
+	CanCreateThread                     bool            `json:"canCreateThread"`
 	AvailableToSearch                   bool            `json:"availableToSearch"`
 	RegularParticipantCanPublishMessage bool            `json:"regularParticipantCanPublishMessage"`
 	RegularParticipantCanPinMessage     bool            `json:"regularParticipantCanPinMessage"`
@@ -61,6 +63,19 @@ type ChatEdited struct {
 type ChatDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`
+}
+
+type ThreadCreated struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ChatId         int64           `json:"chatId"`
+	MessageId      int64           `json:"messageId"`
+	ThreadId       int64           `json:"threadId"`
+}
+
+type ThreadDeleted struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	ChatId         int64           `json:"chatId"`
+	MessageId      int64           `json:"messageId"`
 }
 
 type ParticipantsAdded struct {
@@ -89,7 +104,6 @@ const (
 	GetParticipantsTypeUnspecified = iota
 	GetParticipantsTypeNormal
 	GetParticipantsTypeAllInChatExcepting
-	GetParticipantsTypeAllInAllChats // test only
 )
 
 type ParticipantDeleted struct {
@@ -139,6 +153,7 @@ type ChatNotificationSettingsSetted struct {
 
 type MessageCommoned struct {
 	Id           int64   `json:"id"` // message id
+	ThreadId     int64   `json:"threadId"`
 	ChatId       int64   `json:"chatId"`
 	Content      string  `json:"content"`
 	FileItemUuid *string `json:"fileItemUuid"`
@@ -296,6 +311,7 @@ type MessageBlogPostMade struct {
 type MessageDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	ChatId         int64           `json:"chatId"`
+	ThreadId       int64           `json:"threadId"`
 	MessageId      int64           `json:"messageId"`
 }
 
@@ -357,6 +373,7 @@ func GenerateMessageAdditionalData(correlationId *string, behalfUserId int64) *A
 	}
 }
 
+// whether chat_id or user_id - partitioned table
 type EventKind int16
 
 const (
@@ -386,6 +403,14 @@ func (s *ChatEdited) GetPartitionKey() string {
 }
 
 func (s *ChatDeleted) GetPartitionKey() string {
+	return utils.ToString(s.ChatId)
+}
+
+func (s *ThreadCreated) GetPartitionKey() string {
+	return utils.ToString(s.ChatId)
+}
+
+func (s *ThreadDeleted) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
@@ -489,6 +514,14 @@ func (s *ChatDeleted) Name() string {
 	return "chatDeleted"
 }
 
+func (s *ThreadCreated) Name() string {
+	return "threadCreated"
+}
+
+func (s *ThreadDeleted) Name() string {
+	return "threadDeleted"
+}
+
 func (s *ParticipantsAdded) Name() string {
 	return "participantsAdded"
 }
@@ -586,6 +619,14 @@ func (s *ChatEdited) GetEventKind() EventKind {
 }
 
 func (s *ChatDeleted) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ThreadCreated) GetEventKind() EventKind {
+	return EventKindChat
+}
+
+func (s *ThreadDeleted) GetEventKind() EventKind {
 	return EventKindChat
 }
 

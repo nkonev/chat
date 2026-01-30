@@ -289,6 +289,8 @@ func ConfigureEventProcessor(
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatPinned),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatNotificationSettingsSetted),
 		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUnreadMessageReaded),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnThreadCreated),
+		cqrs.NewGroupEventHandler(cqrsEventHandler.OnThreadDeleted),
 	)
 	if err != nil {
 		return nil, err
@@ -375,6 +377,12 @@ func RunSequenceFastforwarder(
 				if errI2 != nil {
 					lgr.Error("Error during setting message id sequences", logger.AttributeError, errI2)
 					return errI2
+				}
+
+				errThr := commonProjection.InitializeThreadIdSequenceIfNeed(ctx, tx, chatId)
+				if errThr != nil {
+					lgr.Error("Error during setting thread id sequences", logger.AttributeError, errThr)
+					return errThr
 				}
 			}
 		}

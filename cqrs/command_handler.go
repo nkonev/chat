@@ -104,6 +104,7 @@ type ChatCreate struct {
 	AvatarBig                           *string
 	CanResend                           bool
 	CanReact                            bool
+	CanCreateThread                     bool
 	AvailableToSearch                   bool
 	RegularParticipantCanPublishMessage bool
 	RegularParticipantCanPinMessage     bool
@@ -122,6 +123,7 @@ type ChatEdit struct {
 	AvatarBig                           *string
 	CanResend                           bool
 	CanReact                            bool
+	CanCreateThread                     bool
 	AvailableToSearch                   bool
 	RegularParticipantCanPublishMessage bool
 	RegularParticipantCanPinMessage     bool
@@ -152,6 +154,18 @@ func (a *ChatCreate) Validate() error {
 
 type ChatDelete struct {
 	ChatId         int64
+	AdditionalData *AdditionalData
+}
+
+type ThreadCreate struct {
+	ChatId         int64
+	MessageId      int64
+	AdditionalData *AdditionalData
+}
+
+type ThreadDelete struct {
+	ChatId         int64
+	MessageId      int64
 	AdditionalData *AdditionalData
 }
 
@@ -187,6 +201,7 @@ type EmbedMessage struct {
 
 type MessageCreate struct {
 	AdditionalData *AdditionalData
+	ThreadId       int64
 	ChatId         int64
 	Content        string
 	EmbedMessage   *EmbedMessage
@@ -195,6 +210,7 @@ type MessageCreate struct {
 
 type MessageEdit struct {
 	AdditionalData *AdditionalData
+	ThreadId       int64
 	ChatId         int64
 	MessageId      int64
 	Content        string
@@ -204,6 +220,7 @@ type MessageEdit struct {
 
 type MessageSyncEmbed struct {
 	AdditionalData *AdditionalData
+	ThreadId       int64
 	ChatId         int64
 	MessageId      int64
 }
@@ -231,6 +248,7 @@ func (mcd *MessageEdit) IsValidatabale() bool {
 
 type MessageDelete struct {
 	AdditionalData *AdditionalData
+	ThreadId       int64
 	ChatId         int64
 	MessageId      int64
 }
@@ -375,9 +393,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		}
 	}
 
-	chatId, err := db.TransactWithResult(ctx, dba, func(tx *db.Tx) (int64, error) {
-		return commonProjection.GetNextChatId(ctx, tx)
-	})
+	chatId, err := commonProjection.GetNextChatId(ctx, dba)
 	if err != nil {
 		return 0, err
 	}
@@ -394,6 +410,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 		AvatarBig:                           copyCommand.AvatarBig,
 		CanResend:                           copyCommand.CanResend,
 		CanReact:                            copyCommand.CanReact,
+		CanCreateThread:                     copyCommand.CanCreateThread,
 		AvailableToSearch:                   copyCommand.AvailableToSearch,
 		RegularParticipantCanPublishMessage: copyCommand.RegularParticipantCanPublishMessage,
 		RegularParticipantCanPinMessage:     copyCommand.RegularParticipantCanPinMessage,
@@ -469,6 +486,7 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 		AvatarBig:                           copyCommand.AvatarBig,
 		CanResend:                           copyCommand.CanResend,
 		CanReact:                            copyCommand.CanReact,
+		CanCreateThread:                     copyCommand.CanCreateThread,
 		AvailableToSearch:                   copyCommand.AvailableToSearch,
 		RegularParticipantCanPublishMessage: copyCommand.RegularParticipantCanPublishMessage,
 		RegularParticipantCanPinMessage:     copyCommand.RegularParticipantCanPinMessage,
@@ -543,6 +561,64 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 	cc := &ChatDeleted{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
+	}
+	err = eventBus.Publish(ctx, cc)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *ThreadCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) (int64, error) {
+	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
+	if err != nil {
+		return 0, err
+	}
+
+	if !adt.IsChatFound {
+		return 0, NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", s.ChatId))
+	}
+
+	if !CanCreateThread(adt.ChatCanCreateThread, adt.IsParticipant) {
+		return 0, NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to create the thread in the chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+	}
+
+	threadId, err := commonProjection.GetNextThreadId(ctx, dba, s.ChatId)
+	if err != nil {
+		return 0, err
+	}
+
+	cc := &ThreadCreated{
+		AdditionalData: s.AdditionalData,
+		ChatId:         s.ChatId,
+		ThreadId:       threadId,
+		MessageId:      s.MessageId,
+	}
+	err = eventBus.Publish(ctx, cc)
+	if err != nil {
+		return 0, err
+	}
+	return threadId, nil
+}
+
+func (s *ThreadDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
+	if err != nil {
+		return err
+	}
+
+	if !adt.IsChatFound {
+		return NewChatStillNotExistsError(fmt.Sprintf("chat %d still does not exist", s.ChatId))
+	}
+
+	if !CanDeleteThread(adt.ChatCanCreateThread, adt.IsParticipant) {
+		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to delete the thread in the chat %v", s.AdditionalData.BehalfUserId, s.ChatId))
+	}
+
+	cc := &ThreadDeleted{
+		AdditionalData: s.AdditionalData,
+		ChatId:         s.ChatId,
+		MessageId:      s.MessageId,
 	}
 	err = eventBus.Publish(ctx, cc)
 	if err != nil {
@@ -828,6 +904,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 
 	mc := &MessageCreated{
 		MessageCommoned: MessageCommoned{
+			ThreadId:     copyCommand.ThreadId,
 			ChatId:       copyCommand.ChatId,
 			Content:      copyCommand.Content,
 			FileItemUuid: copyCommand.FileItemUuid,
@@ -870,6 +947,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		}
 	}
 
+	// TODO pass handle threadId on the event_handler side
 	ui := &ChatViewRefreshed{
 		AdditionalData:             copyCommand.AdditionalData,
 		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
@@ -1069,6 +1147,7 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 	cp := &MessageDeleted{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
+		ThreadId:       s.ThreadId,
 		MessageId:      s.MessageId,
 	}
 	err = eventBus.Publish(ctx, cp)
@@ -1076,6 +1155,7 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 		return err
 	}
 
+	// TODO send here threadId
 	ui := &ChatViewRefreshed{
 		AdditionalData:             s.AdditionalData,
 		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
@@ -1134,6 +1214,7 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 	cp := &MessageEdited{
 		MessageCommoned: MessageCommoned{
 			Id:           copyCommand.MessageId,
+			ThreadId:     copyCommand.ThreadId,
 			ChatId:       copyCommand.ChatId,
 			Content:      copyCommand.Content,
 			FileItemUuid: copyCommand.FileItemUuid,
@@ -1151,6 +1232,7 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 		return err
 	}
 
+	// TODO it's possible to push-down this logic calling this method to the projection
 	lastMessageId, err := commonProjection.GetLastMessageId(ctx, copyCommand.ChatId)
 	if lastMessageId == copyCommand.MessageId {
 		ui := &ChatViewRefreshed{
@@ -1190,8 +1272,9 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 
 	cp := &MessageEdited{
 		MessageCommoned: MessageCommoned{
-			Id:     copyCommand.MessageId,
-			ChatId: copyCommand.ChatId,
+			Id:       copyCommand.MessageId,
+			ThreadId: copyCommand.ThreadId,
+			ChatId:   copyCommand.ChatId,
 		},
 		IsEmbedSync:    true,
 		AdditionalData: copyCommand.AdditionalData,
@@ -1217,6 +1300,7 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 		return err
 	}
 
+	// TODO it's possible to push-down this logic calling this method to the projection
 	lastMessageId, err := commonProjection.GetLastMessageId(ctx, copyCommand.ChatId)
 	if lastMessageId == copyCommand.MessageId {
 		ui := &ChatViewRefreshed{
@@ -1430,7 +1514,7 @@ func validateAndSetEmbedFieldsEmbedMessage(ctx context.Context, dba *db.DB, comm
 			}
 
 			if !CanResendMessage(chat.CanResend, isParticipant) {
-				return errors.New("Resending is forbidden for this chat")
+				return NewUnauthorizedError("Resending is forbidden for this chat")
 			}
 			receiver.Embed = dto.NewEmbedResend(
 				embedMessageRequest.Id,

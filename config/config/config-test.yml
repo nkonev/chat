@@ -107,6 +107,7 @@ chat:
   tetatet:
     canResend: true
     canReact: true
+    canCreateThread: true
 
 blog:
   restrictCreateBlog: false

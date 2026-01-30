@@ -17,6 +17,7 @@ create unlogged table chat_common(
     title varchar(512) not null,
     fts_title tsvector generated always as (to_tsvector('russian', title)) stored,
     last_generated_message_id bigint not null default 0,
+    last_generated_thread_id not null default 0,
     create_date_time timestamp not null,
     tet_a_tet boolean not null,
     available_to_search boolean not null,
@@ -24,6 +25,7 @@ create unlogged table chat_common(
     avatar_big text,
     can_resend boolean not null,
     can_react BOOLEAN NOT NULL,
+    can_create_thread boolean not null,
     regular_participant_can_publish_message boolean not null,
     regular_participant_can_pin_message BOOLEAN NOT NULL,
     regular_participant_can_write_message BOOLEAN NOT NULL,
@@ -40,15 +42,26 @@ create unlogged table chat_participant(
     chat_id bigint,
     create_date_time timestamp not null,
     chat_admin boolean not null default false,
-    cp_last_read_message_id bigint not null default 0,
-    cp_last_read_message_date_time timestamp,
     primary key(user_id, chat_id)
 );
 SELECT create_distributed_table('chat_participant', 'chat_id');
 
+create unlogged table last_read_message_chat_view(
+       user_id bigint,
+       thread_id bigint,
+       chat_id bigint,
+       cp_last_read_message_id bigint not null,
+       cp_last_read_message_date_time timestamp,
+       primary key (user_id, chat_id, thread_id)
+);
+SELECT create_distributed_table('last_read_message_chat_view', 'chat_id');
+
 create unlogged table message(
     id bigint,
+    -- the coordinates of message are (chat_id + thread_id)
+    -- thread_id = 0 is in the regular messages (not in thread)
     chat_id bigint,
+    thread_id bigint default 0,
     owner_id bigint not null,
     content text not null,
     blog_post boolean not null default false,
@@ -59,18 +72,19 @@ create unlogged table message(
     create_date_time timestamp not null,
     update_date_time timestamp,
     fts_all_content tsvector generated always as (to_tsvector('russian', strip_tags(coalesce(content, '')) || ' ' || strip_tags(coalesce(embed ->> 'embedMessageContent', '')))) stored,
-    primary key (chat_id, id)
+    primary key (chat_id, thread_id, id)
 );
 SELECT create_distributed_table('message', 'chat_id');
 
 CREATE unlogged TABLE message_reaction(
     chat_id BIGINT,
+    thread_id bigint default 0,
     user_id BIGINT,
     reaction VARCHAR(4),
     message_id BIGINT,
     create_date_time timestamp not null,
-    PRIMARY KEY (chat_id, message_id, user_id, reaction),
-    FOREIGN KEY (message_id, chat_id) REFERENCES message(id, chat_id) ON DELETE CASCADE
+    PRIMARY KEY (chat_id, thread_id, message_id, user_id, reaction),
+    FOREIGN KEY (message_id, chat_id, thread_id) REFERENCES message(id, chat_id, thread_id) ON DELETE CASCADE
 );
 
 -- https://docs.citusdata.com/en/v11.1/develop/api_udf.html#example
@@ -79,13 +93,14 @@ SELECT create_distributed_table('message_reaction', 'chat_id', colocate_with => 
 CREATE unlogged TABLE message_pinned(
     message_id BIGINT,
     chat_id BIGINT,
+    thread_id bigint default 0,
     owner_id bigint not null,
     create_date_time timestamp not null,
     update_date_time timestamp,
     preview text not null,
     promoted boolean not null,
-    PRIMARY KEY (chat_id, message_id),
-    FOREIGN KEY (message_id, chat_id) REFERENCES message(id, chat_id) ON DELETE CASCADE
+    PRIMARY KEY (chat_id, thread_id, message_id),
+    FOREIGN KEY (message_id, chat_id, thread_id) REFERENCES message(id, chat_id, thread_id) ON DELETE CASCADE
 );
 
 SELECT create_distributed_table('message_pinned', 'chat_id', colocate_with => 'message');
@@ -93,12 +108,13 @@ SELECT create_distributed_table('message_pinned', 'chat_id', colocate_with => 'm
 CREATE unlogged TABLE message_published(
     message_id BIGINT,
     chat_id BIGINT,
+    thread_id bigint default 0,
     owner_id bigint not null,
     create_date_time timestamp not null,
     update_date_time timestamp,
     preview text not null,
-    PRIMARY KEY (chat_id, message_id),
-    FOREIGN KEY (message_id, chat_id) REFERENCES message(id, chat_id) ON DELETE CASCADE
+    PRIMARY KEY (chat_id, thread_id, message_id),
+    FOREIGN KEY (message_id, chat_id, thread_id) REFERENCES message(id, chat_id, thread_id) ON DELETE CASCADE
 );
 
 SELECT create_distributed_table('message_published', 'chat_id', colocate_with => 'message');
@@ -109,11 +125,19 @@ create unlogged table chat_user_view(
     user_id bigint,
     update_date_time timestamp not null,
     consider_messages_as_unread BOOLEAN not null default true,
-    unread_messages bigint not null default 0,
-    cuv_last_read_message_id bigint not null default 0,
     primary key (user_id, id)
 );
 SELECT create_distributed_table('chat_user_view', 'user_id');
+
+create unlogged table unread_messages_user_view(
+       user_id bigint,
+       thread_id bigint,
+       chat_id bigint,
+       unread_messages bigint not null default 0,
+       cuv_last_read_message_id bigint not null default 0,
+       primary key (user_id, chat_id)
+);
+SELECT create_distributed_table('unread_messages_user_view', 'user_id');
 
 create unlogged table has_unread_messages(user_id bigint primary key, has boolean not null default false);
 SELECT create_distributed_table('has_unread_messages', 'user_id');

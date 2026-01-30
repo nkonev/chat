@@ -15,6 +15,8 @@ const EmbedMessageTypeNone = ""
 
 const FileItemUuidMessageNotFoundId = 0
 
+const RootThreadId = 0
+
 type MessageDto struct {
 	Id             int64
 	OwnerId        int64
