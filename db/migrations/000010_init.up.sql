@@ -54,8 +54,8 @@ create unlogged table message(
     blog_post boolean not null default false,
     embed jsonb,
     file_item_uuid varchar(36),
-    published boolean not null default false,
-    pinned boolean not null default false,
+    published boolean not null default false, -- just a denormalized copy
+    pinned boolean not null default false, -- just a denormalized copy
     create_date_time timestamp not null,
     update_date_time timestamp,
     fts_all_content tsvector generated always as (to_tsvector('russian', strip_tags(coalesce(content, '')) || ' ' || strip_tags(coalesce(embed ->> 'embedMessageContent', '')))) stored,
