@@ -36,8 +36,8 @@ create unlogged table chat_common(
 );
 
 create unlogged table chat_participant(
-    user_id bigint not null,
-    chat_id bigint not null,
+    user_id bigint,
+    chat_id bigint,
     create_date_time timestamp not null,
     chat_admin boolean not null default false,
     cp_last_read_message_id bigint not null default 0,
@@ -47,8 +47,8 @@ create unlogged table chat_participant(
 SELECT create_distributed_table('chat_participant', 'chat_id');
 
 create unlogged table message(
-    id bigint not null,
-    chat_id bigint not null,
+    id bigint,
+    chat_id bigint,
     owner_id bigint not null,
     content text not null,
     blog_post boolean not null default false,
@@ -65,9 +65,9 @@ SELECT create_distributed_table('message', 'chat_id');
 
 CREATE unlogged TABLE message_reaction(
     chat_id BIGINT,
-    user_id BIGINT NOT NULL,
-    reaction VARCHAR(4) NOT NULL,
-    message_id BIGINT NOT NULL,
+    user_id BIGINT,
+    reaction VARCHAR(4),
+    message_id BIGINT,
     create_date_time timestamp not null,
     PRIMARY KEY (chat_id, message_id, user_id, reaction),
     FOREIGN KEY (message_id, chat_id) REFERENCES message(id, chat_id) ON DELETE CASCADE
@@ -77,7 +77,7 @@ CREATE unlogged TABLE message_reaction(
 SELECT create_distributed_table('message_reaction', 'chat_id', colocate_with => 'message');
 
 CREATE unlogged TABLE message_pinned(
-    message_id BIGINT NOT NULL,
+    message_id BIGINT,
     chat_id BIGINT,
     owner_id bigint not null,
     create_date_time timestamp not null,
@@ -91,7 +91,7 @@ CREATE unlogged TABLE message_pinned(
 SELECT create_distributed_table('message_pinned', 'chat_id', colocate_with => 'message');
 
 CREATE unlogged TABLE message_published(
-    message_id BIGINT NOT NULL,
+    message_id BIGINT,
     chat_id BIGINT,
     owner_id bigint not null,
     create_date_time timestamp not null,
@@ -104,9 +104,9 @@ CREATE unlogged TABLE message_published(
 SELECT create_distributed_table('message_published', 'chat_id', colocate_with => 'message');
 
 create unlogged table chat_user_view(
-    id bigint not null,
+    id bigint,
     pinned boolean not null default false,
-    user_id bigint not null,
+    user_id bigint,
     update_date_time timestamp not null,
     consider_messages_as_unread BOOLEAN not null default true,
     unread_messages bigint not null default 0,
