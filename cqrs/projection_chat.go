@@ -1234,7 +1234,7 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 			cc.regular_participant_can_add_participant
 		from chat_common cc
 		%s chat_user_view ch on (cc.id = ch.id and ch.user_id = any($2))
-		left join blog b on ch.id = b.id
+		left join blog b on cc.id = b.id
 		where %s
 		%s
 		%s
