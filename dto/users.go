@@ -13,6 +13,8 @@ const HereUsersLogin = "here"
 
 const ROLE_ADMIN = "ROLE_ADMIN"
 
+const CAN_CREATE_BLOG = "CAN_CREATE_BLOG"
+
 const SystemUserCleaner = -1000
 
 type User struct {
@@ -23,6 +25,7 @@ type User struct {
 	LoginColor       *string         `json:"loginColor"`
 	LastSeenDateTime *time.Time      `json:"lastSeenDateTime"`
 	AdditionalData   *AdditionalData `json:"additionalData"`
+	Permissions      []string        `json:"permissions"`
 }
 
 func (u *User) GetId() int64 {

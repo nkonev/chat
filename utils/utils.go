@@ -16,6 +16,7 @@ const DefaultPage = 0
 const DefaultOffset = 0
 const HeaderUserId = "X-Auth-Userid"
 const HeaderUserRole = "X-Auth-Role"
+const HeaderUserPermission = "X-Auth-Permission"
 const HeaderUserLogin = "X-Auth-Username"
 
 func ToString(in any) string {

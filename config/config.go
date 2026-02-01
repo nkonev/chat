@@ -165,7 +165,7 @@ type ChatConfig struct {
 }
 
 type BlogConfig struct {
-	OnlyAdminCanCreateBlog bool
+	RestrictCreateBlog bool
 }
 
 type TetATetConfig struct {

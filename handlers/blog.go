@@ -106,9 +106,9 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 }
 
 func (ch *BlogHandler) CanCreateBlog(g *gin.Context) {
-	userRoles := getUserRoles(g)
+	userPermissions := getUserPermissions(g)
 
-	can := cqrs.IsBloggingAllowed(ch.cfg, userRoles)
+	can := cqrs.IsBloggingAllowed(ch.cfg, userPermissions)
 	g.JSON(http.StatusOK, &utils.H{"canCreateBlog": can})
 }
 

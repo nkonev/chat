@@ -104,9 +104,9 @@ func (mc *MessageHandler) CreateMessage(g *gin.Context) {
 		}
 	}
 
-	userRoles := getUserRoles(g)
+	userPermissions := getUserPermissions(g)
 
-	mid, err := cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, mc.cfg, mc.lgr, mc.policy, userRoles)
+	mid, err := cc.Handle(g.Request.Context(), mc.eventBus, mc.dbWrapper, mc.commonProjection, mc.cfg, mc.lgr, mc.policy, userPermissions)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return
@@ -704,7 +704,7 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 		return
 	}
 
-	userRoles := getUserRoles(g)
+	userPermissions := getUserPermissions(g)
 
 	cid := g.Param(dto.ChatIdParam)
 	chatId, err := utils.ParseInt64(cid)
@@ -730,7 +730,7 @@ func (mc *MessageHandler) MakeBlogPost(g *gin.Context) {
 		BlogPost:       true,
 	}
 
-	err = mr.Handle(g.Request.Context(), mc.cfg, userRoles, mc.eventBus, mc.dbWrapper, mc.commonProjection)
+	err = mr.Handle(g.Request.Context(), mc.cfg, userPermissions, mc.eventBus, mc.dbWrapper, mc.commonProjection)
 	if err != nil {
 		if translateMessageError(g, err) {
 			return

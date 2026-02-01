@@ -133,6 +133,10 @@ func getUserRoles(g *gin.Context) []string {
 	return g.Request.Header.Values(utils.HeaderUserRole)
 }
 
+func getUserPermissions(g *gin.Context) []string {
+	return g.Request.Header.Values(utils.HeaderUserPermission)
+}
+
 func getCorrelationId(g *gin.Context) *string {
 	ch := g.Request.Header.Get(headerCorrelationId)
 	if len(ch) > 0 {

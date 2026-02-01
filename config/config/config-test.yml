@@ -109,7 +109,7 @@ chat:
     canReact: true
 
 blog:
-  onlyAdminCanCreateBlog: false
+  restrictCreateBlog: false
 
 rabbitmq:
   url: "amqp://chat:chatPazZw0rd@127.0.0.1:5672"

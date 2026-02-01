@@ -769,7 +769,7 @@ func (s *ChatNotificationSettingsSet) Handle(ctx context.Context, eventBus Event
 	return eventBus.Publish(ctx, cp)
 }
 
-func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy, userRoles []string) (int64, error) {
+func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy, userPermissions []string) (int64, error) {
 	var copyCommand *MessageCreate
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -811,7 +811,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 		return 0, NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to write the message in chat %v", sp.AdditionalData.BehalfUserId, sp.ChatId))
 	}
 
-	bloggingAllowed := IsBloggingAllowed(cfg, userRoles)
+	bloggingAllowed := IsBloggingAllowed(cfg, userPermissions)
 	canMakeMessageBlogPost := CanMakeMessageBlogPost(adt.IsChatAdmin, adt.ChatIsTetATet, adt.IsMessageBlogPost, adt.IsBlog, bloggingAllowed)
 
 	trimmedAndSanitized, err := sanitizer.TrimAmdSanitizeMessage(ctx, cfg, lgr, policy, copyCommand.Content)
@@ -1031,14 +1031,14 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 	}
 }
 
-func (s *MakeMessageBlogPost) Handle(ctx context.Context, cfg *config.AppConfig, userRoles []string, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *MakeMessageBlogPost) Handle(ctx context.Context, cfg *config.AppConfig, userPermissions []string, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
 
 	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
 	if err != nil {
 		return err
 	}
 
-	bloggingAllowed := IsBloggingAllowed(cfg, userRoles)
+	bloggingAllowed := IsBloggingAllowed(cfg, userPermissions)
 
 	if !CanMakeMessageBlogPost(adt.IsChatAdmin, adt.ChatIsTetATet, adt.IsMessageBlogPost, adt.IsBlog, bloggingAllowed) {
 		return NewUnauthorizedError(fmt.Sprintf("user %v is not authorized to make the message blog post in the chat %v", s.AdditionalData.BehalfUserId, s.ChatId))

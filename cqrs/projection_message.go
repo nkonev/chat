@@ -1646,7 +1646,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		messagesEnriched := make([]dto.MessageViewEnrichedDto, 0, len(messages))
 		for _, mm := range messages {
-			bloggingAllowed := IsBloggingAllowed(m.cfg, getUserRoles(usersMap, mm.BehalfUserId))
+			bloggingAllowed := IsBloggingAllowed(m.cfg, getUserPermissions(usersMap, mm.BehalfUserId))
 
 			me, err := enrichMessage(
 				ctx, m.lgr,
@@ -1680,21 +1680,21 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 	return res.items, res.notAparticipant, res.users, nil
 }
 
-func getUserRoles(usersMap map[int64]*dto.User, behalfUserId int64) []string {
+func getUserPermissions(usersMap map[int64]*dto.User, behalfUserId int64) []string {
 	user := usersMap[behalfUserId]
 	if user == nil || user.AdditionalData == nil {
 		return []string{}
 	}
 
-	return user.AdditionalData.Roles
+	return user.Permissions
 }
 
-func IsBloggingAllowed(cfg *config.AppConfig, userRoles []string) bool {
-	if !cfg.Blog.OnlyAdminCanCreateBlog {
+func IsBloggingAllowed(cfg *config.AppConfig, userPermissions []string) bool {
+	if !cfg.Blog.RestrictCreateBlog {
 		return true
 	}
 
-	return slices.Contains(userRoles, dto.ROLE_ADMIN)
+	return slices.Contains(userPermissions, dto.CAN_CREATE_BLOG)
 }
 
 func getReactionsCommon(ctx context.Context, co db.CommonOperations, chatId int64, messageIds []int64, reaction *string, maxDisplayableUsers int) ([]dto.ReactionDto, error) {
