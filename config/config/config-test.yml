@@ -113,7 +113,7 @@ blog:
 
 rabbitmq:
   url: "amqp://chat:chatPazZw0rd@127.0.0.1:5672"
-  checkAreEventsProcessedInterval: 2s
+  checkAreEventsProcessedInterval: 250ms
   maxWaitForEvents: 1m
   dumpTestAccumulator: true
   prettyLog: true
