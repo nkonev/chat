@@ -149,4 +149,5 @@ SELECT * FROM citus_check_cluster_node_health();
 ```bash
 go test -count=1 -test.v -p 1 -test.fullpath=true -timeout 30s -run ^TestPinMessage$ go-cqrs-chat-example/cmd
 go test -count=1 -test.v -p 1 -test.fullpath=true -timeout 30s -run ^TestPublishMessage$ go-cqrs-chat-example/cmd
+CHAT_LOGGER_LEVEL=warn CHAT_POSTGRESQL_DUMP=false CHAT_CQRS_DUMP=false CHAT_HTTP_DUMP=false CHAT_SERVER_DUMP=false CHAT_RABBITMQ_DUMPTESTACCUMULATOR=false CHAT_RABBITMQ_DUMP=false go test -count=1 -test.v -p 1 -test.fullpath=true -timeout 120s -run ^TestChatPaginate$ go-cqrs-chat-example/cmd
 ```

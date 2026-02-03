@@ -393,10 +393,20 @@ func (m *EventHandler) notifyParticipantsReloadCommand(ctx context.Context, chat
 
 func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewRefreshed) error {
 
+	// optimization
+	if event.LastMessageAction == LastMessageActionRefresh {
+		err := m.commonProjection.OnChatViewRefreshedLastMessageActionRefreshForPartitionChat(ctx, event.ChatId, event.LastMessageAction)
+		if err != nil {
+			return err
+		}
+	}
+
 	processParticipantsBatch := func(participantIdsPortion []int64) error {
-		errp := m.commonProjection.OnChatViewRefreshedForPartitionChat(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.IncreaseOn, event.AdditionalData.BehalfUserId, event.ChatAction)
-		if errp != nil {
-			return errp
+		if event.UnreadMessagesAction == UnreadMessagesActionIncrease {
+			errp := m.commonProjection.OnChatViewRefreshedUnreadMessagesActionIncreaseForPartitionChat(ctx, event.AdditionalData, participantIdsPortion, event.ChatId, event.UnreadMessagesAction, event.AdditionalData.BehalfUserId)
+			if errp != nil {
+				return errp
+			}
 		}
 
 		for _, participantId := range participantIdsPortion {

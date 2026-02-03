@@ -335,7 +335,7 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 
 // called in cases when chat should lift because of changing update_date_time
 // in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
-func (m *CommonProjection) OnChatViewRefreshedForPartitionChat(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, increaseOn int, messageOwnerId int64, chatAction ChatAction) error {
+func (m *CommonProjection) OnChatViewRefreshedUnreadMessagesActionIncreaseForPartitionChat(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, unreadMessagesAction UnreadMessagesAction, messageOwnerId int64) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// in oder not to have a potential race condition
 		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
@@ -355,7 +355,21 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionChat(ctx context.Conte
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
 			}
+		} else {
+			m.lgr.ErrorContext(ctx, fmt.Sprintf("Wrong unreadMessagesAction = %v", unreadMessagesAction))
 		}
+
+		return nil
+	})
+
+	if errOuter != nil {
+		return errOuter
+	}
+	return nil
+}
+
+func (m *CommonProjection) OnChatViewRefreshedLastMessageActionRefreshForPartitionChat(ctx context.Context, chatId int64, lastMessageAction LastMessageAction) error {
+	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 
 		// it's not forgotten else, it's the different action
 		if lastMessageAction == LastMessageActionRefresh {
@@ -363,6 +377,8 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionChat(ctx context.Conte
 			if err != nil {
 				return err
 			}
+		} else {
+			m.lgr.ErrorContext(ctx, fmt.Sprintf("Wrong lastMessageAction = %v", lastMessageAction))
 		}
 
 		return nil
