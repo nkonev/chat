@@ -367,6 +367,13 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
 
+		user2ChatsNew40, _, err := testRestClient.GetChats(ctx, user2)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user2ChatsNew40))
+		chat1OfUser240 := user2ChatsNew40[0]
+		assert.Equal(t, int64(1), chat1OfUser240.UnreadMessages)
+		assert.Equal(t, false, chat1OfUser240.ConsiderMessagesAsUnread)
+
 		// this message should not contribute into user 2's new messages because user 2 disabled them for chat 1
 		messageId4, err := testRestClient.CreateMessage(ctx, user1, chat1Id, "msg 4")
 		require.NoError(t, err, "error in creating message")
@@ -423,9 +430,33 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, false, user2HasUnreadMessagesNew5)
 
+		user2ChatsNew50, _, err := testRestClient.GetChats(ctx, user2)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user2ChatsNew50))
+		chat1OfUser250 := user2ChatsNew50[0]
+		assert.Equal(t, int64(0), chat1OfUser250.UnreadMessages)
+		assert.Equal(t, true, chat1OfUser250.ConsiderMessagesAsUnread)
+
 		user3HasUnreadMessagesNew5, err := testRestClient.GetHasUnreadMessages(ctx, user3)
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, false, user3HasUnreadMessagesNew5)
+
+		messageId5, err := testRestClient.CreateMessage(ctx, user1, chat1Id, "msg 5")
+		require.NoError(t, err, "error in creating message")
+		assert.True(t, messageId5 > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user2ChatsNew52, _, err := testRestClient.GetChats(ctx, user2)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user2ChatsNew52))
+		chat1OfUser252 := user2ChatsNew52[0]
+		assert.Equal(t, int64(1), chat1OfUser252.UnreadMessages)
+		assert.Equal(t, true, chat1OfUser252.ConsiderMessagesAsUnread)
+
+		user2HasUnreadMessagesNew52, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user2HasUnreadMessagesNew52)
 	})
 }
 
