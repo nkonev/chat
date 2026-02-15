@@ -386,6 +386,7 @@ func TestUnreads(t *testing.T) {
 		assert.Equal(t, 1, len(user2ChatsNew41))
 		chat1OfUser241 := user2ChatsNew41[0]
 		assert.Equal(t, int64(2), chat1OfUser241.UnreadMessages)
+		assert.Equal(t, messageId4, *chat1OfUser241.LastMessageId)
 		assert.Equal(t, false, chat1OfUser241.ConsiderMessagesAsUnread)
 
 		user2HasUnreadMessagesNew41, err := testRestClient.GetHasUnreadMessages(ctx, user2)
@@ -407,6 +408,7 @@ func TestUnreads(t *testing.T) {
 		assert.Equal(t, 1, len(user2ChatsNew42))
 		chat1OfUser242 := user2ChatsNew42[0]
 		assert.Equal(t, int64(2), chat1OfUser242.UnreadMessages)
+		assert.Equal(t, messageId4, *chat1OfUser242.LastMessageId)
 		assert.Equal(t, true, chat1OfUser242.ConsiderMessagesAsUnread)
 
 		user2HasUnreadMessagesNew42, err := testRestClient.GetHasUnreadMessages(ctx, user2)
@@ -435,6 +437,7 @@ func TestUnreads(t *testing.T) {
 		assert.Equal(t, 1, len(user2ChatsNew50))
 		chat1OfUser250 := user2ChatsNew50[0]
 		assert.Equal(t, int64(0), chat1OfUser250.UnreadMessages)
+		assert.Nil(t, chat1OfUser250.LastMessageId)
 		assert.Equal(t, true, chat1OfUser250.ConsiderMessagesAsUnread)
 
 		user3HasUnreadMessagesNew5, err := testRestClient.GetHasUnreadMessages(ctx, user3)
@@ -486,7 +489,7 @@ func TestUnreads(t *testing.T) {
 		assert.Equal(t, 1, len(user2ChatsNew54))
 		chat1OfUser254 := user2ChatsNew54[0]
 		assert.Equal(t, int64(0), chat1OfUser254.UnreadMessages)
-		//assert.Equal(t, messageId3, *chat1OfUser254.LastMessageId) // TODO
+		assert.Nil(t, chat1OfUser254.LastMessageId)
 		assert.Equal(t, true, chat1OfUser254.ConsiderMessagesAsUnread)
 
 		user2HasUnreadMessagesNew54, err := testRestClient.GetHasUnreadMessages(ctx, user2)
