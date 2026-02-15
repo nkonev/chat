@@ -8,7 +8,7 @@ echo "Waiting for $PG_USER"
 
 set +e
 
-function check_string() {
+function contain_string() {
       echo -n "$1" | grep "$2" &> /dev/null
       if [[ $? == 0 ]]; then
         return
@@ -24,9 +24,9 @@ do
   output=`docker compose exec postgresql-citus-coordinator-1 psql -U ${PG_USER} -d ${DB_NAME} --csv --tuples-only -c 'SELECT nodename FROM citus_nodes;'`
 
   if \
-  check_string "$output" 'postgresql-citus-coordinator-1' && \
-  check_string "$output" 'postgresql-citus-worker-1' && \
-  check_string "$output" 'postgresql-citus-worker-2'; then
+  contain_string "$output" 'postgresql-citus-coordinator-1' && \
+  contain_string "$output" 'postgresql-citus-worker-1' && \
+  contain_string "$output" 'postgresql-citus-worker-2'; then
 
     echo "PostgreSQL is available"
     exit 0
