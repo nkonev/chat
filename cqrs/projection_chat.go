@@ -437,7 +437,7 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Conte
 			wasUpdated = true
 		} else if unreadMessagesAction == UnreadMessagesActionRefresh {
 
-			err := m.setUnreadMessages(ctx, tx, participantId, chatId, 0, true, true)
+			err := m.setUnreadMessages(ctx, tx, participantId, chatId, 0, true, false)
 			if err != nil {
 				return err
 			}

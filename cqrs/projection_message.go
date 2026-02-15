@@ -228,7 +228,7 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 }
 
 func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx context.Context, tx *db.Tx, participantId int64, chatId int64) error {
-	err := m.setUnreadMessages(ctx, tx, participantId, chatId, 0, true, false)
+	err := m.setUnreadMessages(ctx, tx, participantId, chatId, 0, false, true)
 	if err != nil {
 		return err
 	}
@@ -1027,7 +1027,7 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId
 	return nil
 }
 
-func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, participantId int64, chatId, messageId int64, needSet, needRefresh bool) error {
+func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, participantId int64, chatId, messageId int64, calculateUnreadsFromTheUsersLastSavedReadedMessage, isInitialization bool) error {
 	_, err := tx.ExecContext(ctx, `
 		with 
 		chat_messages as (
@@ -1039,38 +1039,33 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 		normalized_user as (
 			select cast ($1 as bigint) as user_id
 		),
-		last_message as (
+		input_option_considerable_last_saved_readed_message as (
 			select 
 				coalesce(ww.last_message_id, 0) as last_message_id,
 				nu.user_id
 			from (
 				select
-					(case
-						when exists(select * from chat_user_view uw where uw.id = $2 and uw.user_id = w.user_id and uw.cuv_last_read_message_id > 0)
-						then coalesce(
-							(select m.id as last_message_id from chat_messages m where m.id = w.cuv_last_read_message_id),
-							(select max from max_message where $5 = true) -- allow taking max_message only in case $5 = true
-						)
-					end) as last_message_id,
+					w.cuv_last_read_message_id as last_message_id,
 					w.user_id
-				from chat_user_view w 
+				from chat_user_view w
 				where w.id = $2 and w.user_id = $1
 			) ww
 			right join normalized_user nu on ww.user_id = nu.user_id
 		),
-		existing_message as (
+		input_option_considerable_existing_message as (
 			select coalesce(
 				(select m.id from chat_messages m where m.id = $3),
 				(select max from max_message),
 				0
 			) as normalized_read_message_id
 		),
-		normalized_given_message as (
+		normalized_considerable_message as (
 			select 
 				n.user_id,
 				(case 
-					when $4 = true then (select l.last_message_id from last_message l where l.user_id = n.user_id)
-					else (select normalized_read_message_id from existing_message) 
+					when $5 = true then 0
+					when $4 = true then (select l.last_message_id from input_option_considerable_last_saved_readed_message l where l.user_id = n.user_id) -- to calculate from the last saved readed
+					else (select normalized_read_message_id from input_option_considerable_existing_message) -- to calculate against just from the message  
 				end) as normalized_read_message_id
 			from normalized_user n
 		),
@@ -1079,11 +1074,11 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 				ngm.user_id as user_id,
 				cast ($2 as bigint) as chat_id,
 				(
-					SELECT count(m.id) FILTER(WHERE m.id > (select normalized_read_message_id from normalized_given_message n where n.user_id = ngm.user_id))
+					SELECT count(m.id) FILTER(WHERE m.id > (select normalized_read_message_id from normalized_considerable_message n where n.user_id = ngm.user_id))
 					FROM chat_messages m
 				) as unread_messages,
 				ngm.normalized_read_message_id as last_read_message_id
-			from normalized_given_message ngm
+			from normalized_considerable_message ngm
 		)
 		merge into chat_user_view cuv
 		using input_data idt
@@ -1091,7 +1086,7 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 		when matched then update set 
 		   unread_messages = idt.unread_messages
 		  ,cuv_last_read_message_id = idt.last_read_message_id
-	`, participantId, chatId, messageId, needSet, needRefresh)
+	`, participantId, chatId, messageId, calculateUnreadsFromTheUsersLastSavedReadedMessage, isInitialization)
 	if err != nil {
 		return err
 	}
