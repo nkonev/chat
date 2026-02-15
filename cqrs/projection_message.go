@@ -228,7 +228,7 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 }
 
 func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx context.Context, tx *db.Tx, participantId int64, chatId int64) error {
-	err := m.setUnreadMessages(ctx, tx, participantId, chatId, 0, false, true, false)
+	err := m.setUnreadMessages(ctx, tx, participantId, chatId, 0, false, true)
 	if err != nil {
 		return err
 	}
@@ -1027,7 +1027,7 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId
 	return nil
 }
 
-func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, participantId int64, chatId, messageId int64, calculateUnreadsFromTheUsersLastSavedReadedMessage, isInitialization, canUseMax bool) error {
+func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, participantId int64, chatId, messageId int64, calculateUnreadsFromTheUsersLastSavedReadedMessage, isInitialization bool) error {
 	_, err := tx.ExecContext(ctx, `
 		with 
 		chat_messages as (
@@ -1047,10 +1047,7 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 				select
 					(case
 						when exists(select * from chat_user_view uw where uw.id = $2 and uw.user_id = w.user_id and uw.cuv_last_read_message_id > 0)
-						then coalesce(
-							(select m.id as last_message_id from chat_messages m where m.id = w.cuv_last_read_message_id),
-							(select max from max_message where $6 = true) -- allow taking max_message only in case $5 = true
-						)
+						then (select m.id as last_message_id from chat_messages m where m.id = w.cuv_last_read_message_id)
 					end) as last_message_id,
 					w.user_id
 				from chat_user_view w 
@@ -1092,7 +1089,7 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 		when matched then update set 
 		   unread_messages = idt.unread_messages
 		  ,cuv_last_read_message_id = idt.last_read_message_id
-	`, participantId, chatId, messageId, calculateUnreadsFromTheUsersLastSavedReadedMessage, isInitialization, canUseMax)
+	`, participantId, chatId, messageId, calculateUnreadsFromTheUsersLastSavedReadedMessage, isInitialization)
 	if err != nil {
 		return err
 	}
@@ -1318,7 +1315,7 @@ func (m *CommonProjection) OnUserUnreadMessageReaded(ctx context.Context, event 
 		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 			if event.ReadMessagesAction == ReadMessagesActionOneMessage {
 
-				err := m.setUnreadMessages(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, false, false, false) // includes updateHasUnreads()
+				err := m.setUnreadMessages(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
 				if err != nil {
 					return err
 				}
