@@ -1045,10 +1045,11 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 				nu.user_id
 			from (
 				select
-					(select m.id as last_message_id from chat_messages m where m.id = w.cuv_last_read_message_id) as last_message_id,
+					w.cuv_last_read_message_id as last_message_id,
 					w.cuv_last_read_message_id,
 					w.user_id
-				from chat_user_view w 
+				from chat_user_view w
+				join chat_messages cm on cm.id = w.cuv_last_read_message_id
 				where w.id = $2 and w.user_id = $1
 			) ww
 			right join normalized_user nu on (ww.user_id = nu.user_id and ww.cuv_last_read_message_id > 0)
