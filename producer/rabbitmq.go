@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/beliyav/go-amqp-reconnect/rabbitmq"
-	"github.com/streadway/amqp"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/logger"
 	myRabbitmq "go-cqrs-chat-example/rabbitmq"
 	"go-cqrs-chat-example/type_registry"
 	"time"
+
+	"github.com/beliyav/go-amqp-reconnect/rabbitmq"
+	"github.com/streadway/amqp"
 )
 
 const EventsFanoutExchange = "async-events-exchange"
@@ -33,7 +34,7 @@ func (rp *RabbitOutputEventsPublisher) Publish(ctx context.Context, correlationI
 
 	bytea, err := json.Marshal(aDto)
 	if err != nil {
-		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", "err", err)
+		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", logger.AttributeError, err)
 		return err
 	}
 
@@ -62,7 +63,7 @@ func (rp *RabbitOutputEventsPublisher) Publish(ctx context.Context, correlationI
 	}
 
 	if err := rp.channel.Publish(EventsFanoutExchange, "", false, false, msg); err != nil {
-		rp.lgr.ErrorContext(ctx, "Error during publishing dto", "err", err)
+		rp.lgr.ErrorContext(ctx, "Error during publishing dto", logger.AttributeError, err)
 		return err
 	} else {
 		return nil
@@ -102,7 +103,7 @@ func (rp *RabbitInternalEventsPublisher) Publish(ctx context.Context, aDto inter
 
 	bytea, err := json.Marshal(aDto)
 	if err != nil {
-		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", "err", err)
+		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", logger.AttributeError, err)
 		return err
 	}
 
@@ -127,7 +128,7 @@ func (rp *RabbitInternalEventsPublisher) Publish(ctx context.Context, aDto inter
 	}
 
 	if err := rp.channel.Publish(ChatInternalExchange, "", false, false, msg); err != nil {
-		rp.lgr.ErrorContext(ctx, "Error during publishing dto", "err", err)
+		rp.lgr.ErrorContext(ctx, "Error during publishing dto", logger.AttributeError, err)
 		return err
 	} else {
 		return nil
@@ -161,7 +162,7 @@ func (rp *RabbitTestInputEventsPublisher) Publish(ctx context.Context, aDto inte
 
 	bytea, err := json.Marshal(aDto)
 	if err != nil {
-		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", "err", err)
+		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", logger.AttributeError, err)
 		return err
 	}
 
@@ -186,7 +187,7 @@ func (rp *RabbitTestInputEventsPublisher) Publish(ctx context.Context, aDto inte
 	}
 
 	if err := rp.channel.Publish(AaaEventsExchange, "", false, false, msg); err != nil {
-		rp.lgr.ErrorContext(ctx, "Error during publishing dto", "err", err)
+		rp.lgr.ErrorContext(ctx, "Error during publishing dto", logger.AttributeError, err)
 		return err
 	} else {
 		return nil
@@ -223,7 +224,7 @@ func (rp *RabbitNotificationEventsPublisher) Publish(ctx context.Context, correl
 
 	bytea, err := json.Marshal(aDto)
 	if err != nil {
-		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", "err", err)
+		rp.lgr.ErrorContext(ctx, "Failed during marshal dto", logger.AttributeError, err)
 		return err
 	}
 
@@ -252,7 +253,7 @@ func (rp *RabbitNotificationEventsPublisher) Publish(ctx context.Context, correl
 	}
 
 	if err := rp.channel.Publish(NotificationsFanoutExchange, "", false, false, msg); err != nil {
-		rp.lgr.ErrorContext(ctx, "Error during publishing dto", "err", err)
+		rp.lgr.ErrorContext(ctx, "Error during publishing dto", logger.AttributeError, err)
 		return err
 	} else {
 		return nil

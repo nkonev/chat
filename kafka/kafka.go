@@ -38,7 +38,7 @@ func ConfigureKafkaAdmin(
 			lgr.Info("Stopping kafka admin")
 
 			if err := kafkaAdmin.Close(); err != nil {
-				lgr.Error("Error shutting down kafka admin", "err", err)
+				lgr.Error("Error shutting down kafka admin", logger.AttributeError, err)
 			}
 			return nil
 		},
@@ -200,7 +200,7 @@ func ConfigureSaramaClient(
 		OnStop: func(ctx0 context.Context) error {
 			lgr.Info("Stopping kafka client")
 			ce := client.Close()
-			lgr.Info("Kafka client stopped", "err", ce)
+			lgr.Info("Kafka client stopped", logger.AttributeError, ce)
 
 			return nil
 		},
@@ -271,7 +271,7 @@ func waitForAllEventsProcessed(
 		lgr.Info("Checking for the current offsets will be equal to the latest ones for all partitions", "topic_kind", topicKind.String())
 		isEnd, errE := isEndOnAllPartitions(lgr, cfg, saramaClient, topicKind)
 		if errE != nil {
-			lgr.Error("Error during checking isEndOnAllPartitions", "err", errE)
+			lgr.Error("Error during checking isEndOnAllPartitions", logger.AttributeError, errE)
 			return errE
 		}
 		if isEnd {

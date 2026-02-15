@@ -32,7 +32,7 @@ func create(lgr *logger.LoggerWrapper, name string, consumeCh *rabbitmq.Channel)
 		nil,   // arguments
 	)
 	if err != nil {
-		lgr.Warn("Unable to declare to queue, restarting.", "queue", name, "err", err)
+		lgr.Warn("Unable to declare to queue, restarting.", "queue", name, logger.AttributeError, err)
 		return nil, err
 	}
 	return &q, nil
@@ -50,12 +50,12 @@ func createAndBind(lgr *logger.LoggerWrapper, name string, key string, exchange 
 		nil,   // arguments
 	)
 	if err != nil {
-		lgr.Warn("Unable to declare to queue, restarting.", "queue", name, "err", err)
+		lgr.Warn("Unable to declare to queue, restarting.", "queue", name, logger.AttributeError, err)
 		return nil, err
 	}
 	err = consumeCh.QueueBind(q.Name, key, exchange, false, nil)
 	if err != nil {
-		lgr.Warn("Unable to bind to queue, restarting.", "queue", name, "err", err)
+		lgr.Warn("Unable to bind to queue, restarting.", "queue", name, logger.AttributeError, err)
 		return nil, err
 	}
 	return &q, nil
@@ -73,7 +73,7 @@ func DeleteTestEventQueue(lgr *logger.LoggerWrapper, connection *rabbitmq.Connec
 	lgr.Warn("Deleting test queue", "queue", testOutputQueueName)
 	_, err = ch.QueueDelete(testOutputQueueName, false, false, false)
 	if err != nil {
-		lgr.Warn("An error during delete", "queue", testOutputQueueName, "err", err)
+		lgr.Warn("An error during delete", "queue", testOutputQueueName, logger.AttributeError, err)
 	}
 	return nil
 }
@@ -233,7 +233,7 @@ func listen(
 		var errOuter error
 		deliveries, errOuter = channel.Consume(queue.Name, "", false, false, false, false, nil)
 		if errOuter != nil {
-			lgr.Error("Unable to connect to queue, restarting", "queue", queue.Name, "err", errOuter)
+			lgr.Error("Unable to connect to queue, restarting", "queue", queue.Name, logger.AttributeError, errOuter)
 			sh.Shutdown()
 			return
 		} else {
@@ -244,17 +244,17 @@ func listen(
 			func() {
 				defer func() {
 					if err := recover(); err != nil {
-						lgr.Error("In processing queue panic recovered", "queue", queue.Name, "err", err)
+						lgr.Error("In processing queue panic recovered", "queue", queue.Name, logger.AttributeError, err)
 					}
 				}()
 
 				err := onMessage(&msg)
 				if err != nil {
-					lgr.Error("In processing queue error", "queue", queue.Name, "err", err)
+					lgr.Error("In processing queue error", "queue", queue.Name, logger.AttributeError, err)
 				}
 				err = msg.Ack(false)
 				if err != nil {
-					lgr.Error("In acking delivery for queue error", "queue", queue.Name, "err", err)
+					lgr.Error("In acking delivery for queue error", "queue", queue.Name, logger.AttributeError, err)
 				}
 			}()
 		}

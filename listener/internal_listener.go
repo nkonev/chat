@@ -56,7 +56,7 @@ func CreateRabbitInternalEventsListener(
 		case dto.PublishBroadcastMessage:
 			err := json.Unmarshal(bytesData, &bindTo)
 			if err != nil {
-				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)
+				lgr.ErrorContext(ctx, "Error during deserialize notification", logger.AttributeError, err)
 				return err
 			}
 
@@ -64,7 +64,7 @@ func CreateRabbitInternalEventsListener(
 		case dto.PublishUserTyping:
 			err := json.Unmarshal(bytesData, &bindTo)
 			if err != nil {
-				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)
+				lgr.ErrorContext(ctx, "Error during deserialize notification", logger.AttributeError, err)
 				return err
 			}
 

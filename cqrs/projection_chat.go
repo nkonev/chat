@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
@@ -49,7 +50,7 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 				if tetATetTwoExists {
 					m.lgr.InfoContext(ctx,
 						"Not created common chat because 2-participant tet-a-tet esists",
-						"chat_id", event.ChatId,
+						logger.AttributeChatId, event.ChatId,
 						"title", event.Title,
 					)
 
@@ -64,7 +65,7 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 				if tetATetOneExists {
 					m.lgr.InfoContext(ctx,
 						"Not created common chat because 1-participant tet-a-tet esists",
-						"chat_id", event.ChatId,
+						logger.AttributeChatId, event.ChatId,
 						"title", event.Title,
 					)
 
@@ -137,7 +138,7 @@ func (m *CommonProjection) OnChatCreated(ctx context.Context, event *ChatCreated
 
 	m.lgr.InfoContext(ctx,
 		"Common chat created",
-		"chat_id", event.ChatId,
+		logger.AttributeChatId, event.ChatId,
 		"title", event.Title,
 	)
 
@@ -152,7 +153,7 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 			return err
 		}
 		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping ChatEdited because there is no chat", "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping ChatEdited because there is no chat", logger.AttributeChatId, event.ChatId)
 			return nil
 		}
 
@@ -180,7 +181,7 @@ func (m *CommonProjection) OnChatEdited(ctx context.Context, event *ChatEdited) 
 		}
 		m.lgr.InfoContext(ctx,
 			"Common chat edited",
-			"chat_id", event.ChatId,
+			logger.AttributeChatId, event.ChatId,
 			"title", event.Title,
 		)
 
@@ -248,7 +249,7 @@ func (m *CommonProjection) OnChatRemoved(ctx context.Context, event *ChatDeleted
 
 		m.lgr.InfoContext(ctx,
 			"Common chat removed",
-			"chat_id", event.ChatId,
+			logger.AttributeChatId, event.ChatId,
 		)
 		return nil
 	})
@@ -266,7 +267,7 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *UserChatPinn
 			return err
 		}
 		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping ChatPinned because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping ChatPinned because participant isn't participant", logger.AttributeUserId, event.AdditionalData.BehalfUserId, logger.AttributeChatId, event.ChatId)
 			return nil
 		}
 
@@ -286,8 +287,8 @@ func (m *CommonProjection) OnChatPinned(ctx context.Context, event *UserChatPinn
 
 	m.lgr.InfoContext(ctx,
 		"Chat pinned",
-		"user_id", event.AdditionalData.BehalfUserId,
-		"chat_id", event.ChatId,
+		logger.AttributeUserId, event.AdditionalData.BehalfUserId,
+		logger.AttributeChatId, event.ChatId,
 		"pinned", event.Pinned,
 	)
 
@@ -302,7 +303,7 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 			return err
 		}
 		if !participant {
-			m.lgr.InfoContext(ctx, "Skipping ChatNotificationSettingsSetted because participant isn't participant", "user_id", event.AdditionalData.BehalfUserId, "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping ChatNotificationSettingsSetted because participant isn't participant", logger.AttributeUserId, event.AdditionalData.BehalfUserId, logger.AttributeChatId, event.ChatId)
 			return nil
 		}
 
@@ -317,8 +318,8 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 
 		m.lgr.InfoContext(ctx,
 			"Chat notification settings setted",
-			"user_id", event.AdditionalData.BehalfUserId,
-			"chat_id", event.ChatId,
+			logger.AttributeUserId, event.AdditionalData.BehalfUserId,
+			logger.AttributeChatId, event.ChatId,
 			"setted", event.Setted,
 		)
 
@@ -575,7 +576,7 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 	d, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*tupleDto, error) {
 		chats, err := m.cp.GetChats(ctx, tx, behalfParticipantIds, size, startingFromItemId, includeStartingFrom, reverse, searchString, additionalFoundUserIds, chatId)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error getting chats", "err", err)
+			m.lgr.ErrorContext(ctx, "Error getting chats", logger.AttributeError, err)
 			return nil, err
 		}
 
@@ -605,7 +606,7 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 
 		tetATetOnlines, err := m.getParticipantsOnlineForTetATetMap(ctx, participantOfTetAtetId)
 		if err != nil {
-			m.lgr.WarnContext(ctx, "Something bad during getting tetATetOnlines", "err", err)
+			m.lgr.WarnContext(ctx, "Something bad during getting tetATetOnlines", logger.AttributeError, err)
 		}
 
 		chatsEnriched := make([]dto.ChatViewEnrichedDto, 0, len(chats))
@@ -658,12 +659,12 @@ func (m *EnrichingProjection) patchChatInfoForMessageNotification(ctx context.Co
 		var copyInp *dto.ChatInfoForNotification
 		err := reprint.FromTo(&inp, &copyInp)
 		if err != nil {
-			m.lgr.WarnContext(ctx, "Unable to copy", "err", err)
+			m.lgr.WarnContext(ctx, "Unable to copy", logger.AttributeError, err)
 			return inp
 		} else {
 			us, ok := allPortionUsersMap[*oppositeTetATetUserId]
 			if !ok {
-				m.lgr.InfoContext(ctx, "Opposite user isn't found in the map", "user_id", *oppositeTetATetUserId)
+				m.lgr.InfoContext(ctx, "Opposite user isn't found in the map", logger.AttributeUserId, *oppositeTetATetUserId)
 			} else {
 				copyInp.ChatName = us.Login
 				copyInp.ChatAvatar = us.Avatar
@@ -704,7 +705,7 @@ func (m *EnrichingProjection) getParticipantsOnlineForTetATetMap(ctx context.Con
 
 	onlines, err := m.aaaRestClient.GetOnlines(ctx, userIds) // get online for opposite user
 	if err != nil {
-		m.lgr.WarnContext(ctx, "Unable to get online for", "user_ids", userIds, "err", err)
+		m.lgr.WarnContext(ctx, "Unable to get online for", "user_ids", userIds, logger.AttributeError, err)
 		// nothing
 		return ret, nil
 	}
@@ -725,7 +726,7 @@ func (m *EnrichingProjection) GetChat(ctx context.Context, userId, chatId int64)
 
 	chats, _, errG := m.GetChatsEnriched(ctx, []int64{userId}, size, startingFromItemId, includeStartingFrom, reverse, searchString, &chatId, false)
 	if errG != nil {
-		m.lgr.ErrorContext(ctx, "Error getting chats", "err", errG)
+		m.lgr.ErrorContext(ctx, "Error getting chats", logger.AttributeError, errG)
 		err = errG
 		return
 	}
@@ -733,7 +734,7 @@ func (m *EnrichingProjection) GetChat(ctx context.Context, userId, chatId int64)
 	if len(chats) == 0 {
 		basic, errB := m.cp.GetChatBasic(ctx, m.cp.db, chatId)
 		if errB != nil {
-			m.lgr.ErrorContext(ctx, "Error getting basic chat", "err", errB)
+			m.lgr.ErrorContext(ctx, "Error getting basic chat", logger.AttributeError, errB)
 			err = errB
 			return
 		}
@@ -839,7 +840,7 @@ func (m *EnrichingProjection) GetNameForInvite(ctx context.Context, chatId, beha
 		if tr.chatBasic.TetATet {
 			behalfOppUser := userMap[behalfUserId]
 			if behalfOppUser == nil {
-				m.lgr.WarnContext(ctx, "Skipping an behalfOppUser because it doesn't present in aaa response", "chat_id", chatId, "user_id", behalfUserId)
+				m.lgr.WarnContext(ctx, "Skipping an behalfOppUser because it doesn't present in aaa response", logger.AttributeChatId, chatId, logger.AttributeUserId, behalfUserId)
 				continue
 			}
 
@@ -849,7 +850,7 @@ func (m *EnrichingProjection) GetNameForInvite(ctx context.Context, chatId, beha
 			} else {
 				itselfUser := userMap[userId]
 				if itselfUser == nil {
-					m.lgr.WarnContext(ctx, "Skipping an itselfUser because it doesn't present in aaa response", "chat_id", chatId, "user_id", userId)
+					m.lgr.WarnContext(ctx, "Skipping an itselfUser because it doesn't present in aaa response", logger.AttributeChatId, chatId, logger.AttributeUserId, userId)
 					continue
 				}
 				cn.Name = itselfUser.Login
@@ -869,7 +870,7 @@ func (m *EnrichingProjection) searchForUsers(ctx context.Context, searchString s
 	if searchString != "" && searchString != dto.ReservedPublicallyAvailableForSearchChats {
 		users, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, []int64{}, 0, 0)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error get users from aaa", "err", err)
+			m.lgr.ErrorContext(ctx, "Error get users from aaa", logger.AttributeError, err)
 		}
 		for _, u := range users {
 			additionalFoundUserIds = append(additionalFoundUserIds, u.Id)
@@ -1055,7 +1056,7 @@ func (m *CommonProjection) IterateOverAllChats(ctx context.Context, co db.Common
 		`
 		err := sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}
@@ -1068,7 +1069,7 @@ func (m *CommonProjection) IterateOverAllChats(ctx context.Context, co db.Common
 
 		err = consumer(list)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}

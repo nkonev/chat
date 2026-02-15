@@ -57,7 +57,7 @@ func (p *AsyncMessageService) BroadcastMessage(ctx context.Context, messageText 
 		UserLogin:   userLogin,
 	})
 	if err != nil {
-		p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 	}
 	return nil
 }
@@ -65,7 +65,7 @@ func (p *AsyncMessageService) BroadcastMessage(ctx context.Context, messageText 
 func (p *AsyncMessageService) TypeMessage(ctx context.Context, chatId, userId int64, userLogin string) {
 	participant, err := p.commonProjection.IsParticipant(ctx, p.dbWrapper, userId, chatId)
 	if err != nil {
-		p.lgr.ErrorContext(ctx, "Error checking is participant", "err", err)
+		p.lgr.ErrorContext(ctx, "Error checking is participant", logger.AttributeError, err)
 		return
 	}
 	if !participant {
@@ -79,7 +79,7 @@ func (p *AsyncMessageService) TypeMessage(ctx context.Context, chatId, userId in
 		UserLogin: userLogin,
 	})
 	if err != nil {
-		p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 	}
 }
 
@@ -145,13 +145,13 @@ func (p *MessageService) BroadcastMessage(ctx context.Context, messageText strin
 				ChatId:                       chatId,
 			})
 			if err != nil {
-				p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		p.lgr.ErrorContext(ctx, "Error during getting chat participants", "err", err)
+		p.lgr.ErrorContext(ctx, "Error during getting chat participants", logger.AttributeError, err)
 		return
 	}
 }
@@ -169,12 +169,12 @@ func (p *MessageService) TypeMessage(ctx context.Context, chatId, userId int64, 
 
 	participant, err := p.commonProjection.IsParticipant(ctx, p.dbWrapper, userId, chatId)
 	if err != nil {
-		p.lgr.ErrorContext(ctx, "Error during checking is participant", "err", err)
+		p.lgr.ErrorContext(ctx, "Error during checking is participant", logger.AttributeError, err)
 		return
 	}
 
 	if !participant {
-		p.lgr.InfoContext(ctx, "The user isn't participant", "user_id", userId, "chat_id", chatId)
+		p.lgr.InfoContext(ctx, "The user isn't participant", logger.AttributeUserId, userId, logger.AttributeChatId, chatId)
 		return
 	}
 
@@ -186,13 +186,13 @@ func (p *MessageService) TypeMessage(ctx context.Context, chatId, userId int64, 
 				UserTypingNotification: &ut,
 			})
 			if err != nil {
-				p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				p.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 			}
 		}
 		return nil
 	})
 	if err != nil {
-		p.lgr.ErrorContext(ctx, "Error during getting chat participants", "err", err)
+		p.lgr.ErrorContext(ctx, "Error during getting chat participants", logger.AttributeError, err)
 		return
 	}
 }

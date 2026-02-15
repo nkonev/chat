@@ -63,11 +63,11 @@ func (srv *CleanDeletedUserDataService) processChats(c context.Context) {
 
 		existResponse, err := srv.restClient.CheckAreUsersExists(c, utils.SetMapIdStructToSlice(userIdMap))
 		if err != nil {
-			srv.lgr.ErrorContext(c, "Got error getting existResponse", "err", err)
+			srv.lgr.ErrorContext(c, "Got error getting existResponse", logger.AttributeError, err)
 			return nil
 		}
 		if existResponse == nil {
-			srv.lgr.ErrorContext(c, "Got null getting existResponse", "err", err)
+			srv.lgr.ErrorContext(c, "Got null getting existResponse", logger.AttributeError, err)
 			return nil
 		}
 
@@ -76,12 +76,12 @@ func (srv *CleanDeletedUserDataService) processChats(c context.Context) {
 		for _, cp := range chatParticipants {
 			ue, ok := existsMap[cp.UserId]
 			if !ok {
-				srv.lgr.WarnContext(c, "aaa responded no exists, probably the error in aaa", "user_id", cp.UserId)
+				srv.lgr.WarnContext(c, "aaa responded no exists, probably the error in aaa", logger.AttributeUserId, cp.UserId)
 				continue
 			}
 
 			if !ue.Exists {
-				srv.lgr.InfoContext(c, "Deleting participant because it does not exists in aaa", "user_id", ue.UserId, "chat_id", cp.ChatId)
+				srv.lgr.InfoContext(c, "Deleting participant because it does not exists in aaa", logger.AttributeUserId, ue.UserId, logger.AttributeChatId, cp.ChatId)
 				cmd := cqrs.TechnicalRemoveContentOfDeletedUser{ // ~ DeleteParticipant
 					UserId: cp.UserId,
 					ChatId: cp.ChatId,
@@ -89,7 +89,7 @@ func (srv *CleanDeletedUserDataService) processChats(c context.Context) {
 
 				err = cmd.Handle(c, srv.eventBus)
 				if err != nil {
-					srv.lgr.ErrorContext(c, "error during removing content of deleted user", "err", err)
+					srv.lgr.ErrorContext(c, "error during removing content of deleted user", logger.AttributeError, err)
 				}
 			}
 		}
@@ -97,7 +97,7 @@ func (srv *CleanDeletedUserDataService) processChats(c context.Context) {
 		return nil
 	})
 	if errOuter != nil {
-		srv.lgr.ErrorContext(c, "error during removing content of deleted user", "err", errOuter)
+		srv.lgr.ErrorContext(c, "error during removing content of deleted user", logger.AttributeError, errOuter)
 	}
 
 	srv.lgr.InfoContext(c, "End of cleaning deleted users data job")

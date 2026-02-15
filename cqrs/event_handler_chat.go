@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/utils"
 	"maps"
@@ -23,7 +24,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	}
 
 	if !CanAddParticipant(adt.IsChatAdmin, adt.ChatIsTetATet, event.IsJoining, adt.AvailableToSearch, adt.IsBlog, event.IsChatCreating, adt.IsParticipant, adt.RegularParticipantCanAddParticipants) {
-		m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -33,7 +34,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 	}
 
 	if !resp.ChatExists {
-		m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no chat exists. Probably it's protection against ahead creating tet-a-tet", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping ParticipantsAdded because there is no chat exists. Probably it's protection against ahead creating tet-a-tet", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -69,7 +70,7 @@ func (m *EventHandler) OnParticipantRemoved(ctx context.Context, event *Particip
 
 	for _, participantId := range event.ParticipantIds {
 		if !CanRemoveParticipant(event.AdditionalData.BehalfUserId, adt.IsChatAdmin, adt.ChatIsTetATet, event.IsLeaving, adt.IsParticipant, participantId, isChatRemoving) {
-			m.lgr.InfoContext(ctx, "Skipping ParticipantRemoved because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+			m.lgr.InfoContext(ctx, "Skipping ParticipantRemoved because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 			return nil
 		}
 	}
@@ -113,7 +114,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 				Participants: &pseudoUsers,
 			})
 			if errInn != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 			}
 		}
 	} else {
@@ -131,13 +132,13 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 					Participants: &pseudoUsers,
 				})
 				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 				}
 			}
 			return nil
 		})
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 		}
 	}
 
@@ -161,7 +162,7 @@ func (m *EventHandler) handleParticipantRemoved(ctx context.Context, additionalD
 					ChatNotification: &cv,
 				})
 				if err != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 				}
 			}
 
@@ -201,7 +202,7 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 	}
 
 	if !CanChangeParticipant(event.AdditionalData.BehalfUserId, adt.IsChatAdmin, adt.ChatIsTetATet, event.ParticipantId) {
-		m.lgr.InfoContext(ctx, "Skipping ParticipantChanged because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping ParticipantChanged because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -236,14 +237,14 @@ func (m *EventHandler) OnParticipantChanged(ctx context.Context, event *Particip
 				Participants: &hisParticipantsViews,
 			})
 			if errInn != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 			}
 		}
 
 		return nil
 	})
 	if errOuter != nil {
-		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errOuter)
+		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errOuter)
 	}
 
 	changedUserIds := []int64{}
@@ -279,7 +280,7 @@ func (m *EventHandler) OnChatEdited(ctx context.Context, event *ChatEdited) erro
 	}
 
 	if !CanEditChat(adt.IsChatAdmin, adt.ChatIsTetATet) {
-		m.lgr.InfoContext(ctx, "Skipping OnChatEdited because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping OnChatEdited because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -308,7 +309,7 @@ func (m *EventHandler) OnChatEdited(ctx context.Context, event *ChatEdited) erro
 					ChatNotification: &cv,
 				})
 				if err != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 				}
 			}
 
@@ -368,7 +369,7 @@ func (m *EventHandler) notifyMessagesReloadCommand(ctx context.Context, chatId i
 			ChatId:    chatId,
 		})
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 		}
 	}
 
@@ -386,7 +387,7 @@ func (m *EventHandler) notifyParticipantsReloadCommand(ctx context.Context, chat
 			ChatId:    chatId,
 		})
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 		}
 	}
 }
@@ -457,7 +458,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 		return err
 	}
 	if !CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage) {
-		m.lgr.InfoContext(ctx, "Skipping OnMessageCreated because there is no authorization to do so", "chat_id", event.MessageCommoned.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping OnMessageCreated because there is no authorization to do so", logger.AttributeChatId, event.MessageCommoned.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -466,11 +467,11 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 		return err
 	}
 
-	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
+	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 
 	chatNotificationTitle, err := m.commonProjection.getChatNameForNotification(ctx, m.db, event.MessageCommoned.ChatId)
 	if err != nil {
-		m.lgr.WarnContext(ctx, "Unable to get chatNotificationTitle", "chat_id", event.MessageCommoned.ChatId, "err", err)
+		m.lgr.WarnContext(ctx, "Unable to get chatNotificationTitle", logger.AttributeChatId, event.MessageCommoned.ChatId, logger.AttributeError, err)
 		// nothing
 	}
 
@@ -482,9 +483,9 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	if adt.ChatIsTetATet {
 		oppositeTetATetUserId, err = m.enrichingProjection.getTetATetOpposite(ctx, m.db, event.MessageCommoned.ChatId, event.AdditionalData.BehalfUserId)
 		if err != nil {
-			m.lgr.WarnContext(ctx, "Unable to get opposite", "chat_id", event.MessageCommoned.ChatId, "err", err)
+			m.lgr.WarnContext(ctx, "Unable to get opposite", logger.AttributeChatId, event.MessageCommoned.ChatId, logger.AttributeError, err)
 		} else if oppositeTetATetUserId == nil {
-			m.lgr.DebugContext(ctx, "single tet-a-tet", "chat_id", event.MessageCommoned.ChatId)
+			m.lgr.DebugContext(ctx, "single tet-a-tet", logger.AttributeChatId, event.MessageCommoned.ChatId)
 		} else {
 			additionalUserIdToFetch = append(additionalUserIdToFetch, *oppositeTetATetUserId)
 		}
@@ -519,13 +520,13 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 				MessageNotification: &messageView,
 			})
 			if errInn != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 			}
 
 			// notification about the new message (red dot)
 			if messageView.BehalfUserId != event.AdditionalData.BehalfUserId { // skip myself
 				if owner, ok := allPortionUsersMap[messageView.OwnerId]; !ok {
-					m.lgr.InfoContext(ctx, "Message owner isn't found", "user_id", messageView.OwnerId)
+					m.lgr.InfoContext(ctx, "Message owner isn't found", logger.AttributeUserId, messageView.OwnerId)
 				} else {
 					errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
 						UserId:    messageView.BehalfUserId,
@@ -541,7 +542,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 						},
 					})
 					if errInn != nil {
-						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 					}
 				}
 			}
@@ -550,7 +551,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 		newToSendMentions := m.prepareMentionParticipantIds(ctx, newHasAll, newHasHere, newMentionedUserIds, participantIdsPortion)
 
 		if behalfUserDto == nil {
-			m.lgr.InfoContext(ctx, "Unable to get behalf user for mention notification", "user_id", event.AdditionalData.BehalfUserId)
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for mention notification", logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		} else {
 			for _, participantId := range newToSendMentions {
 				if participantId == event.AdditionalData.BehalfUserId {
@@ -571,7 +572,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 					ChatTitle: chatNotificationTitle,
 				})
 				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 				}
 			}
 		}
@@ -584,7 +585,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 
 	if newRepliedUserId != nil {
 		if behalfUserDto == nil {
-			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", "user_id", event.AdditionalData.BehalfUserId)
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		} else {
 			if *newRepliedUserId != event.AdditionalData.BehalfUserId { // skip myself
 				err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
@@ -602,7 +603,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 					ChatTitle: chatNotificationTitle,
 				})
 				if err != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 				}
 			}
 		}
@@ -622,7 +623,7 @@ func (m *EventHandler) prepareMentionParticipantIds(ctx context.Context, newHasA
 	} else if newHasHere {
 		userOnlines, err := m.aaaRestClient.GetOnlines(ctx, participantIdsPortion) // get online for opposite user
 		if err != nil {
-			m.lgr.WarnContext(ctx, "Unable to get online for", "user_ids", participantIdsPortion, "err", err)
+			m.lgr.WarnContext(ctx, "Unable to get online for", "user_ids", participantIdsPortion, logger.AttributeError, err)
 			// nothing
 		}
 		for _, uo := range userOnlines {
@@ -654,12 +655,12 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 
 	if event.IsEmbedSync {
 		if !CanSyncEmbedMessage(event.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.HasEmbedMessage, canWriteMessage) {
-			m.lgr.InfoContext(ctx, "Skipping OnMessageEdited because there is no authorization to do so (sync)", "chat_id", event.MessageCommoned.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+			m.lgr.InfoContext(ctx, "Skipping OnMessageEdited because there is no authorization to do so (sync)", logger.AttributeChatId, event.MessageCommoned.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 			return nil
 		}
 	} else {
 		if !CanEditMessage(event.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.HasEmbedMessage, adt.EmbedMessageTypeSafe, canWriteMessage) {
-			m.lgr.InfoContext(ctx, "Skipping OnMessageEdited because there is no authorization to do so (edit)", "chat_id", event.MessageCommoned.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+			m.lgr.InfoContext(ctx, "Skipping OnMessageEdited because there is no authorization to do so (edit)", logger.AttributeChatId, event.MessageCommoned.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 			return nil
 		}
 	}
@@ -677,11 +678,11 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		return err
 	}
 
-	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
+	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 
 	chatNotificationTitle, err := m.commonProjection.getChatNameForNotification(ctx, m.db, event.MessageCommoned.ChatId)
 	if err != nil {
-		m.lgr.WarnContext(ctx, "Unable to get chatNotificationTitle", "chat_id", event.MessageCommoned.ChatId, "err", err)
+		m.lgr.WarnContext(ctx, "Unable to get chatNotificationTitle", logger.AttributeChatId, event.MessageCommoned.ChatId, logger.AttributeError, err)
 		// nothing
 	}
 
@@ -763,7 +764,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 				MessageNotification: &messageView,
 			})
 			if errInn != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 			}
 
 			if isPinned {
@@ -782,10 +783,10 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 						ChatId: event.MessageCommoned.ChatId,
 					})
 					if errInn != nil {
-						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 					}
 				} else {
-					m.lgr.WarnContext(ctx, "Pinned enriched isn't found", "user_id", messageView.BehalfUserId)
+					m.lgr.WarnContext(ctx, "Pinned enriched isn't found", logger.AttributeUserId, messageView.BehalfUserId)
 				}
 			}
 
@@ -802,10 +803,10 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 						ChatId: event.MessageCommoned.ChatId,
 					})
 					if errInn != nil {
-						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 					}
 				} else {
-					m.lgr.WarnContext(ctx, "Published enriched isn't found", "user_id", messageView.BehalfUserId)
+					m.lgr.WarnContext(ctx, "Published enriched isn't found", logger.AttributeUserId, messageView.BehalfUserId)
 				}
 			}
 		}
@@ -814,7 +815,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 		removedToSendMentions := m.prepareMentionParticipantIds(ctx, removedHasAll, removedHasHere, removedMentionedUserIds, participantIdsPortion)
 
 		if behalfUserDto == nil {
-			m.lgr.InfoContext(ctx, "Unable to get behalf user for mention notification", "user_id", event.AdditionalData.BehalfUserId)
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for mention notification", logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		} else {
 
 			// add notification
@@ -837,7 +838,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 					ChatTitle: chatNotificationTitle,
 				})
 				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 				}
 			}
 
@@ -856,7 +857,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 					},
 				})
 				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 				}
 			}
 		}
@@ -869,7 +870,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 
 	if addedRepliedUserId != nil {
 		if behalfUserDto == nil {
-			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", "user_id", event.AdditionalData.BehalfUserId)
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		} else {
 			if *addedRepliedUserId != event.AdditionalData.BehalfUserId { // skip myself
 				err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
@@ -887,7 +888,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 					ChatTitle: chatNotificationTitle,
 				})
 				if err != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 				}
 			}
 		}
@@ -895,7 +896,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 
 	if removedRepliedUserId != nil {
 		if behalfUserDto == nil {
-			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", "user_id", event.AdditionalData.BehalfUserId)
+			m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		} else {
 
 			err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
@@ -908,7 +909,7 @@ func (m *EventHandler) OnMessageEdited(ctx context.Context, event *MessageEdited
 				},
 			})
 			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 			}
 		}
 	}
@@ -944,7 +945,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 		return err
 	}
 	if !CanDeleteMessage(event.AdditionalData.BehalfUserId, adt.MessageOwnerId, adt.ChatCanWriteMessage) {
-		m.lgr.InfoContext(ctx, "Skipping OnMessageRemoved because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping OnMessageRemoved because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -963,7 +964,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 		return err
 	}
 
-	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
+	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		for _, participantId := range participantIdsPortion {
@@ -977,7 +978,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 				},
 			})
 			if errInn != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 			}
 
 			err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
@@ -989,7 +990,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 				},
 			})
 			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 			}
 
 			err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
@@ -1002,7 +1003,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 				},
 			})
 			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 			}
 
 			for _, reaction := range reactions {
@@ -1020,7 +1021,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 						ChatId: event.ChatId,
 					})
 					if err != nil {
-						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 					}
 				}
 			}
@@ -1045,7 +1046,7 @@ func (m *EventHandler) OnMessageRemoved(ctx context.Context, event *MessageDelet
 				},
 			})
 			if errInn != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 			}
 		}
 
@@ -1084,7 +1085,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 	}
 
 	if !CanPinMessage(adt.ChatCanPinMessage, adt.IsChatAdmin) {
-		m.lgr.InfoContext(ctx, "Skipping OnMessagePinned because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping OnMessagePinned because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -1111,7 +1112,7 @@ func (m *EventHandler) OnMessagePinned(ctx context.Context, event *MessagePinned
 					MessageNotification: &messageView,
 				})
 				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 				}
 			}
 
@@ -1149,7 +1150,7 @@ func (m *EventHandler) sendUnpublish(ctx context.Context, participantIdsPortion 
 			ChatId: chatId,
 		})
 		if errInn != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 		}
 	}
 }
@@ -1170,7 +1171,7 @@ func (m *EventHandler) sendUnpromotePinned(ctx context.Context, participantIdsPo
 			ChatId: chatId,
 		})
 		if errInn != nil {
-			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 		}
 	}
 }
@@ -1205,10 +1206,10 @@ func (m *EventHandler) sendPromotePinned(ctx context.Context, chatId, promotedMe
 					ChatId: chatId,
 				})
 				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 				}
 			} else {
-				m.lgr.WarnContext(ctx, "Pinned promoted isn't found for the participant", "user_id", participantId)
+				m.lgr.WarnContext(ctx, "Pinned promoted isn't found for the participant", logger.AttributeUserId, participantId)
 			}
 		}
 
@@ -1220,7 +1221,7 @@ func (m *EventHandler) sendPromotePinned(ctx context.Context, chatId, promotedMe
 				MessageNotification: &messageView,
 			})
 			if errInn != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 			}
 		}
 
@@ -1252,7 +1253,7 @@ func (m *EventHandler) OnMessagePublished(ctx context.Context, event *MessagePub
 	}
 
 	if !CanPublishMessage(adt.ChatCanPublishMessage, adt.IsChatAdmin, adt.MessageOwnerId, event.AdditionalData.BehalfUserId) {
-		m.lgr.InfoContext(ctx, "Skipping OnMessagePublished because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping OnMessagePublished because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -1279,7 +1280,7 @@ func (m *EventHandler) OnMessagePublished(ctx context.Context, event *MessagePub
 					MessageNotification: &messageView,
 				})
 				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 				}
 			}
 
@@ -1329,10 +1330,10 @@ func (m *EventHandler) sendPublish(ctx context.Context, chatId, messageId, publi
 					ChatId: chatId,
 				})
 				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 				}
 			} else {
-				m.lgr.WarnContext(ctx, "Published isn't found for the participant", "user_id", participantId)
+				m.lgr.WarnContext(ctx, "Published isn't found for the participant", logger.AttributeUserId, participantId)
 			}
 		}
 
@@ -1344,7 +1345,7 @@ func (m *EventHandler) sendPublish(ctx context.Context, chatId, messageId, publi
 				MessageNotification: &messageView,
 			})
 			if errInn != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 			}
 		}
 
@@ -1364,7 +1365,7 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 	}
 
 	if !CanMakeMessageBlogPost(adt.IsChatAdmin, adt.ChatIsTetATet, adt.IsMessageBlogPost, adt.IsBlog, true) {
-		m.lgr.InfoContext(ctx, "Skipping OnMessageBlogPostMade because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping OnMessageBlogPostMade because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -1381,7 +1382,7 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 	eventType := dto.EventTypeMessageEdited
 
 	if currentBlogPost != nil { // here, after OnMessageBlogPostMade() ex. blog post message is no more blog post
-		m.lgr.DebugContext(ctx, "Sending notification about the message is no more blog post to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.DebugContext(ctx, "Sending notification about the message is no more blog post to participants", "event_type", eventType, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 
 		errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 			messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, currentBlogPost, nil)
@@ -1397,7 +1398,7 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 					MessageNotification: &messageView,
 				})
 				if errInn != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 				}
 			}
 
@@ -1408,7 +1409,7 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 		}
 	}
 
-	m.lgr.DebugContext(ctx, "Sending notification about the message become blog post to participants", "event_type", eventType, "user_id", event.AdditionalData.BehalfUserId)
+	m.lgr.DebugContext(ctx, "Sending notification about the message become blog post to participants", "event_type", eventType, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 
 	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, nil, func(participantIdsPortion []int64) error {
 		messageViews, _, _, errInn := m.enrichingProjection.GetMessagesEnriched(ctx, participantIdsPortion, false, false, nil, event.ChatId, int32(len(participantIdsPortion)), nil, true, false, dto.NoSearchString, &event.MessageId, nil)
@@ -1424,7 +1425,7 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 				MessageNotification: &messageView,
 			})
 			if errInn != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInn)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInn)
 			}
 		}
 
@@ -1446,7 +1447,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 	}
 
 	if !CanReactOnMessage(adt.ChatCanReactOnMessage, adt.IsParticipant) {
-		m.lgr.InfoContext(ctx, "Skipping OnMessageReactionFlipped because there is no authorization to do so", "chat_id", event.ChatId, "user_id", event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping OnMessageReactionFlipped because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 		return nil
 	}
 
@@ -1462,7 +1463,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 
 	chatNotificationTitle, err := m.commonProjection.getChatNameForNotification(ctx, m.db, event.ChatId)
 	if err != nil {
-		m.lgr.WarnContext(ctx, "Unable to get chatNotificationTitle", "chat_id", event.ChatId, "err", err)
+		m.lgr.WarnContext(ctx, "Unable to get chatNotificationTitle", logger.AttributeChatId, event.ChatId, logger.AttributeError, err)
 		// nothing
 	}
 
@@ -1470,7 +1471,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 
 	reaction, err := m.commonProjection.GetReaction(ctx, m.db, event.ChatId, event.MessageId, event.Reaction)
 	if err != nil {
-		m.lgr.ErrorContext(ctx, "Error during IterateOverReactionParticipantsIds", "err", err)
+		m.lgr.ErrorContext(ctx, "Error during IterateOverReactionParticipantsIds", logger.AttributeError, err)
 		return nil
 	}
 
@@ -1527,7 +1528,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 				ChatId:               event.ChatId,
 			})
 			if errInner != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", errInner)
+				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInner)
 			}
 		}
 		return nil
@@ -1550,7 +1551,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 			m.lgr.InfoContext(ctx, "Unable to get message owner for reaction notification")
 		} else {
 			if behalfUserDto == nil {
-				m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", "user_id", event.AdditionalData.BehalfUserId)
+				m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 			} else {
 				if messageOwnerId != event.AdditionalData.BehalfUserId { // skip myself
 					err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
@@ -1564,7 +1565,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 						ChatTitle:     chatNotificationTitle,
 					})
 					if err != nil {
-						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+						m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 					}
 				}
 			}
@@ -1581,7 +1582,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 			m.lgr.InfoContext(ctx, "Unable to get message owner for reaction notification")
 		} else {
 			if behalfUserDto == nil {
-				m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", "user_id", event.AdditionalData.BehalfUserId)
+				m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 			} else {
 				err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
 					EventType:     reactionEventType,
@@ -1594,7 +1595,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 					ChatTitle:     chatNotificationTitle,
 				})
 				if err != nil {
-					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+					m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 				}
 			}
 		}

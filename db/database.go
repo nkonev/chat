@@ -78,7 +78,7 @@ func (db *DB) Begin(ctx context.Context, lgr *logger.LoggerWrapper) (*Tx, error)
 
 func (tx *Tx) SafeRollback() {
 	if err0 := tx.Rollback(); err0 != nil {
-		tx.lgr.Error("Error during rollback tx ", "err", err0)
+		tx.lgr.Error("Error during rollback tx ", logger.AttributeError, err0)
 	}
 }
 
@@ -309,7 +309,7 @@ func (db *DB) Reset(mc config.MigrationConfig, hard bool) error {
 	drop table if exists tr2;
 
 `, additional, mc.MigrationTable))
-	db.lgr.Info("Recreating database", "err", err)
+	db.lgr.Info("Recreating database", logger.AttributeError, err)
 	return err
 }
 

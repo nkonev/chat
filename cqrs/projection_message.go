@@ -28,7 +28,7 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 			return err
 		}
 		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageCreated because there is no chat", "chat_id", event.MessageCommoned.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageCreated because there is no chat", logger.AttributeChatId, event.MessageCommoned.ChatId)
 			return nil
 		}
 
@@ -56,9 +56,9 @@ func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageC
 		}
 		m.lgr.InfoContext(ctx,
 			"Handling message added",
-			"id", event.MessageCommoned.Id,
-			"user_id", event.AdditionalData.BehalfUserId,
-			"chat_id", event.MessageCommoned.ChatId,
+			logger.AttributeMessageId, event.MessageCommoned.Id,
+			logger.AttributeUserId, event.AdditionalData.BehalfUserId,
+			logger.AttributeChatId, event.MessageCommoned.ChatId,
 		)
 		return nil
 	})
@@ -113,7 +113,7 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 			return nil, err
 		}
 		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageEdited because there is no chat", "chat_id", event.MessageCommoned.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageEdited because there is no chat", logger.AttributeChatId, event.MessageCommoned.ChatId)
 			return nil, nil
 		}
 
@@ -204,9 +204,9 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 
 		m.lgr.InfoContext(ctx,
 			"Handling message edited",
-			"id", event.MessageCommoned.Id,
-			"chat_id", event.MessageCommoned.ChatId,
-			"message_id", event.MessageCommoned.Id,
+			logger.AttributeMessageId, event.MessageCommoned.Id,
+			logger.AttributeChatId, event.MessageCommoned.ChatId,
+			logger.AttributeMessageId, event.MessageCommoned.Id,
 		)
 		return &resDto{
 			isPinned:       isMessagePinned,
@@ -323,8 +323,8 @@ func (m *CommonProjection) OnMessageRemoved(ctx context.Context, event *MessageD
 
 	m.lgr.InfoContext(ctx,
 		"Message removed from common chat",
-		"message_id", event.MessageId,
-		"chat_id", event.ChatId,
+		logger.AttributeMessageId, event.MessageId,
+		logger.AttributeChatId, event.ChatId,
 	)
 
 	return res.wasMessagePinned, res.wasMessagePublished, res.promotedMessageId, res.pinnedCount, res.publishedCount, nil
@@ -423,7 +423,7 @@ func (m *EnrichingProjection) GetPinnedPromotedMessage(ctx context.Context, chat
 		if promotedP != nil {
 			users, err := m.aaaRestClient.GetUsers(ctx, []int64{promotedP.OwnerId})
 			if err != nil {
-				m.lgr.WarnContext(ctx, "unable to get users", "err", err)
+				m.lgr.WarnContext(ctx, "unable to get users", logger.AttributeError, err)
 			}
 
 			usersMap := utils.ToMap(users)
@@ -477,7 +477,7 @@ func (m *EnrichingProjection) GetPinnedMessagesEnriched(ctx context.Context, cha
 		}
 
 		if cb == nil {
-			m.lgr.InfoContext(ctx, "chat is not found", "chat_id", chatId)
+			m.lgr.InfoContext(ctx, "chat is not found", logger.AttributeChatId, chatId)
 			return &rs, nil
 		}
 
@@ -493,7 +493,7 @@ func (m *EnrichingProjection) GetPinnedMessagesEnriched(ctx context.Context, cha
 
 		messageOwnerUsers, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdStructToSlice(messageOwners))
 		if err != nil {
-			m.lgr.WarnContext(ctx, "unable to get users", "err", err)
+			m.lgr.WarnContext(ctx, "unable to get users", logger.AttributeError, err)
 		}
 
 		messageOwnerUsersMap := utils.ToMap(messageOwnerUsers)
@@ -544,7 +544,7 @@ func (m *EnrichingProjection) GetPinnedMessageEnriched(ctx context.Context, co d
 				resMap[participantId] = pinnedEnriched
 			}
 		} else {
-			m.lgr.ErrorContext(ctx, "Chat isn't found", "chat_id", chatId)
+			m.lgr.ErrorContext(ctx, "Chat isn't found", logger.AttributeChatId, chatId)
 		}
 
 		return resMap, nil
@@ -637,7 +637,7 @@ func (m *EnrichingProjection) GetPublishedMessagesEnriched(ctx context.Context, 
 		}
 
 		if cb == nil {
-			m.lgr.InfoContext(ctx, "chat is not found", "chat_id", chatId)
+			m.lgr.InfoContext(ctx, "chat is not found", logger.AttributeChatId, chatId)
 			return &rs, nil
 		}
 
@@ -653,7 +653,7 @@ func (m *EnrichingProjection) GetPublishedMessagesEnriched(ctx context.Context, 
 
 		messageOwnerUsers, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdStructToSlice(messageOwners))
 		if err != nil {
-			m.lgr.WarnContext(ctx, "unable to get users", "err", err)
+			m.lgr.WarnContext(ctx, "unable to get users", logger.AttributeError, err)
 		}
 
 		messageOwnerUsersMap := utils.ToMap(messageOwnerUsers)
@@ -704,7 +704,7 @@ func (m *EnrichingProjection) GetPublishedMessageEnriched(ctx context.Context, c
 				resMap[participantId] = publishedEnriched
 			}
 		} else {
-			m.lgr.ErrorContext(ctx, "Chat isn't found", "chat_id", chatId)
+			m.lgr.ErrorContext(ctx, "Chat isn't found", logger.AttributeChatId, chatId)
 		}
 
 		return resMap, nil
@@ -719,7 +719,7 @@ func (m *EnrichingProjection) GetPublishedMessageForPublic(ctx context.Context, 
 		return nil, false, err
 	}
 	if cb == nil {
-		m.lgr.InfoContext(ctx, "Public message isn't found due to no chat", "chat_id", chatId, "message_id", messageId)
+		m.lgr.InfoContext(ctx, "Public message isn't found due to no chat", logger.AttributeChatId, chatId, logger.AttributeMessageId, messageId)
 		return nil, true, nil
 	}
 
@@ -736,7 +736,7 @@ func (m *EnrichingProjection) GetPublishedMessageForPublic(ctx context.Context, 
 		return nil, false, err
 	}
 	if len(msgs) == 0 {
-		m.lgr.InfoContext(ctx, "Public message isn't found due to no message", "chat_id", chatId, "message_id", messageId)
+		m.lgr.InfoContext(ctx, "Public message isn't found due to no message", logger.AttributeChatId, chatId, logger.AttributeMessageId, messageId)
 		return nil, true, nil
 	}
 	if len(msgs) > 1 {
@@ -896,7 +896,7 @@ func (m *CommonProjection) OnMessagePinned(ctx context.Context, event *MessagePi
 
 				promotedMessageId = &event.MessageId
 			} else {
-				m.lgr.InfoContext(ctx, "Skipping pinning the mesage because it is not exists", "chat_id", event.ChatId, "message_id", event.MessageId)
+				m.lgr.InfoContext(ctx, "Skipping pinning the mesage because it is not exists", logger.AttributeChatId, event.ChatId, logger.AttributeMessageId, event.MessageId)
 			}
 		} else {
 			// unpin
@@ -973,7 +973,7 @@ func (m *CommonProjection) OnMessagePublished(ctx context.Context, event *Messag
 					return nil, err
 				}
 			} else {
-				m.lgr.InfoContext(ctx, "Skipping publishing the mesage because it is not exists", "chat_id", event.ChatId, "message_id", event.MessageId)
+				m.lgr.InfoContext(ctx, "Skipping publishing the mesage because it is not exists", logger.AttributeChatId, event.ChatId, logger.AttributeMessageId, event.MessageId)
 			}
 		} else {
 			_, err := tx.ExecContext(ctx, "delete from message_published where chat_id = $1 and message_id = $2", event.ChatId, event.MessageId)
@@ -1427,7 +1427,7 @@ func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *
 		}
 
 		if !messageExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageReactionFlipped because there is no message", "chat_id", event.ChatId, "message_id", event.MessageId)
+			m.lgr.InfoContext(ctx, "Skipping MessageReactionFlipped because there is no message", logger.AttributeChatId, event.ChatId, logger.AttributeMessageId, event.MessageId)
 			return false, nil
 		}
 
@@ -1557,7 +1557,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, messageId)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error getting messages", "err", err)
+			m.lgr.ErrorContext(ctx, "Error getting messages", logger.AttributeError, err)
 			return nil, err
 		}
 
@@ -1620,13 +1620,13 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 			notAparticipant = true
 			chatsByUserIdByChatId, err = m.cp.GetChatsBasicExtended(ctx, tx, utils.SetMapIdBoolToSlice(chatsPreSet), []int64{fakeUserId})
 			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", err)
+				m.lgr.ErrorContext(ctx, "Error getting chat basic", logger.AttributeError, err)
 				return nil, err
 			}
 		} else {
 			chatsByUserIdByChatId, err = m.cp.GetChatsBasicExtended(ctx, tx, utils.SetMapIdBoolToSlice(chatsPreSet), behalfUserIds)
 			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", err)
+				m.lgr.ErrorContext(ctx, "Error getting chat basic", logger.AttributeError, err)
 				return nil, err
 			}
 		}
@@ -1639,7 +1639,7 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		users, err := m.aaaRestClient.GetUsers(ctx, utils.SetMapIdBoolToSlice(usersSet))
 		if err != nil {
-			m.lgr.WarnContext(ctx, "unable to get users", "err", err)
+			m.lgr.WarnContext(ctx, "unable to get users", logger.AttributeError, err)
 		}
 
 		usersMap := utils.ToMap(users)
@@ -2525,7 +2525,7 @@ func (m *EnrichingProjection) parseMentionUserIdsFromMessageHtml(ctx context.Con
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(msg))
 	if err != nil {
-		m.lgr.WarnContext(ctx, "Unable to read html", "err", err)
+		m.lgr.WarnContext(ctx, "Unable to read html", logger.AttributeError, err)
 		return ret, false, false
 	}
 

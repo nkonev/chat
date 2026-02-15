@@ -181,7 +181,7 @@ func ConfigureHttpServer(
 			lgr.Info("Stopping http server")
 
 			if err := httpServer.Shutdown(context.Background()); err != nil {
-				lgr.Error("Error shutting http server", "err", err)
+				lgr.Error("Error shutting http server", logger.AttributeError, err)
 			}
 			return nil
 		},
@@ -291,7 +291,7 @@ func DumpMiddleware(lgr *logger.LoggerWrapper, cfg *config.AppConfig) gin.Handle
 
 		dumpReq, err := httputil.DumpRequest(c.Request, true)
 		if err != nil {
-			lgr.ErrorContext(c.Request.Context(), "Error during dumping http request", "err", err)
+			lgr.ErrorContext(c.Request.Context(), "Error during dumping http request", logger.AttributeError, err)
 		} else {
 			if cfg.Server.PrettyLog && !cfg.Logger.Json {
 				fmt.Printf(">>> HTTP REQUEST trace_id=%s\n", logger.GetTraceId(c.Request.Context()))
@@ -322,7 +322,7 @@ func RunHttpServer(
 		if errors.Is(err, http.ErrServerClosed) {
 			lgr.Info("Http server is closed")
 		} else if err != nil {
-			lgr.Error("Got http server error", "err", err)
+			lgr.Error("Got http server error", logger.AttributeError, err)
 			panic(err)
 		}
 	}()

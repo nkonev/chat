@@ -56,7 +56,7 @@ func (srv *CleanAnandonedChatsService) processChats(c context.Context) {
 	errOuter := srv.co.IterateOverAllChats(c, srv.dbR, func(chatIdsPortion []int64) error {
 		hasParticipantsMap, err := srv.co.HasParticipants(c, srv.dbR, chatIdsPortion) // will re-check on the projection side after kafka
 		if err != nil {
-			srv.lgr.ErrorContext(c, "Got error HasParticipants", "err", err)
+			srv.lgr.ErrorContext(c, "Got error HasParticipants", logger.AttributeError, err)
 			return nil
 		}
 
@@ -64,20 +64,20 @@ func (srv *CleanAnandonedChatsService) processChats(c context.Context) {
 			hasParticipants := hasParticipantsMap[ch]
 
 			if !hasParticipants {
-				srv.lgr.InfoContext(c, "Deleting chat because it does not have participants", "chat_id", ch)
+				srv.lgr.InfoContext(c, "Deleting chat because it does not have participants", logger.AttributeChatId, ch)
 				cmd := cqrs.TechnicalRemoveAbandonedChat{
 					ChatId: ch,
 				}
 				err = cmd.Handle(c, srv.eventBus)
 				if err != nil {
-					srv.lgr.ErrorContext(c, "error during removing abandoned chats", "err", err)
+					srv.lgr.ErrorContext(c, "error during removing abandoned chats", logger.AttributeError, err)
 				}
 			}
 		}
 		return nil
 	})
 	if errOuter != nil {
-		srv.lgr.ErrorContext(c, "error during removing abandoned chats", "err", errOuter)
+		srv.lgr.ErrorContext(c, "error during removing abandoned chats", logger.AttributeError, errOuter)
 	}
 
 	srv.lgr.InfoContext(c, "End of cleaning abandoned chats job")

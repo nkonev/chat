@@ -79,7 +79,7 @@ func TrimAmdSanitizeMessage(ctx context.Context, cfg *config.AppConfig, lgr *log
 	// Load the HTML document
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(sanitizedHtml))
 	if err != nil {
-		lgr.WarnContext(ctx, "Unable to read html", "err", err)
+		lgr.WarnContext(ctx, "Unable to read html", logger.AttributeError, err)
 		return "", errors.New("Unable to read html")
 	}
 
@@ -147,7 +147,7 @@ func TrimAmdSanitizeMessage(ctx context.Context, cfg *config.AppConfig, lgr *log
 
 	ret, err := doc.Find("html").Find("body").Html()
 	if err != nil {
-		lgr.WarnContext(ctx, "Unable to write html", "err", err)
+		lgr.WarnContext(ctx, "Unable to write html", logger.AttributeError, err)
 		return "", err
 	}
 

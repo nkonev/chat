@@ -13,8 +13,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const LogFieldTraceId = "trace_id"
-
 func GetTraceId(ctx context.Context) string {
 	sc := trace.SpanFromContext(ctx).SpanContext()
 	tr := sc.TraceID()
@@ -28,7 +26,7 @@ type TracingContextHandler struct {
 func (h *TracingContextHandler) Handle(ctx context.Context, r slog.Record) error {
 	traceId := GetTraceId(ctx)
 	if traceId != "" {
-		r.AddAttrs(slog.String(LogFieldTraceId, traceId))
+		r.AddAttrs(slog.String(AttributeTraceId, traceId))
 	}
 
 	return h.Handler.Handle(ctx, r)
@@ -111,6 +109,7 @@ func (lw *LoggerWrapper) CloseLogger() {
 	}
 }
 
+// Do not use
 func (lw *LoggerWrapper) WithTrace0(ctx context.Context) *slog.Logger {
-	return lw.Logger.With(LogFieldTraceId, GetTraceId(ctx))
+	return lw.Logger.With(AttributeTraceId, GetTraceId(ctx))
 }

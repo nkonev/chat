@@ -41,7 +41,7 @@ func (m *RedisLock) Lock(ctx context.Context, jobSettings any, key, value string
 
 	locked, err := m.client.SetNX(ctx, key, value, exp).Result()
 	if err != nil {
-		m.lgr.ErrorContext(ctx, "unable to invoke redis", "err", err)
+		m.lgr.ErrorContext(ctx, "unable to invoke redis", logger.AttributeError, err)
 		return false
 	}
 

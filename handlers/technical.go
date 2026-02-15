@@ -1,12 +1,13 @@
 package handlers
 
 import (
-	"github.com/gin-gonic/gin"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/logger"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 type TechnicalHandler struct {
@@ -46,7 +47,7 @@ func (ch *TechnicalHandler) Truncate(g *gin.Context) {
 			return
 		}
 
-		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantDelete command", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantDelete command", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}

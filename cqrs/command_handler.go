@@ -346,7 +346,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 					},
 				})
 				if err != nil {
-					lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+					lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 				}
 
 				return tetATetExistingTwoChatId, nil
@@ -367,7 +367,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 					},
 				})
 				if err != nil {
-					lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+					lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 				}
 
 				return tetATetExistingOneChatId, nil
@@ -666,7 +666,7 @@ func (s *Truncate) Handle(ctx context.Context, eventBus EventBusInterface, dba *
 		case <-ctx.Done():
 			err = ctx.Err()
 			if err != nil {
-				lgr.ErrorContext(ctx, "error from context", "err", err)
+				lgr.ErrorContext(ctx, "error from context", logger.AttributeError, err)
 			}
 			break
 		default:
@@ -674,12 +674,12 @@ func (s *Truncate) Handle(ctx context.Context, eventBus EventBusInterface, dba *
 
 		completed, err := commonProjection.GetIsTruncatingCompleted(ctx, dba)
 		if err != nil {
-			lgr.InfoContext(ctx, "error during GetIsTruncatingCompleted", "err", err)
+			lgr.InfoContext(ctx, "error during GetIsTruncatingCompleted", logger.AttributeError, err)
 		}
 		if completed {
 			err = commonProjection.UnsetIsTruncatingCompleted(ctx, dba)
 			if err != nil {
-				lgr.ErrorContext(ctx, "error during UnsetIsTruncatingCompleted", "err", err)
+				lgr.ErrorContext(ctx, "error during UnsetIsTruncatingCompleted", logger.AttributeError, err)
 			}
 			break
 		}
@@ -958,7 +958,7 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 			},
 		})
 		if err != nil {
-			lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 		}
 
 		err = rabbitmqNotificationEventsPublisher.Publish(ctx, s.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
@@ -971,7 +971,7 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 			},
 		})
 		if err != nil {
-			lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 		}
 
 		var messageOwnerId = messageBasic.GetOwnerId()
@@ -996,7 +996,7 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 						ChatId: s.ChatId,
 					})
 					if err != nil {
-						lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+						lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 					}
 				}
 			}
@@ -1012,7 +1012,7 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 			},
 		})
 		if err != nil {
-			lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+			lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 		}
 
 		return nil
@@ -1203,7 +1203,7 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 	}
 
 	if shouldSkip {
-		lgr.InfoContext(ctx, "Skipping handling MessageSyncEmbed", "message_id", copyCommand.MessageId, "chat_id", copyCommand.ChatId)
+		lgr.InfoContext(ctx, "Skipping handling MessageSyncEmbed", logger.AttributeMessageId, copyCommand.MessageId, logger.AttributeChatId, copyCommand.ChatId)
 		return nil
 	}
 

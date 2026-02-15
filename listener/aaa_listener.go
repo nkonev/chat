@@ -51,7 +51,7 @@ func CreateRabbitAaaUserProfileUpdateListener(lgr *logger.LoggerWrapper, cfg *co
 		case dto.UserAccountEventChanged:
 			err := json.Unmarshal(bytesData, &bindTo)
 			if err != nil {
-				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)
+				lgr.ErrorContext(ctx, "Error during deserialize notification", logger.AttributeError, err)
 				return err
 			}
 			if bindTo.EventType == dto.EventTypeUserAccountChanged {

@@ -169,14 +169,14 @@ func CreateRabbitTestOutputEventListener(service *TestOutputEventAccumulator, lg
 		case dto.GlobalUserEvent:
 			err := json.Unmarshal(bytesData, &bindTo)
 			if err != nil {
-				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)
+				lgr.ErrorContext(ctx, "Error during deserialize notification", logger.AttributeError, err)
 				return err
 			}
 			service.OnEvent(ctx, &bindTo)
 		case dto.ChatEvent:
 			err := json.Unmarshal(bytesData, &bindTo)
 			if err != nil {
-				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)
+				lgr.ErrorContext(ctx, "Error during deserialize notification", logger.AttributeError, err)
 				return err
 			}
 			service.OnEvent(ctx, &bindTo)
@@ -216,7 +216,7 @@ func CreateRabbitTestNotificationEventListener(service *TestNotificationEventAcc
 		case dto.NotificationEvent:
 			err := json.Unmarshal(bytesData, &bindTo)
 			if err != nil {
-				lgr.ErrorContext(ctx, "Error during deserialize notification", "err", err)
+				lgr.ErrorContext(ctx, "Error during deserialize notification", logger.AttributeError, err)
 				return err
 			}
 			service.OnEvent(ctx, &bindTo)

@@ -101,7 +101,7 @@ func TestTransactionWithResultPositive(t *testing.T) {
 		res := tx.QueryRow(`INSERT INTO tr1(a) VALUES ('lorem') RETURNING id`)
 		var id int64
 		if err := res.Scan(&id); err != nil {
-			lgr.Error("Error during getting chat id", "err", err)
+			lgr.Error("Error during getting chat id", logger.AttributeError, err)
 			return 0, err
 		}
 
@@ -126,7 +126,7 @@ func TestTransactionWithResultNegative(t *testing.T) {
 		res := tx.QueryRow(`INSERT INTO tr2(a) VALUES ('lorem') RETURNING id`)
 		var id int64
 		if err := res.Scan(&id); err != nil {
-			lgr.Error("Error during getting chat id", "err", err)
+			lgr.Error("Error during getting chat id", logger.AttributeError, err)
 			return 0, err
 		}
 		if _, err := tx.Exec("insert into tr2(a) VALUES ('lorem')"); err != nil {

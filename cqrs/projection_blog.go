@@ -161,7 +161,7 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 			return errInner
 		}
 		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageBlogPostMade because there is no chat", "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping MessageBlogPostMade because there is no chat", logger.AttributeChatId, event.ChatId)
 			return nil
 		}
 
@@ -170,7 +170,7 @@ func (m *CommonProjection) OnMessageBlogPostMade(ctx context.Context, event *Mes
 			return errInner
 		}
 		if !messageExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageBlogPostMade because there is no message", "chat_id", event.ChatId, "message_id", event.MessageId)
+			m.lgr.InfoContext(ctx, "Skipping MessageBlogPostMade because there is no message", logger.AttributeChatId, event.ChatId, logger.AttributeMessageId, event.MessageId)
 			return nil
 		}
 
@@ -256,7 +256,7 @@ func (m *EnrichingProjection) GetBlogsEnriched(ctx context.Context, size int32, 
 
 	blogs, count, b, err := m.cp.GetBlogs(ctx, size, offset, orderBy, reverseOrder, searchString)
 	if err != nil {
-		m.lgr.ErrorContext(ctx, "Error getting blogs", "err", err)
+		m.lgr.ErrorContext(ctx, "Error getting blogs", logger.AttributeError, err)
 		return nil, err
 	}
 
@@ -483,7 +483,7 @@ func (m *EnrichingProjection) GetBlogEnriched(ctx context.Context, blogId int64)
 	dd, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*dbDto, error) {
 		blog, chatBasic, b, errInn := m.cp.GetBlog(ctx, tx, blogId)
 		if errInn != nil {
-			m.lgr.ErrorContext(ctx, "Error getting blog", "err", errInn)
+			m.lgr.ErrorContext(ctx, "Error getting blog", logger.AttributeError, errInn)
 			return nil, errInn
 		}
 
@@ -742,13 +742,13 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 		}
 
 		if errInn != nil {
-			m.lgr.ErrorContext(ctx, "Error getting blog post message id", "err", errInn)
+			m.lgr.ErrorContext(ctx, "Error getting blog post message id", logger.AttributeError, errInn)
 			return nil, errInn
 		}
 
 		comments, errInn := m.cp.getComments(ctx, tx, blogId, *postMessageId, size, offset, reverseOrder)
 		if errInn != nil {
-			m.lgr.ErrorContext(ctx, "Error getting blog comments", "err", errInn)
+			m.lgr.ErrorContext(ctx, "Error getting blog comments", logger.AttributeError, errInn)
 			return nil, errInn
 		}
 
@@ -774,7 +774,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 		behalfUserId := int64(dto.NonExistentUser)
 		chatsByUserByChatId, errInn := m.cp.GetChatsBasicExtended(ctx, tx, utils.SetMapIdBoolToSlice(chatsPreSet), []int64{behalfUserId})
 		if errInn != nil {
-			m.lgr.ErrorContext(ctx, "Error getting chat basic", "err", errInn)
+			m.lgr.ErrorContext(ctx, "Error getting chat basic", logger.AttributeError, errInn)
 			return nil, errInn
 		}
 
@@ -783,7 +783,7 @@ func (m *EnrichingProjection) GetCommentsEnriched(ctx context.Context, blogId in
 		var count int64
 		errInn = sqlscan.Get(ctx, tx, &count, "SELECT count(*) FROM message m WHERE m.chat_id = $1 AND m.id > $2", blogId, postMessageId)
 		if errInn != nil {
-			m.lgr.ErrorContext(ctx, "Error getting comment count", "err", errInn)
+			m.lgr.ErrorContext(ctx, "Error getting comment count", logger.AttributeError, errInn)
 			return nil, errInn
 		}
 
@@ -860,7 +860,7 @@ func PatchStorageUrlToPublic(
 	// Load the HTML document
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(text))
 	if err != nil {
-		lgr.WarnContext(ctx, "Unable to read html", "err", err)
+		lgr.WarnContext(ctx, "Unable to read html", logger.AttributeError, err)
 		return ""
 	}
 
@@ -874,7 +874,7 @@ func PatchStorageUrlToPublic(
 				if utils.ContainsUrl(ctx, lgr, wlArr, original) { // original
 					newurl, err := makeUrlPublic(original, "", overrideChatId, overrideMessageId)
 					if err != nil {
-						lgr.WarnContext(ctx, "Unable to change url", "err", err)
+						lgr.WarnContext(ctx, "Unable to change url", logger.AttributeError, err)
 						return
 					}
 					maybeImage.SetAttr("data-original", newurl)
@@ -884,7 +884,7 @@ func PatchStorageUrlToPublic(
 				if srcExists && utils.ContainsUrl(ctx, lgr, wlArr, src) {
 					newurl, err := makeUrlPublic(src, utils.UrlStorageEmbedPreview, overrideChatId, overrideMessageId)
 					if err != nil {
-						lgr.WarnContext(ctx, "Unable to change url", "err", err)
+						lgr.WarnContext(ctx, "Unable to change url", logger.AttributeError, err)
 						return
 					}
 					maybeImage.SetAttr("src", newurl)
@@ -895,7 +895,7 @@ func PatchStorageUrlToPublic(
 
 	ret, err := doc.Find("html").Find("body").Html()
 	if err != nil {
-		lgr.WarnContext(ctx, "Unable to write html", "err", err)
+		lgr.WarnContext(ctx, "Unable to write html", logger.AttributeError, err)
 		return ""
 	}
 	return ret
@@ -907,7 +907,7 @@ func getBlogPostImage(ctx context.Context, lgr *logger.LoggerWrapper, messageTex
 		if mbImage != nil {
 			fileParam, err := getFileParam(*mbImage)
 			if err != nil {
-				lgr.WarnContext(ctx, "Unable to get file key", "err", err)
+				lgr.WarnContext(ctx, "Unable to get file key", logger.AttributeError, err)
 				return nil
 			}
 			if len(fileParam) > 0 {
@@ -918,7 +918,7 @@ func getBlogPostImage(ctx context.Context, lgr *logger.LoggerWrapper, messageTex
 
 				publicPreviewUrl, err := makeUrlPublic(dumbUrl.String(), utils.UrlStorageEmbedPreview, chatId, *messageId)
 				if err != nil {
-					lgr.WarnContext(ctx, "Unable to to change url", "err", err)
+					lgr.WarnContext(ctx, "Unable to to change url", logger.AttributeError, err)
 					return nil
 				}
 				return &publicPreviewUrl
@@ -933,7 +933,7 @@ func tryGetFirstImage(ctx context.Context, lgr *logger.LoggerWrapper, text strin
 	// Load the HTML document
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(text))
 	if err != nil {
-		lgr.WarnContext(ctx, "Unable to get image", "err", err)
+		lgr.WarnContext(ctx, "Unable to get image", logger.AttributeError, err)
 		return nil
 	}
 

@@ -125,7 +125,7 @@ func ConfigureCqrsRouter(
 			lgr.Info("Stopping cqrs router")
 
 			if err := cqrsRouter.Close(); err != nil {
-				lgr.Error("Error shutting down router", "err", err)
+				lgr.Error("Error shutting down router", logger.AttributeError, err)
 			}
 			return nil
 		},
@@ -144,7 +144,7 @@ func RunCqrsRouter(
 
 		err := cqrsRouter.Run(context.Background())
 		if err != nil {
-			lgr.Error("Got cqrs error", "err", err)
+			lgr.Error("Got cqrs error", logger.AttributeError, err)
 		}
 	}()
 	return nil
@@ -353,7 +353,7 @@ func RunSequenceFastforwarder(
 
 		errI0 := commonProjection.InitializeChatIdSequenceIfNeed(ctx, tx)
 		if errI0 != nil {
-			lgr.Error("Error during setting message id sequences", "err", errI0)
+			lgr.Error("Error during setting message id sequences", logger.AttributeError, errI0)
 			return errI0
 		}
 
@@ -363,7 +363,7 @@ func RunSequenceFastforwarder(
 
 			chatIdsPortion, errI1 := commonProjection.GetChatIds(ctx, tx, utils.DefaultSize, offset)
 			if errI1 != nil {
-				lgr.Error("Error during getting all chats", "err", errI1)
+				lgr.Error("Error during getting all chats", logger.AttributeError, errI1)
 				return errI1
 			}
 			if len(chatIdsPortion) < utils.DefaultSize {
@@ -373,7 +373,7 @@ func RunSequenceFastforwarder(
 			for _, chatId := range chatIdsPortion {
 				errI2 := commonProjection.InitializeMessageIdSequenceIfNeed(ctx, tx, chatId)
 				if errI2 != nil {
-					lgr.Error("Error during setting message id sequences", "err", errI2)
+					lgr.Error("Error during setting message id sequences", logger.AttributeError, errI2)
 					return errI2
 				}
 			}
@@ -381,7 +381,7 @@ func RunSequenceFastforwarder(
 
 		errU := commonProjection.UnsetIsNeedToFastForwardSequences(ctx, tx)
 		if errU != nil {
-			lgr.Error("Error during removing need fast-forward sequences", "err", errU)
+			lgr.Error("Error during removing need fast-forward sequences", logger.AttributeError, errU)
 			return errU
 		}
 

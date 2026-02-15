@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go-cqrs-chat-example/db"
+	"go-cqrs-chat-example/logger"
 )
 
 func (m *CommonProjection) OnTechnicalProjectionsTruncated(ctx context.Context, event *ProjectionsTruncated) error {
@@ -32,7 +33,7 @@ func (m *CommonProjection) OnTechnicalAbandonedChatRemoved(ctx context.Context, 
 	}
 
 	if has[event.ChatId] {
-		m.lgr.InfoContext(ctx, "Actually this chat has participants, skipping", "chat_id", event.ChatId) // to prevent race condition when sheduler found an empty chat because the ParticipantAdd event still wasn't processed
+		m.lgr.InfoContext(ctx, "Actually this chat has participants, skipping", logger.AttributeChatId, event.ChatId) // to prevent race condition when sheduler found an empty chat because the ParticipantAdd event still wasn't processed
 		return nil
 	}
 

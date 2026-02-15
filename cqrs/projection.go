@@ -117,7 +117,7 @@ func (m *CommonProjection) InitializeMessageIdSequenceIfNeed(ctx context.Context
 		}
 
 		if maxMessageId > 0 {
-			m.lgr.Info("Fast-forwarding messageId sequence", "chat_id", chatId)
+			m.lgr.Info("Fast-forwarding messageId sequence", logger.AttributeChatId, chatId)
 
 			_, err = tx.ExecContext(ctx, "update chat_common set last_generated_message_id = $2 where id = $1", chatId, maxMessageId)
 			if err != nil {

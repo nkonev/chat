@@ -48,7 +48,7 @@ func (ch *BlogHandler) SearchBlogs(g *gin.Context) {
 
 	blogs, err := ch.enrichingProjection.GetBlogsEnriched(g.Request.Context(), size, offset, cqrs.BlogOrderByCreateDateTime, reverse, searchString)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blogs", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blogs", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -61,14 +61,14 @@ func (ch *BlogHandler) GetBlog(g *gin.Context) {
 
 	blogId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding blogId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding blogId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	blog, err := ch.enrichingProjection.GetBlogEnriched(g.Request.Context(), blogId)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blog", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blog", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -85,7 +85,7 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 	cid := g.Param(dto.BlogIdParam)
 	blogId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding blogId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding blogId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -97,7 +97,7 @@ func (ch *BlogHandler) SearchComments(g *gin.Context) {
 
 	comments, err := ch.enrichingProjection.GetCommentsEnriched(g.Request.Context(), blogId, size, offset, reverse)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blog comments", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blog comments", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -119,7 +119,7 @@ func (ch *BlogHandler) GetAllBlogPostsForSeo(g *gin.Context) {
 
 	blogs, err := ch.enrichingProjection.GetBlogsEnrichedForSeo(g.Request.Context(), size, offset)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blogs", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting blogs", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}

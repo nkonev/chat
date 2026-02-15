@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/dto"
+	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
 
@@ -24,7 +25,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 			return nil, err
 		}
 		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping OnParticipantAdded because there is no chat", "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping OnParticipantAdded because there is no chat", logger.AttributeChatId, event.ChatId)
 			return &OnParticipantAddedResponse{
 				ChatExists: false,
 			}, nil
@@ -58,7 +59,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	m.lgr.InfoContext(ctx,
 		"Participant added into common chat",
 		"user_ids", GetParticipantIds(event.Participants),
-		"chat_id", event.ChatId,
+		logger.AttributeChatId, event.ChatId,
 	)
 
 	return res, nil
@@ -108,7 +109,7 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participant
 			return err
 		}
 		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping OnParticipantRemoved because there is no chat", "chat_id", chatId)
+			m.lgr.InfoContext(ctx, "Skipping OnParticipantRemoved because there is no chat", logger.AttributeChatId, chatId)
 			return nil
 		}
 
@@ -135,7 +136,7 @@ func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participant
 	m.lgr.InfoContext(ctx,
 		"Participant removed from common chat",
 		"user_ids", participantIds,
-		"chat_id", chatId,
+		logger.AttributeChatId, chatId,
 	)
 
 	return nil
@@ -148,7 +149,7 @@ func (m *CommonProjection) OnParticipantRemovedSingle(ctx context.Context, parti
 			return err
 		}
 		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping OnParticipantRemoved because there is no chat", "chat_id", chatId)
+			m.lgr.InfoContext(ctx, "Skipping OnParticipantRemoved because there is no chat", logger.AttributeChatId, chatId)
 			return nil
 		}
 
@@ -181,8 +182,8 @@ func (m *CommonProjection) OnParticipantRemovedSingle(ctx context.Context, parti
 
 	m.lgr.InfoContext(ctx,
 		"Participant removed from common chat",
-		"user_id", participantId,
-		"chat_id", chatId,
+		logger.AttributeUserId, participantId,
+		logger.AttributeChatId, chatId,
 	)
 
 	return nil
@@ -225,7 +226,7 @@ func (m *CommonProjection) OnParticipantChanged(ctx context.Context, event *Part
 			return err
 		}
 		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping OnParticipantChanged because there is no chat", "chat_id", event.ChatId)
+			m.lgr.InfoContext(ctx, "Skipping OnParticipantChanged because there is no chat", logger.AttributeChatId, event.ChatId)
 			return nil
 		}
 
@@ -310,7 +311,7 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 		pwc, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*usersWithCount, error) {
 			usersWithAdmin, count, err := m.SearchUsersContaining(ctx, tx, searchString, chatId, size, offset, reverse, needCount)
 			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error getting participant ids", "err", err)
+				m.lgr.ErrorContext(ctx, "Error getting participant ids", logger.AttributeError, err)
 				return nil, err
 			}
 
@@ -352,14 +353,14 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 			if len(userIds) == 0 {
 				participants, err = getParticipantsCommonExcepting(ctx, tx, chatId, nil, size, offset, reverse)
 				if err != nil {
-					m.lgr.ErrorContext(ctx, "Error getting participants", "err", err)
+					m.lgr.ErrorContext(ctx, "Error getting participants", logger.AttributeError, err)
 
 					return nil, err
 				}
 			} else {
 				participants, err = getParticipantsCommonIncluding(ctx, tx, chatId, userIds, int32(len(userIds)), 0, reverse)
 				if err != nil {
-					m.lgr.ErrorContext(ctx, "Error getting participants", "err", err)
+					m.lgr.ErrorContext(ctx, "Error getting participants", logger.AttributeError, err)
 
 					return nil, err
 				}
@@ -383,7 +384,7 @@ func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behal
 			if needCount {
 				theCount, err = getParticipantsCount(ctx, tx, chatId)
 				if err != nil {
-					m.lgr.ErrorContext(ctx, "Error getting participant count", "err", err)
+					m.lgr.ErrorContext(ctx, "Error getting participant count", logger.AttributeError, err)
 
 					return nil, err
 				}
@@ -453,7 +454,7 @@ func (m *EnrichingProjection) ParticipantsFilter(ctx context.Context, co db.Comm
 		for _, aBatch := range batches { // we already know that requestedParticipantIds belong to this chat, so our sole task is to pass them through aaa filter
 			usersPortion, _, err := m.aaaRestClient.SearchGetUsers(ctx, userSearchString, true, aBatch, 0, utils.DefaultSize)
 			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error get users from aaa", "err", err)
+				m.lgr.ErrorContext(ctx, "Error get users from aaa", logger.AttributeError, err)
 			} else {
 				for _, user := range usersPortion {
 					response = append(response, dto.FilteredParticipantItemResponse{user.Id})
@@ -490,7 +491,7 @@ func (m *EnrichingProjection) SearchUsersContaining(ctx context.Context, co db.C
 			shouldContinue = false
 		}
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", logger.AttributeError, err)
 			break
 		}
 
@@ -500,7 +501,7 @@ func (m *EnrichingProjection) SearchUsersContaining(ctx context.Context, co db.C
 		// page 0 because it's portion by ids
 		usersPortion, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, true, participantIds, 0, pageSize)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error get resUsers from aaa", "err", err)
+			m.lgr.ErrorContext(ctx, "Error get resUsers from aaa", logger.AttributeError, err)
 			break
 		}
 
@@ -561,7 +562,7 @@ func (m *EnrichingProjection) SearchUsersNotContainingForAdding(ctx context.Cont
 		ignoredInAaa := false
 		usersPortion, _, err := m.aaaRestClient.SearchGetUsers(ctx, searchString, ignoredInAaa, []int64{}, page, pageSize)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Error get resUsers from aaa", "err", err)
+			m.lgr.ErrorContext(ctx, "Error get resUsers from aaa", logger.AttributeError, err)
 			break
 		}
 		if int32(len(usersPortion)) < pageSize {
@@ -575,7 +576,7 @@ func (m *EnrichingProjection) SearchUsersNotContainingForAdding(ctx context.Cont
 
 		foundParticipantIds, err := m.cp.ParticipantsExistence(ctx, co, chatId, portionUserIds)
 		if err != nil {
-			m.lgr.WarnContext(ctx, "Got error during getting ParticipantsNonExistence", "err", err)
+			m.lgr.WarnContext(ctx, "Got error during getting ParticipantsNonExistence", logger.AttributeError, err)
 			break
 		}
 		for _, u := range usersPortion {
@@ -603,7 +604,7 @@ func (m *CommonProjection) IterateOverChatParticipantIdsExcepting(ctx context.Co
 		offset := utils.GetOffset(page, utils.DefaultSize)
 		participants, err := getParticipantsCommonExcepting(ctx, co, chatId, excluding, utils.DefaultSize, offset, false)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}
@@ -618,7 +619,7 @@ func (m *CommonProjection) IterateOverChatParticipantIdsExcepting(ctx context.Co
 
 		err = consumer(participantIds)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}
@@ -633,7 +634,7 @@ func (m *CommonProjection) IterateOverChatParticipantIdsIncluding(ctx context.Co
 		offset := utils.GetOffset(page, utils.DefaultSize)
 		participants, err := getParticipantsCommonIncluding(ctx, co, chatId, including, utils.DefaultSize, offset, false)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}
@@ -648,7 +649,7 @@ func (m *CommonProjection) IterateOverChatParticipantIdsIncluding(ctx context.Co
 
 		err = consumer(participantIds)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}
@@ -663,7 +664,7 @@ func (m *CommonProjection) IterateOverParticipantsChatIds(ctx context.Context, c
 		offset := utils.GetOffset(page, utils.DefaultSize)
 		chatIds, err := getParticipantsChatsCommon(ctx, co, participantId, utils.DefaultSize, offset, false)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}
@@ -676,7 +677,7 @@ func (m *CommonProjection) IterateOverParticipantsChatIds(ctx context.Context, c
 
 		err = consumer(chatIds)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}
@@ -703,7 +704,7 @@ func (m *CommonProjection) IterateOverAllParticipants(ctx context.Context, co db
 		`
 		err := sqlscan.Select(ctx, co, &list, sqlQuery, sqlArgs...)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}
@@ -716,7 +717,7 @@ func (m *CommonProjection) IterateOverAllParticipants(ctx context.Context, co db
 
 		err = consumer(list)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}
@@ -809,7 +810,7 @@ func (m *CommonProjection) IterateOverCoChattedParticipantIds(ctx context.Contex
 
 		err := sqlscan.Select(ctx, co, &participantIds, "SELECT DISTINCT user_id FROM chat_participant WHERE chat_id IN (SELECT chat_id FROM chat_participant WHERE user_id = $1) ORDER BY user_id LIMIT $2 OFFSET $3", participantId, utils.DefaultSize, offset)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during getting portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during getting portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}
@@ -822,7 +823,7 @@ func (m *CommonProjection) IterateOverCoChattedParticipantIds(ctx context.Contex
 
 		err = consumer(participantIds)
 		if err != nil {
-			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", "err", err)
+			m.lgr.ErrorContext(ctx, "Got error during invoking consumer portion", logger.AttributeError, err)
 			lastError = err
 			break
 		}

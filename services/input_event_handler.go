@@ -59,6 +59,6 @@ func (not InputEventHandler) NotifyAboutProfileChanged(ctx context.Context, user
 		return internalErr
 	})
 	if err != nil {
-		not.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", "err", err)
+		not.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 	}
 }

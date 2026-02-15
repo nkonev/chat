@@ -43,7 +43,7 @@ func NewParticipantHandler(
 func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -52,7 +52,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -61,7 +61,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 
 	err = g.Bind(ccd)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding ParticipantAddDto", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding ParticipantAddDto", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -78,7 +78,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 			return
 		}
 
-		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantAdd command", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantAdd command", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -89,7 +89,7 @@ func (ch *ParticipantHandler) AddParticipant(g *gin.Context) {
 func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -98,14 +98,14 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	interestingUserId, err := utils.ParseInt64(g.Param(dto.ParticipantIdParam))
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding participantId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding participantId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -122,7 +122,7 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 			return
 		}
 
-		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantDelete command", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantDelete command", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -133,7 +133,7 @@ func (ch *ParticipantHandler) DeleteParticipant(g *gin.Context) {
 func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -142,14 +142,14 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	interestingUserId, err := utils.ParseInt64(g.Param(dto.ParticipantIdParam))
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding participantId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding participantId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -169,7 +169,7 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 			return
 		}
 
-		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantChange command", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantChange command", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -180,7 +180,7 @@ func (ch *ParticipantHandler) ChangeParticipant(g *gin.Context) {
 func (ch *ParticipantHandler) LeaveChat(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -189,7 +189,7 @@ func (ch *ParticipantHandler) LeaveChat(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -207,7 +207,7 @@ func (ch *ParticipantHandler) LeaveChat(g *gin.Context) {
 			return
 		}
 
-		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantDelete command", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantDelete command", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -218,7 +218,7 @@ func (ch *ParticipantHandler) LeaveChat(g *gin.Context) {
 func (ch *ParticipantHandler) JoinChat(g *gin.Context) {
 	userId, err := getUserId(g)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -227,7 +227,7 @@ func (ch *ParticipantHandler) JoinChat(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -245,7 +245,7 @@ func (ch *ParticipantHandler) JoinChat(g *gin.Context) {
 			return
 		}
 
-		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantAdd command", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error sending ParticipantAdd command", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -258,7 +258,7 @@ func (ch *ParticipantHandler) GetChatParticipants(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -269,7 +269,7 @@ func (ch *ParticipantHandler) GetChatParticipants(g *gin.Context) {
 
 	ids, err := ch.commonProjection.GetParticipantIds(g.Request.Context(), ch.dbWrapper, chatId, participantsSize, participantsOffset)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participant ids", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participant ids", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -283,14 +283,14 @@ func (ch *ParticipantHandler) ParticipantsFilter(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	_, err = getUserId(g)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -298,7 +298,7 @@ func (ch *ParticipantHandler) ParticipantsFilter(g *gin.Context) {
 	bindTo := new(dto.FilteredParticipantsRequestDto)
 	err = g.Bind(bindTo)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error during unmarshalling", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error during unmarshalling", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -307,7 +307,7 @@ func (ch *ParticipantHandler) ParticipantsFilter(g *gin.Context) {
 
 	response, err := ch.enrichingProjection.ParticipantsFilter(g.Request.Context(), ch.dbWrapper, userSearchString, chatId, requestedParticipantIds)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error during ParticipantsFilter", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error during ParticipantsFilter", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -321,14 +321,14 @@ func (ch *ParticipantHandler) SearchParticipants(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	userId, err := getUserId(g)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -344,7 +344,7 @@ func (ch *ParticipantHandler) SearchParticipants(g *gin.Context) {
 			return
 		}
 
-		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participants", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error getting participants", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -360,14 +360,14 @@ func (ch *ParticipantHandler) SearchForUsersToAdd(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	userId, err := getUserId(g)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -380,7 +380,7 @@ func (ch *ParticipantHandler) SearchForUsersToAdd(g *gin.Context) {
 			return
 		}
 
-		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing searching", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing searching", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -394,14 +394,14 @@ func (ch *ParticipantHandler) CountParticipants(g *gin.Context) {
 
 	chatId, err := utils.ParseInt64(cid)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding chatId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
 
 	_, err = getUserId(g)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error parsing UserId", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -409,7 +409,7 @@ func (ch *ParticipantHandler) CountParticipants(g *gin.Context) {
 	bindTo := new(dto.CountRequestDto)
 	err = g.Bind(bindTo)
 	if err != nil {
-		ch.lgr.ErrorContext(g.Request.Context(), "Error binding CountRequestDto", "err", err)
+		ch.lgr.ErrorContext(g.Request.Context(), "Error binding CountRequestDto", logger.AttributeError, err)
 		g.Status(http.StatusInternalServerError)
 		return
 	}
@@ -420,7 +420,7 @@ func (ch *ParticipantHandler) CountParticipants(g *gin.Context) {
 	if userSearchString != "" {
 		_, aCount, err := ch.enrichingProjection.SearchUsersContaining(g.Request.Context(), ch.dbWrapper, userSearchString, chatId, utils.DefaultSize, utils.DefaultOffset, true, true)
 		if err != nil {
-			ch.lgr.ErrorContext(g.Request.Context(), "Error searchUsersContaining", "err", err)
+			ch.lgr.ErrorContext(g.Request.Context(), "Error searchUsersContaining", logger.AttributeError, err)
 			g.Status(http.StatusInternalServerError)
 			return
 		}
@@ -428,7 +428,7 @@ func (ch *ParticipantHandler) CountParticipants(g *gin.Context) {
 	} else {
 		count, err := ch.commonProjection.GetParticipantsCount(g.Request.Context(), ch.dbWrapper, chatId)
 		if err != nil {
-			ch.lgr.ErrorContext(g.Request.Context(), "Error GetParticipantsCount", "err", err)
+			ch.lgr.ErrorContext(g.Request.Context(), "Error GetParticipantsCount", logger.AttributeError, err)
 			g.Status(http.StatusInternalServerError)
 			return
 		}

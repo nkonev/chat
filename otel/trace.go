@@ -47,7 +47,7 @@ func ConfigureTraceProvider(
 		OnStop: func(ctx context.Context) error {
 			lgr.Info("Stopping trace provider")
 			if err := tp.Shutdown(context.Background()); err != nil {
-				lgr.Error("Error shutting trace provider", "err", err)
+				lgr.Error("Error shutting trace provider", logger.AttributeError, err)
 			}
 			return nil
 		},
@@ -70,11 +70,11 @@ func ConfigureTraceExporter(
 			lgr.Info("Stopping trace exporter")
 
 			if err := exporter.Shutdown(ctx); err != nil {
-				lgr.Error("Error shutting down trace exporter", "err", err)
+				lgr.Error("Error shutting down trace exporter", logger.AttributeError, err)
 			}
 
 			if err := traceExporterConn.Close(); err != nil {
-				lgr.Error("Error shutting down trace exporter connection", "err", err)
+				lgr.Error("Error shutting down trace exporter connection", logger.AttributeError, err)
 			}
 			return nil
 		},
