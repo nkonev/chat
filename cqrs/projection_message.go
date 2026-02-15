@@ -1052,7 +1052,7 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 				join chat_messages cm on cm.id = w.cuv_last_read_message_id
 				where w.id = $2 and w.user_id = $1
 			) ww
-			right join normalized_user nu on (ww.user_id = nu.user_id and ww.cuv_last_read_message_id > 0)
+			right join normalized_user nu on ww.user_id = nu.user_id
 		),
 		input_option_considerable_existing_message as (
 			select coalesce(
