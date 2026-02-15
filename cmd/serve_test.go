@@ -452,11 +452,65 @@ func TestUnreads(t *testing.T) {
 		assert.Equal(t, 1, len(user2ChatsNew52))
 		chat1OfUser252 := user2ChatsNew52[0]
 		assert.Equal(t, int64(1), chat1OfUser252.UnreadMessages)
+		assert.Equal(t, messageId5, *chat1OfUser252.LastMessageId)
 		assert.Equal(t, true, chat1OfUser252.ConsiderMessagesAsUnread)
 
 		user2HasUnreadMessagesNew52, err := testRestClient.GetHasUnreadMessages(ctx, user2)
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user2HasUnreadMessagesNew52)
+
+		err = testRestClient.ReadMessage(ctx, user2, chat1Id, messageId5)
+		require.NoError(t, err, "error in reading message")
+		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user2ChatsNew53, _, err := testRestClient.GetChats(ctx, user2)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user2ChatsNew53))
+		chat1OfUser253 := user2ChatsNew53[0]
+		assert.Equal(t, int64(0), chat1OfUser253.UnreadMessages)
+		assert.Equal(t, messageId5, *chat1OfUser253.LastMessageId)
+		assert.Equal(t, true, chat1OfUser253.ConsiderMessagesAsUnread)
+
+		user2HasUnreadMessagesNew53, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user2HasUnreadMessagesNew53)
+
+		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, messageId5)
+		require.NoError(t, err, "error in delete message")
+		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user2ChatsNew54, _, err := testRestClient.GetChats(ctx, user2)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user2ChatsNew54))
+		chat1OfUser254 := user2ChatsNew54[0]
+		assert.Equal(t, int64(0), chat1OfUser254.UnreadMessages)
+		//assert.Equal(t, messageId3, *chat1OfUser254.LastMessageId) // TODO
+		assert.Equal(t, true, chat1OfUser254.ConsiderMessagesAsUnread)
+
+		user2HasUnreadMessagesNew54, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, false, user2HasUnreadMessagesNew54)
+
+		// now test that counter will count good after deletion
+		messageId6, err := testRestClient.CreateMessage(ctx, user1, chat1Id, "msg 6")
+		require.NoError(t, err, "error in creating message")
+		assert.True(t, messageId6 > 0)
+		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, saramaClient, lc), "error in waiting for processing events")
+
+		user2ChatsNew61, _, err := testRestClient.GetChats(ctx, user2)
+		require.NoError(t, err, "error in getting chats")
+		assert.Equal(t, 1, len(user2ChatsNew61))
+		chat1OfUser261 := user2ChatsNew61[0]
+		assert.Equal(t, int64(1), chat1OfUser261.UnreadMessages)
+		assert.Equal(t, messageId6, *chat1OfUser261.LastMessageId)
+		assert.Equal(t, true, chat1OfUser261.ConsiderMessagesAsUnread)
+
+		user2HasUnreadMessagesNew61, err := testRestClient.GetHasUnreadMessages(ctx, user2)
+		require.NoError(t, err, "error in getting has unread messages")
+		assert.Equal(t, true, user2HasUnreadMessagesNew61)
 	})
 }
 
