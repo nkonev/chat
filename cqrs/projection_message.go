@@ -228,7 +228,7 @@ func (m *CommonProjection) OnMessageEdited(ctx context.Context, event *MessageEd
 }
 
 func (m *CommonProjection) initializeMessageUnreadMultipleParticipants(ctx context.Context, tx *db.Tx, participantId int64, chatId int64) error {
-	err := m.setUnreadMessages(ctx, tx, participantId, chatId, 0, false, true)
+	err := m.setUnreadMessages(ctx, tx, participantId, chatId, dto.NoId, SetUnreadedMessagesActionInitialize)
 	if err != nil {
 		return err
 	}
@@ -1027,18 +1027,51 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId
 	return nil
 }
 
-func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, participantId int64, chatId, messageId int64, calculateUnreadsFromTheUsersLastSavedReadedMessage, isInitialization bool) error {
-	_, err := tx.ExecContext(ctx, `
-		with 
-		chat_messages as (
-			select m.id from message m where m.chat_id = $2
+type SetUnreadedMessagesAction int16
+
+const (
+	SetUnreadedMessagesActionUnspecified = iota
+	SetUnreadedMessagesActionInitialize
+	SetUnreadedMessagesActionCalculateUnreadsFromTheUsersLastSavedReadedMessage
+	SetUnreadedMessagesActionCalculateUnreadsFromTheProvidedMessage
+)
+
+func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, participantId int64, chatId, messageId int64, setUnreadedMessagesAction SetUnreadedMessagesAction) error {
+	queryArgs := []any{participantId, chatId}
+
+	var inputOptionClause string
+
+	switch setUnreadedMessagesAction {
+	case SetUnreadedMessagesActionInitialize:
+		inputOptionClause = `
+		normalized_considerable_message as (
+			select 
+				n.user_id,
+				0 as normalized_read_message_id
+			from normalized_user n
+		)
+		`
+	case SetUnreadedMessagesActionCalculateUnreadsFromTheProvidedMessage:
+		queryArgs = append(queryArgs, messageId)
+		// to calculate against just from the message
+		inputOptionClause = `
+		input_option_considerable_existing_message as (
+			select coalesce(
+				(select m.id from chat_messages m where m.id = $3),
+				(select max from max_message),
+				0
+			) as normalized_read_message_id
 		),
-		max_message as (
-			select max(m.id) as max from chat_messages m
-		),
-		normalized_user as (
-			select cast ($1 as bigint) as user_id
-		),
+		normalized_considerable_message as (
+			select 
+				n.user_id,
+				(select normalized_read_message_id from input_option_considerable_existing_message) as normalized_read_message_id
+			from normalized_user n
+		)
+		`
+	case SetUnreadedMessagesActionCalculateUnreadsFromTheUsersLastSavedReadedMessage:
+		// to calculate from the last saved readed
+		inputOptionClause = `
 		input_option_considerable_last_saved_readed_message as (
 			select 
 				coalesce(ww.last_message_id, 0) as last_message_id,
@@ -1052,23 +1085,29 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 			) ww
 			right join normalized_user nu on ww.user_id = nu.user_id
 		),
-		input_option_considerable_existing_message as (
-			select coalesce(
-				(select m.id from chat_messages m where m.id = $3),
-				(select max from max_message),
-				0
-			) as normalized_read_message_id
-		),
 		normalized_considerable_message as (
 			select 
 				n.user_id,
-				(case 
-					when $5 = true then 0
-					when $4 = true then (select l.last_message_id from input_option_considerable_last_saved_readed_message l where l.user_id = n.user_id) -- to calculate from the last saved readed
-					else (select normalized_read_message_id from input_option_considerable_existing_message) -- to calculate against just from the message  
-				end) as normalized_read_message_id
+				(select l.last_message_id from input_option_considerable_last_saved_readed_message l where l.user_id = n.user_id) as normalized_read_message_id
 			from normalized_user n
+		)
+		`
+	default:
+		return fmt.Errorf("Unknown action: %v", setUnreadedMessagesAction)
+	}
+
+	q := fmt.Sprintf(`
+		with 
+		chat_messages as (
+			select m.id from message m where m.chat_id = $2
 		),
+		max_message as (
+			select max(m.id) as max from chat_messages m
+		),
+		normalized_user as (
+			select cast ($1 as bigint) as user_id
+		),
+		%s,
 		input_data as (
 			select
 				ngm.user_id as user_id,
@@ -1086,7 +1125,9 @@ func (m *CommonProjection) setUnreadMessages(ctx context.Context, tx *db.Tx, par
 		when matched then update set 
 		   unread_messages = idt.unread_messages
 		  ,cuv_last_read_message_id = idt.last_read_message_id
-	`, participantId, chatId, messageId, calculateUnreadsFromTheUsersLastSavedReadedMessage, isInitialization)
+	`, inputOptionClause)
+
+	_, err := tx.ExecContext(ctx, q, queryArgs...)
 	if err != nil {
 		return err
 	}
@@ -1312,7 +1353,7 @@ func (m *CommonProjection) OnUserUnreadMessageReaded(ctx context.Context, event 
 		errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 			if event.ReadMessagesAction == ReadMessagesActionOneMessage {
 
-				err := m.setUnreadMessages(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, false, false) // includes updateHasUnreads()
+				err := m.setUnreadMessages(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId, event.MessageId, SetUnreadedMessagesActionCalculateUnreadsFromTheProvidedMessage) // includes updateHasUnreads()
 				if err != nil {
 					return err
 				}
