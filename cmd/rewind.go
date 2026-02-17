@@ -24,7 +24,8 @@ import (
 const CommandRewindName = "rewind"
 
 func RunRewind(args []string) {
-	if app.IsHelp(args) {
+	processedArgs, hasHelp := app.IsHelp(args)
+	if hasHelp {
 		fmt.Printf(`
 Consumes all the events from the Kafka events topic
 hereby (re)building PostgreSQL projections
@@ -37,7 +38,7 @@ Then exits.
 		return
 	}
 
-	cfg, err := config.CreateTypedConfig(args)
+	cfg, err := config.CreateTypedConfig(processedArgs)
 	if err != nil {
 		panic(err)
 	}

@@ -20,7 +20,8 @@ import (
 const CommandImportName = "import"
 
 func RunImport(args []string) {
-	if app.IsHelp(args) {
+	processedArgs, hasHelp := app.IsHelp(args)
+	if hasHelp {
 		fmt.Printf(`
 Performs import to the Kafka events topic from the json line file produced by "export" command
 and sets the 'need_to_fast_forward_sequences' task into "technical" table.
@@ -45,7 +46,7 @@ cat /tmp/export.json | ./%s %s --cqrs.import.file=%s
 		return
 	}
 
-	cfg, err := config.CreateTypedConfig(args)
+	cfg, err := config.CreateTypedConfig(processedArgs)
 	if err != nil {
 		panic(err)
 	}

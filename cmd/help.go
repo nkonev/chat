@@ -15,7 +15,12 @@ func RunHelp(args []string) {
 
 Where command is one of %v.
 
-%s or %s or %s or %s should be the first option. 
+The config reading order is:
+* config file
+* environment variables
+* program arguments
+
+E. g. you can override any value in the config file with environment variable or program argument.
 
 Examples:
 
@@ -34,7 +39,6 @@ Examples:
 
 `, ExecutableName, app.ConfigLongPrefix, app.ConfigShortPrefix,
 		AllCommands.String(),
-		app.ConfigLongPrefix, app.ConfigShortPrefix, app.HelpLongPrefix, app.HelpShortPrefix,
 		ExecutableName, CommandServeName, app.ConfigLongPrefix,
 		ExecutableName, CommandServeName, app.ConfigLongPrefix,
 		ExecutableName, CommandServeName, app.ConfigShortPrefix,

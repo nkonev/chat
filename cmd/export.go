@@ -16,7 +16,8 @@ import (
 const CommandExportName = "export"
 
 func RunExport(args []string) {
-	if app.IsHelp(args) {
+	processedArgs, hasHelp := app.IsHelp(args)
+	if hasHelp {
 		fmt.Printf(`
 Performs export of CQRS Kafka events topic to the json line file.
 See cqrs.export.file setting. This settings along with /path/to/file.json also accepts a special '%s' pseudofile.
@@ -40,7 +41,7 @@ To export to stdout:
 		return
 	}
 
-	cfg, err := config.CreateTypedConfig(args)
+	cfg, err := config.CreateTypedConfig(processedArgs)
 	if err != nil {
 		panic(err)
 	}

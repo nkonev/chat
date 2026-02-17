@@ -28,9 +28,10 @@ import (
 const CommandServeName = "serve"
 
 func RunServe(args []string) {
-	if app.IsHelp(args) {
+	processedArgs, hasHelp := app.IsHelp(args)
+	if hasHelp {
 		fmt.Printf(`
-Starts normal serving api requests.
+Starts normal api requests serving.
 Http server starts when all the events from the Kafka events topic were consumed and
 the 'need_to_fast_forward_sequences' task
 in "technical" PostgreSQL table is finished.
@@ -65,7 +66,7 @@ To run without schedulers:
 		return
 	}
 
-	cfg, err := config.CreateTypedConfig(args)
+	cfg, err := config.CreateTypedConfig(processedArgs)
 	if err != nil {
 		panic(err)
 	}

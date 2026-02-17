@@ -20,7 +20,8 @@ import (
 const CommandResetName = "reset"
 
 func RunReset(args []string) {
-	if app.IsHelp(args) {
+	processedArgs, hasHelp := app.IsHelp(args)
+	if hasHelp {
 		fmt.Println(`
 Performs reset the CQRS projections in PostgreSQL and sets the 'need_to_fast_forward_sequences' task into "technical" table.
 		`)
@@ -28,7 +29,7 @@ Performs reset the CQRS projections in PostgreSQL and sets the 'need_to_fast_for
 		return
 	}
 
-	cfg, err := config.CreateTypedConfig(args)
+	cfg, err := config.CreateTypedConfig(processedArgs)
 	if err != nil {
 		panic(err)
 	}

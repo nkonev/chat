@@ -245,12 +245,12 @@ func createTypedConfig(filename string, args ...string) (*AppConfig, error) {
 
 	var argsToReadConfig []string
 
-	configInArgs, configFilePath, argsToConfig, err := app.IsConfig(args)
+	hasConfigInArgs, configFilePath, argsToConfig, err := app.IsConfig(args)
 	if err != nil {
 		return nil, fmt.Errorf("An error occured during working with config: %w", err)
 	}
 
-	if configInArgs {
+	if hasConfigInArgs {
 		argsToReadConfig = argsToConfig
 
 		err = file.Decode(configFilePath, &conf)
@@ -271,7 +271,7 @@ func createTypedConfig(filename string, args ...string) (*AppConfig, error) {
 			return nil, fmt.Errorf("config file loaded failed. %v\n", err)
 		}
 
-		argsToReadConfig = args
+		argsToReadConfig = argsToConfig
 	}
 
 	err = env.Decode(os.Environ(), strings.ToUpper(app.TRACE_RESOURCE)+"_", &conf)
