@@ -39,7 +39,7 @@ postgresql:
     statementDuration: 15m
 
 postgresqlold:
-  url: "postgres://postgres:postgresqlPassword@localhost:45401/chat?sslmode=disable&application_name=chat-app"
+  url: "postgres://postgres:postgresqlPassword@localhost:45401/chat_old?sslmode=disable&application_name=chat-app"
   maxOpenConnections: 16
   maxIdleConnections: 4
   maxLifetime: 30s
