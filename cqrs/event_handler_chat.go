@@ -453,19 +453,21 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.%s", eventType))
 	defer messageSpan.End()
 
-	adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
+	//adt, err := m.commonProjection.GetMessageDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.MessageCommoned.ChatId, event.MessageCommoned.Id)
+	//if err != nil {
+	//	return err
+	//}
+	//if !CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage) {
+	//	m.lgr.InfoContext(ctx, "Skipping OnMessageCreated because there is no authorization to do so", logger.AttributeChatId, event.MessageCommoned.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
+	//	return nil
+	//}
+
+	err := m.commonProjection.OnMessageCreated(ctx, event)
 	if err != nil {
 		return err
-	}
-	if !CanWriteMessage(adt.IsParticipant, adt.IsChatAdmin, adt.ChatCanWriteMessage) {
-		m.lgr.InfoContext(ctx, "Skipping OnMessageCreated because there is no authorization to do so", logger.AttributeChatId, event.MessageCommoned.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
-		return nil
 	}
 
-	err = m.commonProjection.OnMessageCreated(ctx, event)
-	if err != nil {
-		return err
-	}
+	return nil
 
 	m.lgr.DebugContext(ctx, "Sending notification about the message to participants", "event_type", eventType, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
 
@@ -480,7 +482,7 @@ func (m *EventHandler) OnMessageCreated(ctx context.Context, event *MessageCreat
 	var additionalUserIdToFetch []int64 = []int64{event.AdditionalData.BehalfUserId}
 
 	var oppositeTetATetUserId *int64
-	if adt.ChatIsTetATet {
+	if false {
 		oppositeTetATetUserId, err = m.enrichingProjection.getTetATetOpposite(ctx, m.db, event.MessageCommoned.ChatId, event.AdditionalData.BehalfUserId)
 		if err != nil {
 			m.lgr.WarnContext(ctx, "Unable to get opposite", logger.AttributeChatId, event.MessageCommoned.ChatId, logger.AttributeError, err)
