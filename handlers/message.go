@@ -21,7 +21,7 @@ const badMediaUrl = "BAD_MEDIA_URL"
 
 type MessageHandler struct {
 	lgr                                 *logger.LoggerWrapper
-	eventBus                            *cqrs.PartitionAwareEventBus
+	eventBus                            *cqrs.KafkaProducer
 	dbWrapper                           *db.DB
 	commonProjection                    *cqrs.CommonProjection
 	policy                              *sanitizer.SanitizerPolicy
@@ -36,7 +36,7 @@ type MessageHandler struct {
 
 func NewMessageHandler(
 	lgr *logger.LoggerWrapper,
-	eventBus *cqrs.PartitionAwareEventBus,
+	eventBus *cqrs.KafkaProducer,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	policy *sanitizer.SanitizerPolicy,

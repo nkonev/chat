@@ -32,10 +32,10 @@ use '%s' command.
 See cqrs.import.file setting. This settings along with /path/to/file.json also accepts a special '%s' pseudofile.
 
 To import from the file:
-./%s %s --cqrs.import.file=/tmp/export.json
+./%s %s --cqrs.import.file=/tmp/export.jsonl
 
 To import from stdin via pipe:
-cat /tmp/export.json | ./%s %s --cqrs.import.file=%s
+cat /tmp/export.jsonl | ./%s %s --cqrs.import.file=%s
 
 `, CommandRewindName,
 			app.PseudoFileStdin,

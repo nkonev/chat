@@ -12,5 +12,5 @@ playwright-report/
 __debug_bin
 .vscode/
 *.log
-event.json
+export.jsonl
 chat

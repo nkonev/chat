@@ -14,7 +14,7 @@ import (
 
 type BlogHandler struct {
 	lgr                 *logger.LoggerWrapper
-	eventBus            *cqrs.PartitionAwareEventBus
+	eventBus            *cqrs.KafkaProducer
 	dbWrapper           *db.DB
 	commonProjection    *cqrs.CommonProjection
 	enrichingProjection *cqrs.EnrichingProjection
@@ -23,7 +23,7 @@ type BlogHandler struct {
 
 func NewBlogHandler(
 	lgr *logger.LoggerWrapper,
-	eventBus *cqrs.PartitionAwareEventBus,
+	eventBus *cqrs.KafkaProducer,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	enrichingProjection *cqrs.EnrichingProjection,

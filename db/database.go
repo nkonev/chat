@@ -136,11 +136,12 @@ func (tl *TraceLogWrapper) TraceCopyFromEnd(ctx context.Context, conn *pgx.Conn,
 }
 
 func (tl *TraceLogWrapper) TraceConnectStart(ctx context.Context, data pgx.TraceConnectStartData) context.Context {
-	return tl.delegate.TraceConnectStart(ctx, data)
+	//return tl.delegate.TraceConnectStart(ctx, data)
+	return ctx
 }
 
 func (tl *TraceLogWrapper) TraceConnectEnd(ctx context.Context, data pgx.TraceConnectEndData) {
-	tl.delegate.TraceConnectEnd(ctx, data)
+	//tl.delegate.TraceConnectEnd(ctx, data)
 }
 
 func (tl *TraceLogWrapper) TracePrepareStart(ctx context.Context, conn *pgx.Conn, data pgx.TracePrepareStartData) context.Context {

@@ -40,11 +40,10 @@ type KafkaProducerConfig struct {
 }
 
 type KafkaConsumerConfig struct {
-	ReturnErrors         bool
-	ClientId             string
-	NackResendSleep      time.Duration
-	ReconnectRetrySleep  time.Duration
-	OffsetCommitInterval time.Duration
+	ReturnErrors bool
+	ClientId     string
+	BatchSize    int
+	FetchMaxWait time.Duration
 }
 
 type OtlpConfig struct {

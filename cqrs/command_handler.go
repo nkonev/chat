@@ -291,7 +291,7 @@ type TechnicalRemoveAbandonedChat struct {
 	ChatId int64
 }
 
-func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *sanitizer.StripTagsPolicy, cfg *config.AppConfig, rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher, lgr *logger.LoggerWrapper) (int64, error) {
+func (sp *ChatCreate) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *sanitizer.StripTagsPolicy, cfg *config.AppConfig, rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher, lgr *logger.LoggerWrapper) (int64, error) {
 	var copyCommand *ChatCreate
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -431,7 +431,7 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus EventBusInterface, db
 	return chatId, nil
 }
 
-func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *sanitizer.StripTagsPolicy, cfg *config.AppConfig) error {
+func (sp *ChatEdit) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection, stripTagsPolicy *sanitizer.StripTagsPolicy, cfg *config.AppConfig) error {
 	var copyCommand *ChatEdit
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -518,7 +518,7 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba 
 	return nil
 }
 
-func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *ChatDelete) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection) error {
 	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
@@ -551,7 +551,7 @@ func (s *ChatDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba
 	return nil
 }
 
-func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig) error {
+func (s *ParticipantAdd) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig) error {
 	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
@@ -606,7 +606,7 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus EventBusInterface,
 	return nil
 }
 
-func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig) error {
+func (s *ParticipantDelete) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig) error {
 	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
@@ -653,7 +653,7 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus EventBusInterfa
 	return nil
 }
 
-func (s *Truncate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, lgr *logger.LoggerWrapper, cfg *config.AppConfig) error {
+func (s *Truncate) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection, lgr *logger.LoggerWrapper, cfg *config.AppConfig) error {
 	pa := &ProjectionsTruncated{}
 	err := eventBus.Publish(ctx, pa)
 	if err != nil {
@@ -694,7 +694,7 @@ func (s *Truncate) Handle(ctx context.Context, eventBus EventBusInterface, dba *
 	return nil
 }
 
-func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *ParticipantChange) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection) error {
 	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
@@ -733,7 +733,7 @@ func (s *ParticipantChange) Handle(ctx context.Context, eventBus EventBusInterfa
 	return nil
 }
 
-func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error {
+func (s *ChatPin) Handle(ctx context.Context, eventBus *KafkaProducer) error {
 	cp := &ChatPinned{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
@@ -760,7 +760,7 @@ func (s *ChatPin) Handle(ctx context.Context, eventBus EventBusInterface) error 
 	return nil
 }
 
-func (s *ChatNotificationSettingsSet) Handle(ctx context.Context, eventBus EventBusInterface) error {
+func (s *ChatNotificationSettingsSet) Handle(ctx context.Context, eventBus *KafkaProducer) error {
 	cp := &ChatNotificationSettingsSetted{
 		AdditionalData: s.AdditionalData,
 		ChatId:         s.ChatId,
@@ -769,7 +769,7 @@ func (s *ChatNotificationSettingsSet) Handle(ctx context.Context, eventBus Event
 	return eventBus.Publish(ctx, cp)
 }
 
-func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy, userPermissions []string) (int64, error) {
+func (sp *MessageCreate) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy, userPermissions []string) (int64, error) {
 	var copyCommand *MessageCreate
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -888,7 +888,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus EventBusInterface,
 	return messageId, nil
 }
 
-func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eventBus EventBusInterface, commonProjection *CommonProjection, dba *db.DB, rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher, rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher) error {
+func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eventBus *KafkaProducer, commonProjection *CommonProjection, dba *db.DB, rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher, rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher) error {
 	// seems it's not need to immediately respond errot in case is no participant, so we skip authorization check here
 	// the authorization is in event_handler
 	if s.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
@@ -1031,7 +1031,7 @@ func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eve
 	}
 }
 
-func (s *MakeMessageBlogPost) Handle(ctx context.Context, cfg *config.AppConfig, userPermissions []string, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *MakeMessageBlogPost) Handle(ctx context.Context, cfg *config.AppConfig, userPermissions []string, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection) error {
 
 	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
 	if err != nil {
@@ -1054,7 +1054,7 @@ func (s *MakeMessageBlogPost) Handle(ctx context.Context, cfg *config.AppConfig,
 	return eventBus.Publish(ctx, &ev)
 }
 
-func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *MessageDelete) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection) error {
 	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
 	if err != nil {
 		return err
@@ -1093,7 +1093,7 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus EventBusInterface, 
 	return nil
 }
 
-func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy) error {
+func (sp *MessageEdit) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy) error {
 	var copyCommand *MessageEdit
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -1170,7 +1170,7 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus EventBusInterface, d
 	return nil
 }
 
-func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy) error {
+func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy) error {
 	var copyCommand *MessageSyncEmbed
 	err := reprint.FromTo(&sp, &copyCommand)
 	if err != nil {
@@ -1236,7 +1236,7 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus EventBusInterfa
 	return nil
 }
 
-func (s *MessagePin) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *MessagePin) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection) error {
 	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
 	if err != nil {
 		return err
@@ -1260,7 +1260,7 @@ func (s *MessagePin) Handle(ctx context.Context, eventBus EventBusInterface, dba
 	return nil
 }
 
-func (s *MessagePublish) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection) error {
+func (s *MessagePublish) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection) error {
 	adt, err := commonProjection.GetMessageDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId, s.MessageId)
 	if err != nil {
 		return err
@@ -1284,7 +1284,7 @@ func (s *MessagePublish) Handle(ctx context.Context, eventBus EventBusInterface,
 	return nil
 }
 
-func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInterface, dba *db.DB, commonProjection *CommonProjection, policy *sanitizer.SanitizerPolicy) error {
+func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection, policy *sanitizer.SanitizerPolicy) error {
 	adt, err := commonProjection.GetChatDataForAuthorization(ctx, dba, s.AdditionalData.BehalfUserId, s.ChatId)
 	if err != nil {
 		return err
@@ -1315,7 +1315,7 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus EventBusInter
 	return nil
 }
 
-func (s *TechnicalRemoveContentOfDeletedUser) Handle(ctx context.Context, eventBus EventBusInterface) error {
+func (s *TechnicalRemoveContentOfDeletedUser) Handle(ctx context.Context, eventBus *KafkaProducer) error {
 	pa := &ParticipantDeleted{
 		AdditionalData:          GenerateMessageAdditionalData(nil, dto.SystemUserCleaner),
 		ParticipantIds:          []int64{s.UserId},
@@ -1344,7 +1344,7 @@ func (s *TechnicalRemoveContentOfDeletedUser) Handle(ctx context.Context, eventB
 	return nil
 }
 
-func (s *TechnicalRemoveAbandonedChat) Handle(ctx context.Context, eventBus EventBusInterface) error {
+func (s *TechnicalRemoveAbandonedChat) Handle(ctx context.Context, eventBus *KafkaProducer) error {
 	return eventBus.Publish(ctx, &TechnicalAbandonedChatRemoved{ChatId: s.ChatId})
 }
 

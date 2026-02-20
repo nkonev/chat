@@ -1,12 +1,10 @@
 # chat application
 
-This application is using [Watermill CQRS](http://watermill.io/docs/cqrs) component.
-
-It's based on [6-cqrs-ordered-events](https://github.com/ThreeDotsLabs/watermill/tree/v1.4.6/_examples/basic/6-cqrs-ordered-events) example.
+This chat application built with CQRS (anti) pattern.
 
 Events are stored in Kafka, projections are stored in PostgreSQL.
 
-We can reset our projections and then restore their state from Kafka by resetting offsets.
+We can reset our projections and then restore their state from Kafka by resetting offsets and then replaying events.
 
 See [It's Okay To Store Data In Kafka](https://www.confluent.io/blog/okay-store-data-apache-kafka/).
 
@@ -127,9 +125,9 @@ docker volume rm go-cqrs-example_postgres_data
 docker compose up -d postgresql
 
 # export
-./chat export --cqrs.export.file=/tmp/export.json
+./chat export --cqrs.export.file=/tmp/export.jsonl
 # or
-./chat export --cqrs.export.file=stdout > /tmp/export.json
+./chat export --cqrs.export.file=stdout > /tmp/export.jsonl
 
 # set env
 CHAT_LOGGER_LEVEL=debug ./chat serve

@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *PartitionAwareEventBus, lgr *logger.LoggerWrapper, dba *db.DB, commonProjection *CommonProjection) error {
+func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *KafkaProducer, lgr *logger.LoggerWrapper, dba *db.DB, commonProjection *CommonProjection) error {
 	ctx := context.Background()
 
 	if !cfg.PerformMigration {

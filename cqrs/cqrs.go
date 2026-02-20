@@ -2,317 +2,534 @@ package cqrs
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
-
-	"github.com/IBM/sarama"
-	"github.com/ThreeDotsLabs/watermill"
-	"github.com/ThreeDotsLabs/watermill-kafka/v3/pkg/kafka"
-	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
-	"github.com/google/uuid"
-
-	"go-cqrs-chat-example/config"
-	"log/slog"
 	"time"
 
-	"github.com/ThreeDotsLabs/watermill/components/cqrs"
-	"github.com/ThreeDotsLabs/watermill/message"
-	wotel "github.com/nkonev/watermill-opentelemetry/pkg/opentelemetry"
+	"github.com/twmb/franz-go/pkg/kgo"
+	"go.opentelemetry.io/otel/trace"
+
+	"go-cqrs-chat-example/config"
+
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/fx"
+
+	"github.com/twmb/franz-go/plugin/kotel"
 )
 
-func ConfigureKafkaMarshaller(
-	lgr *logger.LoggerWrapper,
-) kafka.MarshalerUnmarshaler {
-	// This marshaler converts Watermill messages to Kafka messages.
-	// We are using it to add partition key to the Kafka message.
-	return kafka.NewWithPartitioningMarshaler(GenerateKafkaPartitionKey(lgr))
+const kafkaHeaderEventType = "eventType"
+
+type KafkaProducer struct {
+	tr  trace.Tracer
+	cl  *kgo.Client
+	cfg *config.AppConfig
+	lgr *logger.LoggerWrapper
 }
 
-func ConfigureWatermillLogger(
-	lgr *logger.LoggerWrapper,
-) watermill.LoggerAdapter {
-	return watermill.NewSlogLoggerWithLevelMapping(
-		lgr.With("watermill", true),
-		map[slog.Level]slog.Level{
-			slog.LevelInfo: slog.LevelDebug,
-		},
-	)
-}
+func (p *KafkaProducer) Publish(ctx context.Context, msg CqrsEvent) error {
+	// Start a new span with options.
+	opts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindProducer),
+	}
+	ctx, span := p.tr.Start(ctx, "event", opts...)
+	// End the span when function exits.
+	defer span.End()
 
-func ConfigurePublisher(
-	cfg *config.AppConfig,
-	watermillLogger watermill.LoggerAdapter,
-	propagator propagation.TextMapPropagator,
-	tp *sdktrace.TracerProvider,
-	kafkaMarshaler kafka.MarshalerUnmarshaler,
-) (message.Publisher, error) {
-	// You can use any Pub/Sub implementation from here: https://watermill.io/pubsubs/
-	kafkaProducerConfig := sarama.NewConfig()
-	kafkaProducerConfig.Producer.Retry.Max = cfg.Kafka.Producer.RetryMax
-	kafkaProducerConfig.Producer.Return.Successes = cfg.Kafka.Producer.ReturnSuccess
-	kafkaProducerConfig.Version = sarama.V4_1_0_0
-	kafkaProducerConfig.Metadata.Retry.Backoff = cfg.Kafka.Producer.RetryBackoff
-	kafkaProducerConfig.ClientID = cfg.Kafka.Producer.ClientId
+	var topic string
 
-	publisher, err := kafka.NewPublisher(
-		kafka.PublisherConfig{
-			Brokers:               cfg.Kafka.BootstrapServers,
-			OverwriteSaramaConfig: kafkaProducerConfig,
-			Marshaler:             kafkaMarshaler,
-		},
-		watermillLogger,
-	)
-	if err != nil {
-		return nil, err
+	kind := msg.GetEventKind()
+	switch kind {
+	case EventKindChat:
+		topic = p.cfg.Kafka.TopicChat.Topic
+	case EventKindUser:
+		topic = p.cfg.Kafka.TopicUser.Topic
+	default:
+		return fmt.Errorf("Unknown kind: %v", kind)
 	}
 
-	tr := tp.Tracer("chat-publisher")
+	key := msg.GetPartitionKey()
 
-	publisherDecorator := wotel.NewPublisherDecorator(publisher, wotel.WithTextMapPropagator(propagator), wotel.WithTracer(tr))
+	eventType := msg.Name()
 
-	return publisherDecorator, nil
-}
-
-func ConfigureCqrsRouter(
-	lgr *logger.LoggerWrapper,
-	watermillLoggerAdapter watermill.LoggerAdapter,
-	propagator propagation.TextMapPropagator,
-	tp *sdktrace.TracerProvider,
-	cfg *config.AppConfig,
-	lc fx.Lifecycle,
-) (*message.Router, error) {
-	// CQRS is built on messages router. Detailed documentation: https://watermill.io/docs/messages-router/
-	cqrsRouter, err := message.NewRouter(message.RouterConfig{}, watermillLoggerAdapter)
-	if err != nil {
-		return nil, err
+	headers := []kgo.RecordHeader{
+		kgo.RecordHeader{
+			Key:   kafkaHeaderEventType,
+			Value: []byte(eventType),
+		},
 	}
 
-	tr := tp.Tracer("chat-subscriber")
+	value, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
 
-	// Simple middleware which will recover panics from event or command handlers.
-	// More about router middlewares you can find in the documentation:
-	// https://watermill.io/docs/messages-router/#middleware
-	//
-	// List of available middlewares you can find in message/router/middleware.
-	cqrsRouter.AddMiddleware(middleware.Recoverer)
-	cqrsRouter.AddMiddleware(wotel.Trace(wotel.WithTextMapPropagator(propagator), wotel.WithTracer(tr)))
-	cqrsRouter.AddMiddleware(func(h message.HandlerFunc) message.HandlerFunc {
-		return func(msg *message.Message) ([]*message.Message, error) {
-			if cfg.Cqrs.SleepBeforeEvent > 0 {
-				lgr.InfoContext(msg.Context(), "Sleeping")
-				time.Sleep(cfg.Cqrs.SleepBeforeEvent)
-			}
+	record := &kgo.Record{
+		Topic:   topic,
+		Key:     []byte(key),
+		Headers: headers,
+		Value:   value,
+	}
 
-			if cfg.Cqrs.Dump {
-				if cfg.Cqrs.PrettyLog && !cfg.Logger.Json {
-					fmt.Printf("[kafka subscriber] Received message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(msg.Context()), msg.Metadata, string(msg.Payload))
-				} else {
-					lgr.InfoContext(msg.Context(), fmt.Sprintf("[kafka subscriber] Received message: trace_id=%s, metadata=%v, body: %v\n", logger.GetTraceId(msg.Context()), msg.Metadata, string(msg.Payload)))
-				}
-			}
-			return h(msg)
+	if p.cfg.Cqrs.Dump {
+		if p.cfg.Cqrs.PrettyLog && !p.cfg.Logger.Json {
+			fmt.Printf("[kafka cqrs publisher] Sending record: trace_id=%s, topic=%s, kind=%v, event_type=%v, body: %v\n", logger.GetTraceId(ctx), record.Topic, kind, eventType, string(value))
+		} else {
+			p.lgr.InfoContext(ctx, "[kafka cqrs publisher] Sending record:", "topic", record.Topic, "event_type", eventType, "key", string(record.Key), "event_kind", kind, "value", string(record.Value))
 		}
-	})
+	}
 
-	lc.Append(fx.Hook{
-		OnStop: func(ctx context.Context) error {
-			lgr.Info("Stopping cqrs router")
+	prs := p.cl.ProduceSync(ctx, record)
 
-			if err := cqrsRouter.Close(); err != nil {
-				lgr.Error("Error shutting down router", logger.AttributeError, err)
-			}
-			return nil
-		},
-	})
-
-	return cqrsRouter, nil
-}
-
-func RunCqrsRouter(
-	lgr *logger.LoggerWrapper,
-	cqrsRouter *message.Router,
-	processor *cqrs.EventGroupProcessor,
-) error {
-	go func() {
-		lgr.Info("Starting CQRS router with a given Event Processor", "eventProcessor", fmt.Sprintf("%T", processor)) // to configure it before this
-
-		err := cqrsRouter.Run(context.Background())
-		if err != nil {
-			lgr.Error("Got cqrs error", logger.AttributeError, err)
+	var serr error
+	var aerr []error
+	for i := range prs {
+		if prs[i].Err != nil {
+			aerr = append(aerr, prs[i].Err)
 		}
-	}()
+	}
+	serr = errors.Join(aerr...)
+	if serr != nil {
+		return serr
+	}
+
 	return nil
 }
 
-func ConfigureCqrsMarshaller() *cqrs.JSONMarshaler {
-	return &cqrs.JSONMarshaler{
-		NewUUID: func() string {
-			uuidV7, err := uuid.NewV7()
-			if err != nil {
-				panic(err)
-			}
-			return uuidV7.String()
-		},
-		// It will generate topic names based on the event/command type.
-		// So for example, for "RoomBooked" name will be "RoomBooked".
-		GenerateName: cqrs.NamedStruct(func(v interface{}) string {
-			panic(fmt.Sprintf("not implemented Name() for %T", v))
-		}),
-	}
-}
-
-func ConfigureEventBus(
+func ConfigurePublisher(
 	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
-	publisher message.Publisher,
-	cqrsMarshaler *cqrs.JSONMarshaler,
-	watermillLoggerAdapter watermill.LoggerAdapter,
-) (*PartitionAwareEventBus, error) {
-	eventBusRoot, err := cqrs.NewEventBusWithConfig(publisher, cqrs.EventBusConfig{
-		GeneratePublishTopic: func(params cqrs.GenerateEventPublishTopicParams) (string, error) {
-			pm, ok := params.Event.(PartitionableMessage)
-			if !ok {
-				return "", fmt.Errorf("Wrong type %T of event, it should be PartitionableMessage", params.Event)
-			}
+	tp *sdktrace.TracerProvider,
+	kotelService *kotel.Kotel,
+	lc fx.Lifecycle,
+) (*KafkaProducer, error) {
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(cfg.Kafka.BootstrapServers...),
+		kgo.WithHooks(kotelService.Hooks()...),
+	)
+	if err != nil {
+		return nil, err
+	}
+	lc.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			lgr.Info("Begin stopping kafka publisher")
 
-			switch pm.GetEventKind() {
-			case EventKindChat:
-				return cfg.Kafka.TopicChat.Topic, nil
-			case EventKindUser:
-				return cfg.Kafka.TopicUser.Topic, nil
-			}
-
-			return "", fmt.Errorf("Wrong kind %v of event", pm.GetEventKind())
-		},
-		Marshaler: cqrsMarshaler,
-		Logger:    watermillLoggerAdapter,
-		OnPublish: func(params cqrs.OnEventSendParams) error {
-			pm, ok := params.Event.(PartitionableMessage)
-			if !ok {
-				return fmt.Errorf("Wrong type %T of event, it should be PartitionableMessage", params.Event)
-			}
-
-			if cfg.Cqrs.Dump {
-				if cfg.Cqrs.PrettyLog && !cfg.Logger.Json {
-					fmt.Printf("[kafka publisher] Sending message: trace_id=%s, kind=%v, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), pm.GetEventKind(), params.Message.Metadata, string(params.Message.Payload))
-				} else {
-					lgr.InfoContext(params.Message.Context(), fmt.Sprintf("[kafka publisher] Sending message: trace_id=%s, kind=%v, metadata=%v, body: %v\n", logger.GetTraceId(params.Message.Context()), pm.GetEventKind(), params.Message.Metadata, string(params.Message.Payload)))
-				}
-			}
+			cl.Close()
 			return nil
 		},
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	return &PartitionAwareEventBus{eventBusRoot}, nil
+	tr := tp.Tracer("kafka-cqrs-publisher")
+
+	return &KafkaProducer{tr, cl, cfg, lgr}, nil
 }
 
-func ConfigureEventProcessor(
+type KafkaListener struct {
+	lgr              *logger.LoggerWrapper
+	cfg              *config.AppConfig
+	cqrsEventHandler *EventHandler
+	kotelService     *kotel.Kotel
+	tracer           *kotel.Tracer
+	lc               fx.Lifecycle
+}
+
+func NewKafkaListener(
+	lgr *logger.LoggerWrapper,
 	cfg *config.AppConfig,
-	cqrsRouter *message.Router,
-	watermillLoggerAdapter watermill.LoggerAdapter,
-	kafkaMarshaler kafka.MarshalerUnmarshaler,
-	cqrsMarshaler *cqrs.JSONMarshaler,
-	commonProjection *CommonProjection,
 	cqrsEventHandler *EventHandler,
-) (*cqrs.EventGroupProcessor, error) {
-	kafkaConsumerConfig := sarama.NewConfig()
-	kafkaConsumerConfig.Consumer.Return.Errors = cfg.Kafka.Consumer.ReturnErrors
-	kafkaConsumerConfig.Version = sarama.V4_1_0_0
-	kafkaConsumerConfig.ClientID = cfg.Kafka.Consumer.ClientId
-	kafkaConsumerConfig.Consumer.Offsets.Initial = sarama.OffsetOldest // need for to work after import
-	kafkaConsumerConfig.Consumer.Offsets.AutoCommit.Interval = cfg.Kafka.Consumer.OffsetCommitInterval
+	kotelService *kotel.Kotel,
+	tracer *kotel.Tracer,
+	lc fx.Lifecycle,
 
-	eventProcessor, err := cqrs.NewEventGroupProcessorWithConfig(
-		cqrsRouter,
-		cqrs.EventGroupProcessorConfig{
-			GenerateSubscribeTopic: func(params cqrs.EventGroupProcessorGenerateSubscribeTopicParams) (string, error) {
-				switch params.EventGroupName {
-				case cfg.Kafka.ConsumerGroupChat:
-					return cfg.Kafka.TopicChat.Topic, nil
+) *KafkaListener {
+	return &KafkaListener{
+		lgr:              lgr,
+		cfg:              cfg,
+		cqrsEventHandler: cqrsEventHandler,
+		kotelService:     kotelService,
+		tracer:           tracer,
+		lc:               lc,
+	}
+}
 
-				case cfg.Kafka.ConsumerGroupUser:
-					return cfg.Kafka.TopicUser.Topic, nil
-				}
-				return "", fmt.Errorf("Unknown eventGroup: %v", params.EventGroupName)
-			},
-			SubscriberConstructor: func(params cqrs.EventGroupProcessorSubscriberConstructorParams) (message.Subscriber, error) {
-				return kafka.NewSubscriber(
-					kafka.SubscriberConfig{
-						Brokers:               cfg.Kafka.BootstrapServers,
-						OverwriteSaramaConfig: kafkaConsumerConfig,
-						ConsumerGroup:         params.EventGroupName,
-						Unmarshaler:           kafkaMarshaler,
-						NackResendSleep:       cfg.Kafka.Consumer.NackResendSleep,
-						ReconnectRetrySleep:   cfg.Kafka.Consumer.ReconnectRetrySleep,
-					},
-					watermillLoggerAdapter,
-				)
-			},
-			Marshaler: cqrsMarshaler,
-			Logger:    watermillLoggerAdapter,
+func ListenChatTopic(
+	lis *KafkaListener,
+	lc fx.Lifecycle,
+) error {
+	err := lis.runKafkaListener(
+		"chat-subscriber",
+		lis.cfg.Kafka.TopicChat.Topic,
+		lis.cfg.Kafka.ConsumerGroupChat,
+		lis.processChatBatch,
+		lc,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ListenUserTopic(
+	lis *KafkaListener,
+	lc fx.Lifecycle,
+) error {
+
+	err := lis.runKafkaListener(
+		"user-subscriber",
+		lis.cfg.Kafka.TopicUser.Topic,
+		lis.cfg.Kafka.ConsumerGroupUser,
+		lis.processUserBatch,
+		lc,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func NewKotelTracer(tracerProvider *sdktrace.TracerProvider, pr propagation.TextMapPropagator) *kotel.Tracer {
+	// Create a new kotel tracer with the provided tracer provider and
+	// propagator.
+	tracerOpts := []kotel.TracerOpt{
+		kotel.TracerProvider(tracerProvider),
+		kotel.TracerPropagator(pr),
+	}
+	return kotel.NewTracer(tracerOpts...)
+}
+
+func NewKotel(tracer *kotel.Tracer) *kotel.Kotel {
+	kotelOps := []kotel.Opt{
+		kotel.WithTracer(tracer),
+	}
+	return kotel.NewKotel(kotelOps...)
+}
+
+func (p *KafkaListener) runKafkaListener(
+	name string,
+	topic, consumerGroup string,
+	processRecordsBatch func(records []*kgo.Record) (*kgo.Record, context.Context, error),
+	lc fx.Lifecycle,
+) error {
+	// One client can both produce and consume!
+	// Consuming can either be direct (no consumer group), or through a group. Below, we use a group.
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(p.cfg.Kafka.BootstrapServers...),
+		kgo.ClientID(p.cfg.Kafka.Consumer.ClientId),
+		kgo.ConsumerGroup(consumerGroup),
+		kgo.ConsumeTopics(topic),
+		kgo.WithHooks(p.kotelService.Hooks()...),
+		kgo.DisableAutoCommit(),
+		kgo.BlockRebalanceOnPoll(),
+		// kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()), // was need for to work after import in the previous implementation. now TestImport can work without it
+		kgo.FetchMaxWait(p.cfg.Kafka.Consumer.FetchMaxWait),
+	)
+	if err != nil {
+		return err
+	}
+
+	p.lgr.Info("Starting " + name + " subscriber")
+
+	lc.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			p.lgr.Info("Begin stopping kafka " + name + " subscriber")
+
+			cl.Close()
+			return nil
 		},
-	)
-	if err != nil {
-		return nil, err
+	})
+
+	ctx := context.Background()
+
+	go func() {
+		for {
+			// https://github.com/twmb/franz-go/blob/master/examples/group_committing/main.go
+			fetches := cl.PollRecords(ctx, p.cfg.Kafka.Consumer.BatchSize)
+			if fetches.IsClientClosed() {
+				p.lgr.Info("Client is closed, exiting " + name + " subscriber")
+				return
+			}
+
+			fetches.EachError(func(to string, pa int32, err error) {
+				p.lgr.Error("Got fetch error in "+name+" subscriber", "topic", to, "partition", pa, logger.AttributeError, err)
+			})
+
+			fetches.EachPartition(func(partition kgo.FetchTopicPartition) {
+				// defer recover
+				defer func() {
+					if err := recover(); err != nil {
+						p.lgr.Error("In processing topic panic recovered in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, err)
+					}
+				}()
+
+				if partition.Err != nil {
+					p.lgr.Error("Got partition error in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, partition.Err)
+					return
+				}
+				records := partition.Records
+				if len(records) == 0 {
+					return
+				}
+
+				p.lgr.Debug("got records in "+name+" subscriber", "partition", partition.Partition, "len", len(records))
+				lastSuccessful, errCtx, err := processRecordsBatch(records)
+				if err != nil {
+					if errCtx != nil {
+						p.lgr.ErrorContext(errCtx, "Got error during processing in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, err)
+					} else {
+						p.lgr.Error("Got error during processing in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, err)
+					}
+					return
+				}
+
+				if lastSuccessful != nil {
+					p.lgr.Debug("Committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
+					if err = cl.CommitRecords(ctx, lastSuccessful); err != nil {
+						p.lgr.Error("Error during committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
+					} else {
+						p.lgr.Debug("Committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
+					}
+				}
+			})
+			cl.AllowRebalance()
+		}
+	}()
+
+	return nil
+}
+
+func processEvent[T any](lgr *logger.LoggerWrapper, cfg *config.AppConfig, eventType string, record *kgo.Record, tracer *kotel.Tracer, handler func(ctx context.Context, event *T) error) (context.Context, error) {
+	ctx, span := tracer.WithProcessSpan(record)
+	defer span.End()
+
+	if cfg.Cqrs.SleepBeforeEvent > 0 {
+		lgr.InfoContext(ctx, "Sleeping")
+		time.Sleep(cfg.Cqrs.SleepBeforeEvent)
 	}
 
-	// All messages from this group will have one subscription.
-	// When message arrives, Watermill will match it with the correct handler.
-	err = eventProcessor.AddHandlersGroup(
-		cfg.Kafka.ConsumerGroupChat,
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatCreated),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatEdited),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatRemoved),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantAdded),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantRemoved),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnParticipantChanged),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageCreated),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageEdited),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatViewRefreshed),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageBlogPostMade),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageRemoved),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessageReactionFlipped),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessagePinned),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnMessagePublished),
-		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalProjectionsTruncated),
-		cqrs.NewGroupEventHandler(commonProjection.OnTechnicalAbandonedChatRemoved),
-		// event need to be in event-chat topic, because only this topic is backupable
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatPinned),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnChatNotificationSettingsSetted),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUnreadMessageReaded),
-	)
-	if err != nil {
-		return nil, err
+	if cfg.Cqrs.Dump {
+		if cfg.Cqrs.PrettyLog && !cfg.Logger.Json {
+			fmt.Printf("[kafka cqrs subscriber] Processing record: trace_id=%s, topic=%s, event_type=%v, body: %v\n", logger.GetTraceId(ctx), record.Topic, eventType, string(record.Value))
+		} else {
+			lgr.InfoContext(ctx, "[kafka cqrs subscriber] Processing record:", "topic", record.Topic, "partition", record.Partition, "event_type", eventType, "key", string(record.Key), "value", string(record.Value))
+		}
 	}
 
-	err = eventProcessor.AddHandlersGroup(
-		cfg.Kafka.ConsumerGroupUser,
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatPinned),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatNotificationSettingsSetted),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserUnreadMessageReaded),
+	mi, err := parseRecord[T](record)
+	if err != nil {
+		lgr.ErrorContext(ctx, "Error during unmarshalling", logger.AttributeError, err)
+		return ctx, err
+	}
+	err = handler(ctx, &mi)
+	if err != nil {
+		return ctx, err
+	}
 
+	return ctx, nil
+}
+
+func (p *KafkaListener) processChatBatch(records []*kgo.Record) (*kgo.Record, context.Context, error) {
+	var lastSuccessful *kgo.Record
+
+	for _, record := range records {
+		eventType, err := getEventType(record)
+		if err != nil {
+			return nil, nil, err
+		}
+		switch eventType {
+		case EventChatCreated:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnChatCreated)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventChatEdited:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnChatEdited)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventChatDeleted:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnChatRemoved)
+			if err != nil {
+				return nil, ctx, err
+			}
+		// this event need to be in event-chat topic, because only this topic is backupable
+		case EventChatPinned:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnChatPinned)
+			if err != nil {
+				return nil, ctx, err
+			}
+		// this event need to be in event-chat topic, because only this topic is backupable
+		case EventChatNotificationSettingsSetted:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnChatNotificationSettingsSetted)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventChatViewRefreshed:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnChatViewRefreshed)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventParticipantsAdded:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantAdded)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventParticipantsDeleted:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantRemoved)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventParticipantsChanged:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantChanged)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventMessageCreated:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageCreated)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventMessageEdited:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageEdited)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventMessageDeleted:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageRemoved)
+			if err != nil {
+				return nil, ctx, err
+			}
+		// this event need to be in event-chat topic, because only this topic is backupable
+		case EventMessageReaded:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnUnreadMessageReaded)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventMessageBlogPostMade:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageBlogPostMade)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventMessageReactionFlipped:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageReactionFlipped)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventMessagePinned:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnMessagePinned)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventMessagePublished:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnMessagePublished)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventProjectionsResetted:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnTechnicalProjectionsTruncated)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventTechnicalAbandonedChatRemoved:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnTechnicalAbandonedChatRemoved)
+			if err != nil {
+				return nil, ctx, err
+			}
+		default:
+			return nil, nil, fmt.Errorf("unknown chat event type %v", eventType)
+		}
+
+		lastSuccessful = record
+	}
+
+	return lastSuccessful, nil, nil
+}
+
+// https://github.com/twmb/franz-go/blob/master/examples/plugin_kotel/main.go
+func (p *KafkaListener) processUserBatch(records []*kgo.Record) (*kgo.Record, context.Context, error) {
+	var lastSuccessful *kgo.Record
+
+	for _, record := range records {
+		eventType, err := getEventType(record)
+		if err != nil {
+			return nil, nil, err
+		}
+		switch eventType {
+		case EventUserChatPinned:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatPinned)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventUserChatNotificationSettingsSetted:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatNotificationSettingsSetted)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventUserMessageReaded:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnUserUnreadMessageReaded)
+			if err != nil {
+				return nil, ctx, err
+			}
 		// we introduced a dedicated event-user topic in order to eliminate the distributed deadlock in event_handler_chat.go::OnChatViewRefreshed(),
 		// which would be due to mutating userId-partitioned chat_user_view and has_unread_messages tables from the chatId-partitioned event-chat topic
 		// see also https://docs.citusdata.com/en/v13.0/reference/common_errors.html#canceling-the-transaction-since-it-was-involved-in-a-distributed-deadlock
 		// https://www.cybertec-postgresql.com/en/postgresql-understanding-deadlocks/
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewCreated),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewUpdated),
-		cqrs.NewGroupEventHandler(cqrsEventHandler.OnUserChatViewRemoved),
-	)
-	if err != nil {
-		return nil, err
+		case EventUserChatViewCreated:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewCreated)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventUserChatViewUpdated:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewUpdated)
+			if err != nil {
+				return nil, ctx, err
+			}
+		case EventUserChatViewRemoved:
+			ctx, err := processEvent(p.lgr, p.cfg, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewRemoved)
+			if err != nil {
+				return nil, ctx, err
+			}
+		default:
+			return nil, nil, fmt.Errorf("unknown user event type %v", eventType)
+		}
+
+		lastSuccessful = record
 	}
 
-	return eventProcessor, nil
+	return lastSuccessful, nil, nil
+}
+
+func parseRecord[T any](record *kgo.Record) (T, error) {
+	var res T
+	if record == nil {
+		return res, errors.New("record is nil")
+	}
+
+	err := json.Unmarshal(record.Value, &res)
+	if err != nil {
+		return res, fmt.Errorf("error unmarshalling record %v: %w", string(record.Value), err)
+	}
+
+	return res, nil
+}
+
+func getEventType(record *kgo.Record) (string, error) {
+	if record == nil {
+		return "", errors.New("record is nil")
+	}
+
+	for i := range record.Headers {
+		if record.Headers[i].Key == kafkaHeaderEventType {
+			return string(record.Headers[i].Value), nil
+		}
+	}
+	return "", errors.New("no name header found")
 }
 
 func ConfigureCommonProjection(

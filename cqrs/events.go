@@ -8,6 +8,34 @@ import (
 	"time"
 )
 
+const (
+	EventChatCreated                        = "chatCreated"
+	EventChatEdited                         = "chatEdited"
+	EventChatDeleted                        = "chatDeleted"
+	EventParticipantsAdded                  = "participantsAdded"
+	EventParticipantsDeleted                = "participantDeleted"
+	EventParticipantsChanged                = "participantChanged"
+	EventProjectionsResetted                = "projectionsResetted"
+	EventUserChatPinned                     = "userChatPinned"
+	EventChatPinned                         = "chatPinned"
+	EventUserChatNotificationSettingsSetted = "userChatNotificationSettingsSetted"
+	EventChatNotificationSettingsSetted     = "chatNotificationSettingsSetted"
+	EventMessageCreated                     = "messageCreated"
+	EventMessageEdited                      = "messageEdited"
+	EventChatViewRefreshed                  = "chatViewRefreshed"
+	EventUserMessageReaded                  = "userMessageReaded"
+	EventMessageReaded                      = "messageReaded"
+	EventMessageBlogPostMade                = "messageBlogPostMade"
+	EventMessageDeleted                     = "messageDeleted"
+	EventMessagePinned                      = "messagePinned"
+	EventMessagePublished                   = "messagePublished"
+	EventMessageReactionFlipped             = "messageReactionFlipped"
+	EventTechnicalAbandonedChatRemoved      = "technicalAbandonedChatRemoved"
+	EventUserChatViewCreated                = "userChatViewCreated"
+	EventUserChatViewUpdated                = "userChatViewUpdated"
+	EventUserChatViewRemoved                = "userChatViewRemoved"
+)
+
 type AdditionalData struct {
 	CreatedAt     time.Time `json:"createdAt"`
 	CorrelationId *string   `json:"correlationId"`
@@ -478,103 +506,103 @@ func (s *UserChatViewRemoved) GetPartitionKey() string {
 }
 
 func (s *ChatCreated) Name() string {
-	return "chatCreated"
+	return EventChatCreated
 }
 
 func (s *ChatEdited) Name() string {
-	return "chatEdited"
+	return EventChatEdited
 }
 
 func (s *ChatDeleted) Name() string {
-	return "chatDeleted"
+	return EventChatDeleted
 }
 
 func (s *ParticipantsAdded) Name() string {
-	return "participantsAdded"
+	return EventParticipantsAdded
 }
 
 func (s *ParticipantDeleted) Name() string {
-	return "participantDeleted"
+	return EventParticipantsDeleted
 }
 
 func (s *ParticipantChanged) Name() string {
-	return "participantChanged"
+	return EventParticipantsChanged
 }
 
 func (s *ProjectionsTruncated) Name() string {
-	return "projectionsResetted"
+	return EventProjectionsResetted
 }
 
 func (s *UserChatPinned) Name() string {
-	return "userChatPinned"
+	return EventUserChatPinned
 }
 
 func (s *ChatPinned) Name() string {
-	return "chatPinned"
+	return EventChatPinned
 }
 
 func (s *UserChatNotificationSettingsSetted) Name() string {
-	return "userChatNotificationSettingsSetted"
+	return EventUserChatNotificationSettingsSetted
 }
 
 func (s *ChatNotificationSettingsSetted) Name() string {
-	return "chatNotificationSettingsSetted"
+	return EventChatNotificationSettingsSetted
 }
 
 func (s *MessageCreated) Name() string {
-	return "messageCreated"
+	return EventMessageCreated
 }
 
 func (s *MessageEdited) Name() string {
-	return "messageEdited"
+	return EventMessageEdited
 }
 
 func (s *ChatViewRefreshed) Name() string {
-	return "chatViewRefreshed"
+	return EventChatViewRefreshed
 }
 
 func (s *UserMessageReaded) Name() string {
-	return "userMessageReaded"
+	return EventUserMessageReaded
 }
 
 func (s *MessageReaded) Name() string {
-	return "messageReaded"
+	return EventMessageReaded
 }
 
 func (s *MessageBlogPostMade) Name() string {
-	return "messageBlogPostMade"
+	return EventMessageBlogPostMade
 }
 
 func (s *MessageDeleted) Name() string {
-	return "messageDeleted"
+	return EventMessageDeleted
 }
 
 func (s *MessagePinned) Name() string {
-	return "messagePinned"
+	return EventMessagePinned
 }
 
 func (s *MessagePublished) Name() string {
-	return "messagePublished"
+	return EventMessagePublished
 }
 
 func (s *MessageReactionFlipped) Name() string {
-	return "messageReactionFlipped"
+	return EventMessageReactionFlipped
 }
 
 func (s *TechnicalAbandonedChatRemoved) Name() string {
-	return "technicalAbandonedChatRemoved"
+	return EventTechnicalAbandonedChatRemoved
 }
 
 func (s *UserChatViewCreated) Name() string {
-	return "userChatViewCreated"
+	return EventUserChatViewCreated
 }
 
 func (s *UserChatViewUpdated) Name() string {
-	return "userChatViewUpdated"
+	return EventUserChatViewUpdated
 }
 
 func (s *UserChatViewRemoved) Name() string {
-	return "userChatViewRemoved"
+	return EventUserChatViewRemoved
 }
 
 func (s *ChatCreated) GetEventKind() EventKind {

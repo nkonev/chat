@@ -12,7 +12,7 @@ import (
 
 type TechnicalHandler struct {
 	lgr              *logger.LoggerWrapper
-	eventBus         *cqrs.PartitionAwareEventBus
+	eventBus         *cqrs.KafkaProducer
 	dbWrapper        *db.DB
 	commonProjection *cqrs.CommonProjection
 	cfg              *config.AppConfig
@@ -20,7 +20,7 @@ type TechnicalHandler struct {
 
 func NewTechnicalHandler(
 	lgr *logger.LoggerWrapper,
-	eventBus *cqrs.PartitionAwareEventBus,
+	eventBus *cqrs.KafkaProducer,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	cfg *config.AppConfig,

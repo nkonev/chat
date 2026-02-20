@@ -21,10 +21,8 @@ kafka:
   consumer:
     returnErrors: true
     clientId: "chat-consumer"
-    nackResendSleep: 100ms
-    reconnectRetrySleep: 1s
-    # default 1s
-    offsetCommitInterval: 1s
+    batchSize: 1024
+    fetchMaxWait: 5s
 otlp:
   endpoint: localhost:4317
 postgresql:

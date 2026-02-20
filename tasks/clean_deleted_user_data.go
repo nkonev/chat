@@ -2,7 +2,6 @@ package tasks
 
 import (
 	"context"
-	"github.com/nkonev/dcron"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
@@ -10,6 +9,8 @@ import (
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/utils"
+
+	"github.com/nkonev/dcron"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -44,7 +45,7 @@ type CleanDeletedUserDataService struct {
 	tracer     trace.Tracer
 	dbR        *db.DB
 	lgr        *logger.LoggerWrapper
-	eventBus   *cqrs.PartitionAwareEventBus
+	eventBus   *cqrs.KafkaProducer
 	co         *cqrs.CommonProjection
 }
 
@@ -115,7 +116,7 @@ func NewCleanDeletedUserDataService(
 	lgr *logger.LoggerWrapper,
 	chatClient client.AaaRestClient,
 	dbR *db.DB,
-	eventBus *cqrs.PartitionAwareEventBus,
+	eventBus *cqrs.KafkaProducer,
 	co *cqrs.CommonProjection,
 ) *CleanDeletedUserDataService {
 	trcr := otel.Tracer("scheduler/clean-deleted-users-data")

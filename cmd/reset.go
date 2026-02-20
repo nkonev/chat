@@ -58,7 +58,7 @@ Performs reset the CQRS projections in PostgreSQL and sets the 'need_to_fast_for
 		fx.Invoke(
 			db.RunResetDatabaseSoft,
 			kafka.RunResetPartitionsChat,
-			kafka.RunResetPartitionsUser,
+			kafka.RunDeleteTopicUser,
 			db.RunMigrations,
 			kafka.RunCreateTopicChat,
 			kafka.RunCreateTopicUser,

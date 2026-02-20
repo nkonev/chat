@@ -24,10 +24,10 @@ See cqrs.export.file setting. This settings along with /path/to/file.json also a
 So all the logs are written to stderr.
 
 To export to the file:
-./%s %s --cqrs.export.file=/tmp/export.json
+./%s %s --cqrs.export.file=/tmp/export.jsonl
 
 or via pipe:
-./%s %s --cqrs.export.file=%s > /tmp/export.json
+./%s %s --cqrs.export.file=%s > /tmp/export.jsonl
 
 To export to stdout:
 ./%s %s --cqrs.export.file=%s
@@ -59,7 +59,7 @@ To export to stdout:
 			return fsl
 		}),
 		fx.Provide(
-			kafka.ConfigureSaramaClient,
+			kafka.ConfigureKafkaAdmin,
 		),
 		fx.Invoke(
 			kafka.Export,

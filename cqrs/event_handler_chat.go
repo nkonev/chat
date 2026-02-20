@@ -1632,3 +1632,11 @@ func (m *EventHandler) OnUnreadMessageReaded(ctx context.Context, event *Message
 		ReadMessagesAction: event.ReadMessagesAction,
 	})
 }
+
+func (m *EventHandler) OnTechnicalProjectionsTruncated(ctx context.Context, event *ProjectionsTruncated) error {
+	return m.commonProjection.OnTechnicalProjectionsTruncated(ctx, event)
+}
+
+func (m *EventHandler) OnTechnicalAbandonedChatRemoved(ctx context.Context, event *TechnicalAbandonedChatRemoved) error {
+	return m.commonProjection.OnTechnicalAbandonedChatRemoved(ctx, event)
+}

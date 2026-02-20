@@ -21,10 +21,8 @@ kafka:
   consumer:
     returnErrors: true
     clientId: "chat-consumer"
-    nackResendSleep: 100ms
-    reconnectRetrySleep: 1s
-    # default 1s
-    offsetCommitInterval: 200ms
+    batchSize: 1024
+    fetchMaxWait: 500ms
 otlp:
   endpoint: localhost:4317
 postgresql:
@@ -55,9 +53,9 @@ cqrs:
   dump: true
   prettyLog: true
   import:
-    file: ./event.json
+    file: ./export.jsonl
   export:
-    file: ./event.json
+    file: ./export.jsonl
   projections:
     chatUserView:
       maxViewableParticipants: 10

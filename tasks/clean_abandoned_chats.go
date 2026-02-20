@@ -2,12 +2,13 @@ package tasks
 
 import (
 	"context"
-	"github.com/nkonev/dcron"
 	"go-cqrs-chat-example/client"
 	"go-cqrs-chat-example/config"
 	"go-cqrs-chat-example/cqrs"
 	"go-cqrs-chat-example/db"
 	"go-cqrs-chat-example/logger"
+
+	"github.com/nkonev/dcron"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -42,7 +43,7 @@ type CleanAnandonedChatsService struct {
 	tracer     trace.Tracer
 	dbR        *db.DB
 	lgr        *logger.LoggerWrapper
-	eventBus   *cqrs.PartitionAwareEventBus
+	eventBus   *cqrs.KafkaProducer
 	co         *cqrs.CommonProjection
 }
 
@@ -95,7 +96,7 @@ func NewCleanAbandonedChatsService(
 	lgr *logger.LoggerWrapper,
 	chatClient client.AaaRestClient,
 	dbR *db.DB,
-	eventBus *cqrs.PartitionAwareEventBus,
+	eventBus *cqrs.KafkaProducer,
 	co *cqrs.CommonProjection,
 ) *CleanAnandonedChatsService {
 	trcr := otel.Tracer("scheduler/clean-abandoned-chats")

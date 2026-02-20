@@ -20,7 +20,7 @@ import (
 
 type ChatHandler struct {
 	lgr                          *logger.LoggerWrapper
-	eventBus                     *cqrs.PartitionAwareEventBus
+	eventBus                     *cqrs.KafkaProducer
 	dbWrapper                    *db.DB
 	commonProjection             *cqrs.CommonProjection
 	stripTagsPolicy              *sanitizer.StripTagsPolicy
@@ -32,7 +32,7 @@ type ChatHandler struct {
 
 func NewChatHandler(
 	lgr *logger.LoggerWrapper,
-	eventBus *cqrs.PartitionAwareEventBus,
+	eventBus *cqrs.KafkaProducer,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	stripTagsPolicy *sanitizer.StripTagsPolicy,

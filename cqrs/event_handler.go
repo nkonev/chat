@@ -28,10 +28,10 @@ type EventHandler struct {
 	cfg                                 *config.AppConfig
 	stripSourceContent                  *sanitizer.StripSourcePolicy
 	stripAllTags                        *sanitizer.StripTagsPolicy
-	eventBus                            *PartitionAwareEventBus
+	eventBus                            *KafkaProducer
 }
 
-func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *EnrichingProjection, rabbitmqEventPublisher *producer.RabbitOutputEventsPublisher, rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher, db *db.DB, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient, cfg *config.AppConfig, stripSourceContent *sanitizer.StripSourcePolicy, stripAllTags *sanitizer.StripTagsPolicy, eventBus *PartitionAwareEventBus) *EventHandler {
+func NewEventHandler(commonProjection *CommonProjection, enrichingProjection *EnrichingProjection, rabbitmqEventPublisher *producer.RabbitOutputEventsPublisher, rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher, db *db.DB, lgr *logger.LoggerWrapper, aaaRestClient client.AaaRestClient, cfg *config.AppConfig, stripSourceContent *sanitizer.StripSourcePolicy, stripAllTags *sanitizer.StripTagsPolicy, eventBus *KafkaProducer) *EventHandler {
 	tr := otel.Tracer("event")
 
 	return &EventHandler{

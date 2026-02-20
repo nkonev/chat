@@ -15,7 +15,7 @@ import (
 
 type ParticipantHandler struct {
 	lgr                 *logger.LoggerWrapper
-	eventBus            *cqrs.PartitionAwareEventBus
+	eventBus            *cqrs.KafkaProducer
 	dbWrapper           *db.DB
 	commonProjection    *cqrs.CommonProjection
 	enrichingProjection *cqrs.EnrichingProjection
@@ -24,7 +24,7 @@ type ParticipantHandler struct {
 
 func NewParticipantHandler(
 	lgr *logger.LoggerWrapper,
-	eventBus *cqrs.PartitionAwareEventBus,
+	eventBus *cqrs.KafkaProducer,
 	dbWrapper *db.DB,
 	commonProjection *cqrs.CommonProjection,
 	enrichingProjection *cqrs.EnrichingProjection,
