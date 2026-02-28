@@ -255,6 +255,7 @@ const (
 	UnreadMessagesActionUnspecified = iota
 	UnreadMessagesActionRefresh
 	UnreadMessagesActionIncrease
+	UnreadMessagesActionDecrease
 )
 
 type LastMessageAction int16
@@ -296,8 +297,9 @@ type ChatViewRefreshed struct {
 	ChatId                     int64                `json:"chatId"`
 	UnreadMessagesAction       UnreadMessagesAction `json:"unreadMessagesAction"`
 	LastMessageAction          LastMessageAction    `json:"lastMessageAction"`
-	IncreaseOn                 int                  `json:"increaseOn"`
+	Delta                      int                  `json:"delta"`
 	ChatAction                 ChatAction           `json:"chatAction"`
+	ActionableMessageId        *int64               `json:"actionableMessageId"`
 }
 
 type UserMessageReaded struct {
@@ -365,8 +367,9 @@ type UserChatViewUpdated struct {
 	UserId               int64                `json:"userId"`
 	UnreadMessagesAction UnreadMessagesAction `json:"unreadMessagesAction"`
 	LastMessageAction    LastMessageAction    `json:"lastMessageAction"`
-	IncreaseOn           int                  `json:"increaseOn"`
+	Delta                int                  `json:"delta"`
 	ChatAction           ChatAction           `json:"chatAction"`
+	ActionableMessageId  *int64               `json:"actionableMessageId"`
 }
 
 type UserChatViewRemoved struct {

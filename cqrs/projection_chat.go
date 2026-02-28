@@ -393,7 +393,7 @@ func (m *CommonProjection) OnChatViewRefreshedLastMessageActionRefreshForPartiti
 
 // called in cases when chat should lift because of changing update_date_time
 // in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
-func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Context, additionalData *AdditionalData, participantId int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, increaseOn int, messageOwnerId int64, chatAction ChatAction) error {
+func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Context, additionalData *AdditionalData, participantId int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, delta int, messageOwnerId int64, chatAction ChatAction, actionableMessageId *int64) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// in oder not to have a potential race condition
 		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
@@ -413,8 +413,8 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Conte
 		if unreadMessagesAction == UnreadMessagesActionIncrease {
 
 			// not owners
-			if participantIdWithoutMessageOwner != nil && increaseOn > 0 {
-				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, *participantIdWithoutMessageOwner, chatId, increaseOn)
+			if participantIdWithoutMessageOwner != nil && delta > 0 {
+				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, *participantIdWithoutMessageOwner, chatId, delta)
 				if err != nil {
 					return fmt.Errorf("error during increasing unread messages: %w", err)
 				}
@@ -431,6 +431,21 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Conte
 				err = m.updateHasUnreads(ctx, tx, *ownerIdP)
 				if err != nil {
 					return err
+				}
+			}
+
+			wasUpdated = true
+		} else if unreadMessagesAction == UnreadMessagesActionDecrease {
+			if actionableMessageId == nil {
+				m.lgr.ErrorContext(ctx, "Wrong invariant - UnreadMessagesActionDecrease requires non-nil actionableMessageId")
+				return nil
+			}
+
+			// not owners
+			if participantIdWithoutMessageOwner != nil && delta > 0 {
+				err := m.decreaseUnreadsAndSetHasUnreads(ctx, tx, *participantIdWithoutMessageOwner, chatId, delta, *actionableMessageId)
+				if err != nil {
+					return fmt.Errorf("error during decreasing unread messages: %w", err)
 				}
 			}
 

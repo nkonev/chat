@@ -417,8 +417,9 @@ func (m *EventHandler) OnChatViewRefreshed(ctx context.Context, event *ChatViewR
 				UserId:               participantId,
 				UnreadMessagesAction: event.UnreadMessagesAction,
 				LastMessageAction:    event.LastMessageAction,
-				IncreaseOn:           event.IncreaseOn,
+				Delta:                event.Delta,
 				ChatAction:           event.ChatAction,
+				ActionableMessageId:  event.ActionableMessageId,
 			}
 			err := m.eventBus.Publish(ctx, ue)
 			if err != nil {

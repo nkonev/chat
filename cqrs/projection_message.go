@@ -1315,7 +1315,7 @@ func (m *CommonProjection) increaseUnreadsAndSetHasUnreads(ctx context.Context, 
 		UPDATE chat_user_view 
 		SET unread_messages = unread_messages + $3
 		WHERE user_id = $1 and id = $2
-		returning consider_messages_as_unread
+		RETURNING consider_messages_as_unread
 	`, participantId, chatId, increaseOn)
 	if err != nil {
 		return err
@@ -1329,8 +1329,46 @@ func (m *CommonProjection) increaseUnreadsAndSetHasUnreads(ctx context.Context, 
 			return err
 		}
 	}
+
+	return nil
+}
+
+func (m *CommonProjection) decreaseUnreadsAndSetHasUnreads(ctx context.Context, tx *db.Tx, participantId int64, chatId int64, decreaseOn int, actionableMessageId int64) error {
+	var lastReadMessageId int64
+	err := sqlscan.Get(ctx, tx, &lastReadMessageId, `
+		select coalesce(a.cuv_last_read_message_id, 0)
+		from (
+			select cuv_last_read_message_id
+			from chat_user_view
+			where user_id = $1 and id = $2
+		) a
+	`, participantId, chatId)
 	if err != nil {
 		return err
+	}
+
+	if actionableMessageId > lastReadMessageId { // it's ok that actionableMessageId can be 0 - it means that user hasn't read messages yet
+		var resDto = struct {
+			ConsiderMessagesAsUnread bool  `db:"consider_messages_as_unread"`
+			UnreadCount              int64 `db:"unread_messages"`
+		}{}
+		err = sqlscan.Get(ctx, tx, &resDto, `
+		UPDATE chat_user_view
+		SET unread_messages = unread_messages - $3
+		WHERE user_id = $1 and id = $2
+		RETURNING consider_messages_as_unread, unread_messages
+	`, participantId, chatId, decreaseOn)
+		if err != nil {
+			return err
+		}
+
+		if resDto.ConsiderMessagesAsUnread && resDto.UnreadCount == 0 {
+			// refresh has_unread_messages because other chats can contribute
+			err = m.updateHasUnreads(ctx, tx, participantId)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

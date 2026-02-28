@@ -876,7 +876,7 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus *KafkaProducer, db
 		AllParticipantIdsExcepting: []int64{},
 		ChatId:                     copyCommand.ChatId,
 		UnreadMessagesAction:       UnreadMessagesActionIncrease,
-		IncreaseOn:                 1,
+		Delta:                      1,
 		LastMessageAction:          LastMessageActionRefresh,
 	}
 
@@ -1081,8 +1081,10 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus *KafkaProducer, dba
 		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 		AllParticipantIdsExcepting: []int64{},
 		ChatId:                     s.ChatId,
-		UnreadMessagesAction:       UnreadMessagesActionRefresh,
+		UnreadMessagesAction:       UnreadMessagesActionDecrease,
 		LastMessageAction:          LastMessageActionRefresh,
+		Delta:                      1,
+		ActionableMessageId:        &s.MessageId,
 	}
 
 	errInner := eventBus.Publish(ctx, ui)
