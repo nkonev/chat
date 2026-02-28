@@ -42,9 +42,9 @@ curl -Ss -X GET -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/sear
 curl -i -X PUT -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/pin?pin=true'
 
 # create a message
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message' -d '{"content": "new message"}'
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message' -d '{"content": "new message 2"}'
-curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message' -d '{"content": "new message 3"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message' -d '{"text": "new message"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message' -d '{"text": "new message 2"}'
+curl -i -X POST -H 'Content-Type: application/json' -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message' -d '{"text": "new message 3"}'
 
 # show messages
 curl -Ss -X GET -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1/message/search' | jq
