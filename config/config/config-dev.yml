@@ -81,6 +81,7 @@ http:
   disableCompression: false
   prettyLog: true
   dump: true
+
 logger:
   level: info
   json: true
