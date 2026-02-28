@@ -315,7 +315,7 @@ func processEvent[T any](lgr *logger.LoggerWrapper, cfg *config.AppConfig, event
 
 	if cfg.Cqrs.Dump {
 		if cfg.Cqrs.PrettyLog && !cfg.Logger.Json {
-			fmt.Printf("[kafka cqrs subscriber] Processing record: trace_id=%s, topic=%s, offset=%d, event_type=%v, body: %v\n", logger.GetTraceId(ctx), record.Topic, record.Offset, eventType, string(record.Value))
+			fmt.Printf("[kafka cqrs subscriber] Processing record: trace_id=%s, topic=%s, offset=%d, partition=%d, event_type=%v, body: %v\n", logger.GetTraceId(ctx), record.Topic, record.Offset, record.Partition, eventType, string(record.Value))
 		} else {
 			lgr.InfoContext(ctx, "[kafka cqrs subscriber] Processing record:", "topic", record.Topic, "offset", record.Offset, "partition", record.Partition, "event_type", eventType, "key", string(record.Key), "value", string(record.Value))
 		}
