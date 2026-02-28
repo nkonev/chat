@@ -285,15 +285,15 @@ func (p *KafkaListener) runKafkaListener(
 					} else {
 						p.lgr.Error("Got error during processing in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, err)
 					}
-					return
+					return // not commit the offset
 				}
 
 				if lastSuccessful != nil {
-					p.lgr.Debug("Committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
+					p.lgr.Debug("Begin committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
 					if err = cl.CommitRecords(ctx, lastSuccessful); err != nil {
 						p.lgr.Error("Error during committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
 					} else {
-						p.lgr.Debug("Committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
+						p.lgr.Debug("Offset was successfully committed", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
 					}
 				}
 			})
