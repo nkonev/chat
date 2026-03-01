@@ -38,7 +38,7 @@ const (
 
 type CqrsEvent interface {
 	GetPartitionKey() string
-	Name() string
+	GetEventType() string
 	GetEventKind() EventKind
 }
 
@@ -514,103 +514,103 @@ func (s *UserChatViewRemoved) GetPartitionKey() string {
 	return utils.ToString(s.UserId)
 }
 
-func (s *ChatCreated) Name() string {
+func (s *ChatCreated) GetEventType() string {
 	return EventChatCreated
 }
 
-func (s *ChatEdited) Name() string {
+func (s *ChatEdited) GetEventType() string {
 	return EventChatEdited
 }
 
-func (s *ChatDeleted) Name() string {
+func (s *ChatDeleted) GetEventType() string {
 	return EventChatDeleted
 }
 
-func (s *ParticipantsAdded) Name() string {
+func (s *ParticipantsAdded) GetEventType() string {
 	return EventParticipantsAdded
 }
 
-func (s *ParticipantDeleted) Name() string {
+func (s *ParticipantDeleted) GetEventType() string {
 	return EventParticipantsDeleted
 }
 
-func (s *ParticipantChanged) Name() string {
+func (s *ParticipantChanged) GetEventType() string {
 	return EventParticipantsChanged
 }
 
-func (s *ProjectionsTruncated) Name() string {
+func (s *ProjectionsTruncated) GetEventType() string {
 	return EventProjectionsResetted
 }
 
-func (s *UserChatPinned) Name() string {
+func (s *UserChatPinned) GetEventType() string {
 	return EventUserChatPinned
 }
 
-func (s *ChatPinned) Name() string {
+func (s *ChatPinned) GetEventType() string {
 	return EventChatPinned
 }
 
-func (s *UserChatNotificationSettingsSetted) Name() string {
+func (s *UserChatNotificationSettingsSetted) GetEventType() string {
 	return EventUserChatNotificationSettingsSetted
 }
 
-func (s *ChatNotificationSettingsSetted) Name() string {
+func (s *ChatNotificationSettingsSetted) GetEventType() string {
 	return EventChatNotificationSettingsSetted
 }
 
-func (s *MessageCreated) Name() string {
+func (s *MessageCreated) GetEventType() string {
 	return EventMessageCreated
 }
 
-func (s *MessageEdited) Name() string {
+func (s *MessageEdited) GetEventType() string {
 	return EventMessageEdited
 }
 
-func (s *ChatViewRefreshed) Name() string {
+func (s *ChatViewRefreshed) GetEventType() string {
 	return EventChatViewRefreshed
 }
 
-func (s *UserMessageReaded) Name() string {
+func (s *UserMessageReaded) GetEventType() string {
 	return EventUserMessageReaded
 }
 
-func (s *MessageReaded) Name() string {
+func (s *MessageReaded) GetEventType() string {
 	return EventMessageReaded
 }
 
-func (s *MessageBlogPostMade) Name() string {
+func (s *MessageBlogPostMade) GetEventType() string {
 	return EventMessageBlogPostMade
 }
 
-func (s *MessageDeleted) Name() string {
+func (s *MessageDeleted) GetEventType() string {
 	return EventMessageDeleted
 }
 
-func (s *MessagePinned) Name() string {
+func (s *MessagePinned) GetEventType() string {
 	return EventMessagePinned
 }
 
-func (s *MessagePublished) Name() string {
+func (s *MessagePublished) GetEventType() string {
 	return EventMessagePublished
 }
 
-func (s *MessageReactionFlipped) Name() string {
+func (s *MessageReactionFlipped) GetEventType() string {
 	return EventMessageReactionFlipped
 }
 
-func (s *TechnicalAbandonedChatRemoved) Name() string {
+func (s *TechnicalAbandonedChatRemoved) GetEventType() string {
 	return EventTechnicalAbandonedChatRemoved
 }
 
-func (s *UserChatViewCreated) Name() string {
+func (s *UserChatViewCreated) GetEventType() string {
 	return EventUserChatViewCreated
 }
 
-func (s *UserChatViewUpdated) Name() string {
+func (s *UserChatViewUpdated) GetEventType() string {
 	return EventUserChatViewUpdated
 }
 
-func (s *UserChatViewRemoved) Name() string {
+func (s *UserChatViewRemoved) GetEventType() string {
 	return EventUserChatViewRemoved
 }
 

@@ -57,7 +57,7 @@ func (p *KafkaProducer) Publish(ctx context.Context, msg CqrsEvent) error {
 
 	key := msg.GetPartitionKey()
 
-	eventType := msg.Name()
+	eventType := msg.GetEventType()
 
 	uv7, err := uuid.NewV7()
 	if err != nil {
