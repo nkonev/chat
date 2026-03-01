@@ -169,14 +169,77 @@ func NewKafkaListener(
 }
 
 func ListenChatTopic(
-	lis *KafkaListener,
+	p *KafkaListener,
 	lc fx.Lifecycle,
 ) error {
-	err := lis.runKafkaListener(
+	eventFunctionMapping := map[string]func(eventId, eventType string, record *kgo.Record) (context.Context, error){
+		EventChatCreated: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatCreated)
+		},
+		EventChatEdited: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatEdited)
+		},
+		EventChatDeleted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatRemoved)
+		},
+		// this event need to be in event-chat topic, because only this topic is backupable
+		EventChatPinned: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatPinned)
+		},
+		// this event need to be in event-chat topic, because only this topic is backupable
+		EventChatNotificationSettingsSetted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatNotificationSettingsSetted)
+		},
+		EventChatViewRefreshed: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatViewRefreshed)
+		},
+		EventParticipantsAdded: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantAdded)
+		},
+		EventParticipantsDeleted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantRemoved)
+		},
+		EventParticipantsChanged: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantChanged)
+		},
+		EventMessageCreated: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageCreated)
+		},
+		EventMessageEdited: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageEdited)
+		},
+		EventMessageDeleted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageRemoved)
+		},
+		// this event need to be in event-chat topic, because only this topic is backupable
+		EventMessageReaded: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUnreadMessageReaded)
+		},
+		EventMessageBlogPostMade: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageBlogPostMade)
+		},
+		EventMessageReactionFlipped: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageReactionFlipped)
+		},
+		EventMessagePinned: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessagePinned)
+		},
+		EventMessagePublished: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessagePublished)
+		},
+		EventProjectionsResetted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnTechnicalProjectionsTruncated)
+		},
+		EventTechnicalAbandonedChatRemoved: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnTechnicalAbandonedChatRemoved)
+		},
+	}
+
+	err := p.runKafkaListener(
 		"chat-subscriber",
-		lis.cfg.Kafka.TopicChat.Topic,
-		lis.cfg.Kafka.ConsumerGroupChat,
-		lis.processChatBatch,
+		p.cfg.Kafka.TopicChat.Topic,
+		p.cfg.Kafka.ConsumerGroupChat,
+		eventFunctionMapping,
 		lc,
 	)
 	if err != nil {
@@ -187,15 +250,40 @@ func ListenChatTopic(
 }
 
 func ListenUserTopic(
-	lis *KafkaListener,
+	p *KafkaListener,
 	lc fx.Lifecycle,
 ) error {
 
-	err := lis.runKafkaListener(
+	eventFunctionMapping := map[string]func(eventId, eventType string, record *kgo.Record) (context.Context, error){
+		EventUserChatPinned: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatPinned)
+		},
+		EventUserChatNotificationSettingsSetted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatNotificationSettingsSetted)
+		},
+		EventUserMessageReaded: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserUnreadMessageReaded)
+		},
+		// we introduced a dedicated event-user topic in order to eliminate the distributed deadlock in event_handler_chat.go::OnChatViewRefreshed(),
+		// which would be due to mutating userId-partitioned chat_user_view and has_unread_messages tables from the chatId-partitioned event-chat topic
+		// see also https://docs.citusdata.com/en/v13.0/reference/common_errors.html#canceling-the-transaction-since-it-was-involved-in-a-distributed-deadlock
+		// https://www.cybertec-postgresql.com/en/postgresql-understanding-deadlocks/
+		EventUserChatViewCreated: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewCreated)
+		},
+		EventUserChatViewUpdated: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewUpdated)
+		},
+		EventUserChatViewRemoved: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewRemoved)
+		},
+	}
+
+	err := p.runKafkaListener(
 		"user-subscriber",
-		lis.cfg.Kafka.TopicUser.Topic,
-		lis.cfg.Kafka.ConsumerGroupUser,
-		lis.processUserBatch,
+		p.cfg.Kafka.TopicUser.Topic,
+		p.cfg.Kafka.ConsumerGroupUser,
+		eventFunctionMapping,
 		lc,
 	)
 	if err != nil {
@@ -225,7 +313,7 @@ func NewKotel(tracer *kotel.Tracer) *kotel.Kotel {
 func (p *KafkaListener) runKafkaListener(
 	name string,
 	topic, consumerGroup string,
-	processRecordsBatch func(records []*kgo.Record) (*kgo.Record, context.Context, error),
+	eventFunctionMapping map[string]func(eventId, eventType string, record *kgo.Record) (context.Context, error),
 	lc fx.Lifecycle,
 ) error {
 	// One client can both produce and consume!
@@ -289,7 +377,7 @@ func (p *KafkaListener) runKafkaListener(
 				}
 
 				p.lgr.Debug("got records in "+name+" subscriber", "partition", partition.Partition, "len", len(records))
-				lastSuccessful, errCtx, err := processRecordsBatch(records)
+				lastSuccessful, errCtx, err := p.processEventBatch(records, eventFunctionMapping)
 				if err != nil {
 					if errCtx != nil {
 						p.lgr.ErrorContext(errCtx, "Got error during processing in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, err)
@@ -345,7 +433,7 @@ func processEvent[T CqrsEvent](lgr *logger.LoggerWrapper, cfg *config.AppConfig,
 	return ctx, nil
 }
 
-func (p *KafkaListener) processChatBatch(records []*kgo.Record) (*kgo.Record, context.Context, error) {
+func (p *KafkaListener) processEventBatch(records []*kgo.Record, eventFunctionMapping map[string]func(eventId string, eventType string, record *kgo.Record) (context.Context, error)) (*kgo.Record, context.Context, error) {
 	var lastSuccessful *kgo.Record
 
 	for _, record := range records {
@@ -353,161 +441,14 @@ func (p *KafkaListener) processChatBatch(records []*kgo.Record) (*kgo.Record, co
 		if err != nil {
 			return nil, nil, err
 		}
-		switch eventType {
-		case EventChatCreated:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatCreated)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventChatEdited:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatEdited)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventChatDeleted:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatRemoved)
-			if err != nil {
-				return nil, ctx, err
-			}
-		// this event need to be in event-chat topic, because only this topic is backupable
-		case EventChatPinned:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatPinned)
-			if err != nil {
-				return nil, ctx, err
-			}
-		// this event need to be in event-chat topic, because only this topic is backupable
-		case EventChatNotificationSettingsSetted:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatNotificationSettingsSetted)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventChatViewRefreshed:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatViewRefreshed)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventParticipantsAdded:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantAdded)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventParticipantsDeleted:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantRemoved)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventParticipantsChanged:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantChanged)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventMessageCreated:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageCreated)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventMessageEdited:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageEdited)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventMessageDeleted:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageRemoved)
-			if err != nil {
-				return nil, ctx, err
-			}
-		// this event need to be in event-chat topic, because only this topic is backupable
-		case EventMessageReaded:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUnreadMessageReaded)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventMessageBlogPostMade:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageBlogPostMade)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventMessageReactionFlipped:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageReactionFlipped)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventMessagePinned:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessagePinned)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventMessagePublished:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessagePublished)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventProjectionsResetted:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnTechnicalProjectionsTruncated)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventTechnicalAbandonedChatRemoved:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnTechnicalAbandonedChatRemoved)
-			if err != nil {
-				return nil, ctx, err
-			}
-		default:
-			return nil, nil, fmt.Errorf("unknown chat event type %v", eventType)
+
+		f, ok := eventFunctionMapping[eventType]
+		if !ok {
+			return nil, nil, fmt.Errorf("unknown event type %v", eventType)
 		}
-
-		lastSuccessful = record
-	}
-
-	return lastSuccessful, nil, nil
-}
-
-// https://github.com/twmb/franz-go/blob/master/examples/plugin_kotel/main.go
-func (p *KafkaListener) processUserBatch(records []*kgo.Record) (*kgo.Record, context.Context, error) {
-	var lastSuccessful *kgo.Record
-
-	for _, record := range records {
-		eventId, eventType, err := parseKnownEventHeaders(record)
+		ctx, err := f(eventId, eventType, record)
 		if err != nil {
-			return nil, nil, err
-		}
-		switch eventType {
-		case EventUserChatPinned:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatPinned)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventUserChatNotificationSettingsSetted:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatNotificationSettingsSetted)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventUserMessageReaded:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserUnreadMessageReaded)
-			if err != nil {
-				return nil, ctx, err
-			}
-		// we introduced a dedicated event-user topic in order to eliminate the distributed deadlock in event_handler_chat.go::OnChatViewRefreshed(),
-		// which would be due to mutating userId-partitioned chat_user_view and has_unread_messages tables from the chatId-partitioned event-chat topic
-		// see also https://docs.citusdata.com/en/v13.0/reference/common_errors.html#canceling-the-transaction-since-it-was-involved-in-a-distributed-deadlock
-		// https://www.cybertec-postgresql.com/en/postgresql-understanding-deadlocks/
-		case EventUserChatViewCreated:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewCreated)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventUserChatViewUpdated:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewUpdated)
-			if err != nil {
-				return nil, ctx, err
-			}
-		case EventUserChatViewRemoved:
-			ctx, err := processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewRemoved)
-			if err != nil {
-				return nil, ctx, err
-			}
-		default:
-			return nil, nil, fmt.Errorf("unknown user event type %v", eventType)
+			return nil, ctx, err
 		}
 
 		lastSuccessful = record
