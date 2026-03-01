@@ -315,7 +315,7 @@ func (p *KafkaListener) runKafkaListener(
 	return nil
 }
 
-func processEvent[T any](lgr *logger.LoggerWrapper, cfg *config.AppConfig, eventId, eventType string, record *kgo.Record, tracer *kotel.Tracer, handler func(ctx context.Context, event *T) error) (context.Context, error) {
+func processEvent[T CqrsEvent](lgr *logger.LoggerWrapper, cfg *config.AppConfig, eventId, eventType string, record *kgo.Record, tracer *kotel.Tracer, handler func(ctx context.Context, event T) error) (context.Context, error) {
 	ctx, span := tracer.WithProcessSpan(record)
 	defer span.End()
 
@@ -337,7 +337,7 @@ func processEvent[T any](lgr *logger.LoggerWrapper, cfg *config.AppConfig, event
 		lgr.ErrorContext(ctx, "Error during unmarshalling", logger.AttributeError, err)
 		return ctx, err
 	}
-	err = handler(ctx, &mi)
+	err = handler(ctx, mi)
 	if err != nil {
 		return ctx, err
 	}

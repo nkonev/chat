@@ -36,6 +36,12 @@ const (
 	EventUserChatViewRemoved                = "userChatViewRemoved"
 )
 
+type CqrsEvent interface {
+	GetPartitionKey() string
+	Name() string
+	GetEventKind() EventKind
+}
+
 type AdditionalData struct {
 	CreatedAt     time.Time `json:"createdAt"`
 	CorrelationId *string   `json:"correlationId"`
