@@ -125,6 +125,7 @@ To run without schedulers:
 			tasks.NewCleanAbandonedChatsService,
 			tasks.NewCleanDeletedUserDataService,
 			cqrs.NewKafkaListener,
+			cqrs.NewBatchOptimizer,
 		),
 		fx.Invoke(
 			db.RunMigrations,
@@ -137,6 +138,7 @@ To run without schedulers:
 			kafka.WaitForAllEventsProcessedUser,
 			cqrs.RunSequenceFastforwarder,
 			producer.EnableOutputEvents,
+			producer.EnableNotificationEvents,
 			listener.CreateAndListenInternalEventsChannel,
 			listener.CreateAndListenAaaChannel,
 			tasks.RunScheduler,

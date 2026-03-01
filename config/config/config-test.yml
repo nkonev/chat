@@ -117,6 +117,8 @@ rabbitmq:
   dumpTestAccumulator: true
   prettyLog: true
   dump: true
+  skipPublishOutputEventsOnRewind: false
+  skipPublishNotificationEventsOnRewind: false
 
 redis:
   address: :36379

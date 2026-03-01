@@ -7,7 +7,7 @@ package cqrs
 // See comments about it in TestUnreads()
 // Also, in order to keep these command's response times fast we should avoid iterations over db rows here. The best place for it is event_handler, projection.
 
-// To have some happens-before relationship garantees, it's strongly not recommended to send user events (EventKindUser) depending on chat data, from here (command_handler).
+// To have some happens-before relationship garantees, it's strongly not recommended to send user events (EventPartitioningByUserId) depending on chat data, from here (command_handler).
 // It's recommended to (re)send them from event_handler
 
 import (
@@ -502,12 +502,13 @@ func (sp *ChatEdit) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db
 	}
 
 	ui := &ChatViewRefreshed{
-		AdditionalData:   copyCommand.AdditionalData,
 		ParticipantsMode: ParticipantsModeAllParticipantIdsExcepting,
 		// excluding => s.ParticipantIds is an optimization in order not to re-refresh views for the recently added
 		AllParticipantIdsExcepting: copyCommand.ParticipantIdsToAdd,
 		ChatId:                     copyCommand.ChatId,
 		ChatAction:                 ChatActionRefresh,
+		EventTime:                  sp.AdditionalData.CreatedAt,
+		CorrelationId:              sp.AdditionalData.CorrelationId,
 	}
 
 	errInner := eventBus.Publish(ctx, ui)
@@ -590,13 +591,14 @@ func (s *ParticipantAdd) Handle(ctx context.Context, eventBus *KafkaProducer, db
 	}
 
 	ui := &ChatViewRefreshed{
-		AdditionalData:   s.AdditionalData,
 		ParticipantsMode: ParticipantsModeAllParticipantIdsExcepting,
 		// chat_user_views for newly added participants will be created from scratch including already added, see ParticipantsAdded handler
 		// actually don't need to send an event for newly added, their last_updated will be updated in OnParticipantAdded()
 		AllParticipantIdsExcepting: s.ParticipantIds,
 		ChatId:                     s.ChatId,
 		ChatAction:                 ChatActionRefresh,
+		EventTime:                  s.AdditionalData.CreatedAt,
+		CorrelationId:              s.AdditionalData.CorrelationId,
 	}
 	errInner := eventBus.Publish(ctx, ui)
 	if errInner != nil {
@@ -637,11 +639,12 @@ func (s *ParticipantDelete) Handle(ctx context.Context, eventBus *KafkaProducer,
 	// excluding => s.ParticipantIds is an optimization - we don't need to refresh views for deleted participants
 	if len(s.ParticipantIds) > 0 {
 		ui := &ChatViewRefreshed{
-			AdditionalData:             s.AdditionalData,
 			ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 			AllParticipantIdsExcepting: s.ParticipantIds,
 			ChatId:                     s.ChatId,
 			ChatAction:                 ChatActionRefresh,
+			EventTime:                  s.AdditionalData.CreatedAt,
+			CorrelationId:              s.AdditionalData.CorrelationId,
 		}
 		errInner := eventBus.Publish(ctx, ui)
 		if errInner != nil {
@@ -720,11 +723,12 @@ func (s *ParticipantChange) Handle(ctx context.Context, eventBus *KafkaProducer,
 	}
 
 	ui := &ChatViewRefreshed{
-		AdditionalData:             s.AdditionalData,
 		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 		AllParticipantIdsExcepting: []int64{},
 		ChatId:                     s.ChatId,
 		// here we don't add ParticipantsAction == ParticipantsActionRefresh because changing a participant (e. g. making him admin) shouldn't change chat_user_view
+		EventTime:     s.AdditionalData.CreatedAt,
+		CorrelationId: s.AdditionalData.CorrelationId,
 	}
 	errInner := eventBus.Publish(ctx, ui)
 	if errInner != nil {
@@ -745,11 +749,12 @@ func (s *ChatPin) Handle(ctx context.Context, eventBus *KafkaProducer) error {
 	}
 
 	ui := &ChatViewRefreshed{
-		AdditionalData:     s.AdditionalData,
 		ParticipantsMode:   ParticipantsModeOnlyParticipantIds,
 		OnlyParticipantIds: []int64{s.AdditionalData.BehalfUserId},
 		ChatId:             s.ChatId,
 		ChatAction:         ChatActionRefresh,
+		EventTime:          s.AdditionalData.CreatedAt,
+		CorrelationId:      s.AdditionalData.CorrelationId,
 	}
 
 	errInner := eventBus.Publish(ctx, ui)
@@ -870,15 +875,12 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus *KafkaProducer, db
 		}
 	}
 
-	ui := &ChatViewRefreshed{
-		AdditionalData:             copyCommand.AdditionalData,
-		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
-		AllParticipantIdsExcepting: []int64{},
-		ChatId:                     copyCommand.ChatId,
-		UnreadMessagesAction:       UnreadMessagesActionIncrease,
-		Delta:                      1,
-		LastMessageAction:          LastMessageActionRefresh,
-	}
+	ui := NewChatViewRefreshedIncrease(
+		copyCommand.ChatId,
+		[]MessageWithOwner{{MessageId: mc.MessageCommoned.Id, OwnerId: copyCommand.AdditionalData.BehalfUserId}},
+		copyCommand.AdditionalData.CreatedAt,
+		copyCommand.AdditionalData.CorrelationId,
+	)
 
 	errInner := eventBus.Publish(ctx, ui)
 	if errInner != nil {
@@ -886,6 +888,19 @@ func (sp *MessageCreate) Handle(ctx context.Context, eventBus *KafkaProducer, db
 	}
 
 	return messageId, nil
+}
+
+func NewChatViewRefreshedIncrease(chatId int64, deltaMessages []MessageWithOwner, eventTime time.Time, correlationId *string) *ChatViewRefreshed {
+	return &ChatViewRefreshed{
+		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
+		AllParticipantIdsExcepting: []int64{},
+		ChatId:                     chatId,
+		UnreadMessagesAction:       UnreadMessagesActionIncrease,
+		MessagesDelta:              deltaMessages,
+		LastMessageAction:          LastMessageActionRefresh,
+		EventTime:                  eventTime,
+		CorrelationId:              correlationId,
+	}
 }
 
 func (s *MessageRead) Handle(ctx context.Context, lgr *logger.LoggerWrapper, eventBus *KafkaProducer, commonProjection *CommonProjection, dba *db.DB, rabbitmqOutputEventPublisher *producer.RabbitOutputEventsPublisher, rabbitmqNotificationEventsPublisher *producer.RabbitNotificationEventsPublisher) error {
@@ -1076,16 +1091,7 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus *KafkaProducer, dba
 		return err
 	}
 
-	ui := &ChatViewRefreshed{
-		AdditionalData:             s.AdditionalData,
-		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
-		AllParticipantIdsExcepting: []int64{},
-		ChatId:                     s.ChatId,
-		UnreadMessagesAction:       UnreadMessagesActionDecrease,
-		LastMessageAction:          LastMessageActionRefresh,
-		Delta:                      1,
-		ActionableMessageId:        &s.MessageId,
-	}
+	ui := NewChatViewRefreshedDecrease(s.ChatId, []MessageWithOwner{{MessageId: s.MessageId, OwnerId: adt.MessageOwnerId}}, s.AdditionalData.CreatedAt, s.AdditionalData.CorrelationId)
 
 	errInner := eventBus.Publish(ctx, ui)
 	if errInner != nil {
@@ -1093,6 +1099,19 @@ func (s *MessageDelete) Handle(ctx context.Context, eventBus *KafkaProducer, dba
 	}
 
 	return nil
+}
+
+func NewChatViewRefreshedDecrease(chatId int64, deltaMessages []MessageWithOwner, eventTime time.Time, correlationId *string) *ChatViewRefreshed {
+	return &ChatViewRefreshed{
+		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
+		AllParticipantIdsExcepting: []int64{},
+		ChatId:                     chatId,
+		UnreadMessagesAction:       UnreadMessagesActionDecrease,
+		MessagesDelta:              deltaMessages,
+		LastMessageAction:          LastMessageActionRefresh,
+		EventTime:                  eventTime,
+		CorrelationId:              correlationId,
+	}
 }
 
 func (sp *MessageEdit) Handle(ctx context.Context, eventBus *KafkaProducer, dba *db.DB, commonProjection *CommonProjection, cfg *config.AppConfig, lgr *logger.LoggerWrapper, policy *sanitizer.SanitizerPolicy) error {
@@ -1156,11 +1175,12 @@ func (sp *MessageEdit) Handle(ctx context.Context, eventBus *KafkaProducer, dba 
 	lastMessageId, err := commonProjection.GetLastMessageId(ctx, copyCommand.ChatId)
 	if lastMessageId == copyCommand.MessageId {
 		ui := &ChatViewRefreshed{
-			AdditionalData:             copyCommand.AdditionalData,
 			ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 			AllParticipantIdsExcepting: []int64{},
 			ChatId:                     copyCommand.ChatId,
 			LastMessageAction:          LastMessageActionRefresh,
+			EventTime:                  sp.AdditionalData.CreatedAt,
+			CorrelationId:              sp.AdditionalData.CorrelationId,
 		}
 
 		errInner := eventBus.Publish(ctx, ui)
@@ -1222,11 +1242,12 @@ func (sp *MessageSyncEmbed) Handle(ctx context.Context, eventBus *KafkaProducer,
 	lastMessageId, err := commonProjection.GetLastMessageId(ctx, copyCommand.ChatId)
 	if lastMessageId == copyCommand.MessageId {
 		ui := &ChatViewRefreshed{
-			AdditionalData:             copyCommand.AdditionalData,
 			ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 			AllParticipantIdsExcepting: []int64{},
 			ChatId:                     copyCommand.ChatId,
 			LastMessageAction:          LastMessageActionRefresh,
+			EventTime:                  sp.AdditionalData.CreatedAt,
+			CorrelationId:              sp.AdditionalData.CorrelationId,
 		}
 
 		errInner := eventBus.Publish(ctx, ui)
@@ -1331,11 +1352,12 @@ func (s *TechnicalRemoveContentOfDeletedUser) Handle(ctx context.Context, eventB
 	}
 
 	ui := &ChatViewRefreshed{
-		AdditionalData:             GenerateMessageAdditionalData(nil, dto.SystemUserCleaner),
 		ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 		AllParticipantIdsExcepting: []int64{s.UserId},
 		ChatId:                     s.ChatId,
 		ChatAction:                 ChatActionRefresh,
+		EventTime:                  pa.AdditionalData.CreatedAt,
+		CorrelationId:              pa.AdditionalData.CorrelationId,
 	}
 
 	errInner := eventBus.Publish(ctx, ui)

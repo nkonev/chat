@@ -181,6 +181,9 @@ type RabbitMQConfig struct {
 
 	Dump      bool
 	PrettyLog bool
+
+	SkipPublishOutputEventsOnRewind       bool
+	SkipPublishNotificationEventsOnRewind bool
 }
 
 type CleanAbandonedChatsTask struct {

@@ -21,44 +21,108 @@ import (
 	"github.com/jackc/pgtype"
 )
 
-func (m *CommonProjection) OnMessageCreated(ctx context.Context, event *MessageCreated) error {
+func (m *CommonProjection) OnMessageCreatedBatch(ctx context.Context, events []MessageCreated) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		chatExists, err := m.checkChatExists(ctx, tx, event.MessageCommoned.ChatId)
+		chatIds := []int64{} // actually it's 1 chat id
+		for _, e := range events {
+			chatIds = append(chatIds, e.MessageCommoned.ChatId)
+		}
+
+		chatsExists, err := m.checkAreChatsExist(ctx, tx, chatIds)
 		if err != nil {
 			return err
 		}
-		if !chatExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageCreated because there is no chat", logger.AttributeChatId, event.MessageCommoned.ChatId)
-			return nil
+
+		validMessageCreateds := []MessageCreated{}
+
+		for _, event := range events {
+			if chatsExists[event.MessageCommoned.ChatId] {
+				validMessageCreateds = append(validMessageCreateds, event)
+			} else {
+				m.lgr.InfoContext(ctx, "Skipping MessageCreated because there is no chat", logger.AttributeChatId, event.MessageCommoned.ChatId)
+			}
 		}
 
-		var embed pgtype.JSONB
-		if event.MessageCommoned.Embed != nil {
-			err = embed.Set(event.MessageCommoned.Embed)
-			if err != nil {
-				return err
+		var messageIds []int64
+		var ownerIds []int64
+		var contents []string
+		var embeds []pgtype.JSONB
+		var fileItemUuids []*string
+		var dbChatIds []int64
+		var createdAts []time.Time
+
+		for _, event := range validMessageCreateds {
+			messageIds = append(messageIds, event.MessageCommoned.Id)
+			dbChatIds = append(dbChatIds, event.MessageCommoned.ChatId)
+			ownerIds = append(ownerIds, event.AdditionalData.BehalfUserId)
+			contents = append(contents, event.MessageCommoned.Content)
+
+			var embed pgtype.JSONB
+			if event.MessageCommoned.Embed != nil {
+				err = embed.Set(event.MessageCommoned.Embed)
+				if err != nil {
+					return err
+				}
+			} else {
+				embed.Status = pgtype.Null
 			}
-		} else {
-			embed.Status = pgtype.Null
+			embeds = append(embeds, embed)
+
+			fileItemUuids = append(fileItemUuids, event.MessageCommoned.FileItemUuid)
+			createdAts = append(createdAts, event.AdditionalData.CreatedAt)
 		}
 		_, err = tx.ExecContext(ctx, `
-		insert into message(id, chat_id, owner_id, content, embed, create_date_time, update_date_time, file_item_uuid) 
-			values ($1, $2, $3, $4, $5, $6, $7, $8)
+		with input_data as (
+			select * from unnest(
+				 cast($1 as bigint[])
+				,cast($2 as bigint[])
+				,cast($3 as bigint[])
+				,cast($4 as text[])
+				,cast($5 as jsonb[])
+				,cast($6 as varchar(36)[])
+				,cast($7 as timestamp[])
+			) as t (
+				 message_id
+				,chat_id
+				,owner_id
+				,content
+				,embed
+				,file_item_uuid
+				,create_date_time
+			)
+		)
+		insert into message(
+			 id
+			,chat_id
+			,owner_id
+			,content
+			,embed
+			,file_item_uuid
+			,create_date_time
+		) 
+		select
+			 idt.message_id
+			,idt.chat_id
+			,idt.owner_id
+			,idt.content
+			,idt.embed
+			,idt.file_item_uuid
+			,idt.create_date_time
+		from input_data idt
 		on conflict(chat_id, id) do update set 
-		    owner_id = excluded.owner_id
-		    , content = excluded.content
-			, embed = excluded.embed
-		    , update_date_time = excluded.update_date_time
-			, file_item_uuid = excluded.file_item_uuid
-	`, event.MessageCommoned.Id, event.MessageCommoned.ChatId, event.AdditionalData.BehalfUserId, event.MessageCommoned.Content, embed, event.AdditionalData.CreatedAt, nil, event.MessageCommoned.FileItemUuid)
+		     owner_id = excluded.owner_id
+		    ,content = excluded.content
+			,embed = excluded.embed
+			,file_item_uuid = excluded.file_item_uuid
+		    ,create_date_time = excluded.create_date_time
+	`, messageIds, dbChatIds, ownerIds, contents, embeds, fileItemUuids, createdAts)
 		if err != nil {
 			return err
 		}
 		m.lgr.InfoContext(ctx,
 			"Handling message added",
-			logger.AttributeMessageId, event.MessageCommoned.Id,
-			logger.AttributeUserId, event.AdditionalData.BehalfUserId,
-			logger.AttributeChatId, event.MessageCommoned.ChatId,
+			"message_ids", messageIds,
+			"chat_ids", dbChatIds,
 		)
 		return nil
 	})
@@ -731,7 +795,7 @@ func (m *EnrichingProjection) GetPublishedMessageForPublic(ctx context.Context, 
 		}
 	}
 
-	msgs, _, users, err := m.GetMessagesEnriched(ctx, []int64{}, false, true, nil, chatId, 1, nil, true, false, dto.NoSearchString, &messageId, tetATetParticipantIds)
+	msgs, _, users, err := m.GetMessagesEnriched(ctx, []int64{}, false, true, nil, chatId, 1, nil, true, false, dto.NoSearchString, []int64{messageId}, tetATetParticipantIds)
 	if err != nil {
 		return nil, false, err
 	}
@@ -1030,7 +1094,7 @@ func (m *CommonProjection) setLastMessage(ctx context.Context, tx *db.Tx, chatId
 type SetUnreadedMessagesAction int16
 
 const (
-	SetUnreadedMessagesActionUnspecified = iota
+	SetUnreadedMessagesActionUnspecified SetUnreadedMessagesAction = iota
 	SetUnreadedMessagesActionInitialize
 	SetUnreadedMessagesActionCalculateUnreadsFromTheUsersLastSavedReadedMessage
 	SetUnreadedMessagesActionCalculateUnreadsFromTheProvidedMessage
@@ -1205,6 +1269,48 @@ func (m *CommonProjection) updateParticipantMessageReadId(ctx context.Context, c
 	return err
 }
 
+func (m *CommonProjection) fastForwardParticipantMessageReadIdUpTo(ctx context.Context, co db.CommonOperations, chatId int64, lastReadMessageDateTime time.Time, maxMessageIdsPerParticipantId map[int64]int64) error {
+	if len(maxMessageIdsPerParticipantId) == 0 {
+		return nil
+	}
+
+	participantIds := []int64{}
+	messageIds := []int64{}
+
+	for participantId, upToMessageId := range maxMessageIdsPerParticipantId {
+		participantIds = append(participantIds, participantId)
+		messageIds = append(messageIds, upToMessageId)
+	}
+
+	_, err := co.ExecContext(ctx, `
+	with owners_with_messages as (
+		select * from unnest(
+			 cast($3 as bigint[])
+			,cast($4 as bigint[])
+		) as t (
+			 owner_id
+			,message_id
+		)
+	),
+	input_data as (
+		select 
+			ow.owner_id, 
+			ow.message_id,
+			p.chat_id
+		from owners_with_messages ow
+		join chat_participant p on ow.owner_id = p.user_id
+		where p.chat_id = $1
+	)
+	merge into chat_participant cp
+	using input_data idt
+	on (idt.chat_id, idt.owner_id) = (cp.chat_id, cp.user_id)
+	when matched then update set 
+	   cp_last_read_message_id = idt.message_id
+	  ,cp_last_read_message_date_time = $2
+	`, chatId, lastReadMessageDateTime, participantIds, messageIds)
+	return err
+}
+
 func (m *CommonProjection) fastForwardParticipantMessageReadId(ctx context.Context, co db.CommonOperations, userId, chatId int64, lastReadMessageDateTime time.Time) error {
 	_, err := co.ExecContext(ctx, `
 		with 
@@ -1327,47 +1433,6 @@ func (m *CommonProjection) increaseUnreadsAndSetHasUnreads(ctx context.Context, 
 		`, participantId)
 		if err != nil {
 			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *CommonProjection) decreaseUnreadsAndSetHasUnreads(ctx context.Context, tx *db.Tx, participantId int64, chatId int64, decreaseOn int, actionableMessageId int64) error {
-	var lastReadMessageId int64
-	err := sqlscan.Get(ctx, tx, &lastReadMessageId, `
-		select coalesce(a.cuv_last_read_message_id, 0)
-		from (
-			select cuv_last_read_message_id
-			from chat_user_view
-			where user_id = $1 and id = $2
-		) a
-	`, participantId, chatId)
-	if err != nil {
-		return err
-	}
-
-	if actionableMessageId > lastReadMessageId { // it's ok that actionableMessageId can be 0 - it means that user hasn't read messages yet
-		var resDto = struct {
-			ConsiderMessagesAsUnread bool  `db:"consider_messages_as_unread"`
-			UnreadCount              int64 `db:"unread_messages"`
-		}{}
-		err = sqlscan.Get(ctx, tx, &resDto, `
-		UPDATE chat_user_view
-		SET unread_messages = unread_messages - $3
-		WHERE user_id = $1 and id = $2
-		RETURNING consider_messages_as_unread, unread_messages
-	`, participantId, chatId, decreaseOn)
-		if err != nil {
-			return err
-		}
-
-		if resDto.ConsiderMessagesAsUnread && resDto.UnreadCount == 0 {
-			// refresh has_unread_messages because other chats can contribute
-			err = m.updateHasUnreads(ctx, tx, participantId)
-			if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -1598,7 +1663,7 @@ func (m *CommonProjection) GetLastMessageId(ctx context.Context, chatId int64) (
 	return maxMessageId, nil
 }
 
-func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, needCheckAuth, isForPublic bool, authForUserId *int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64, additionalUserIdToFetch []int64) ([]dto.MessageViewEnrichedDto, bool, []*dto.User, error) {
+func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUserIds []int64, needCheckAuth, isForPublic bool, authForUserId *int64, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, requestedMessageIds []int64, additionalUserIdToFetch []int64) ([]dto.MessageViewEnrichedDto, bool, []*dto.User, error) {
 	type resDto struct {
 		items           []dto.MessageViewEnrichedDto
 		notAparticipant bool
@@ -1607,6 +1672,10 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 	if isForPublic && len(behalfUserIds) > 0 {
 		return nil, false, nil, errors.New("Wrong invariant - isForPublic and more than 0 behalfUserIds")
+	}
+
+	if isForPublic && len(requestedMessageIds) > 1 {
+		return nil, false, nil, errors.New("Unknown invariant - and more than 1 messageIds")
 	}
 
 	res, errOuter := db.TransactWithResult(ctx, m.cp.db, func(tx *db.Tx) (*resDto, error) {
@@ -1629,49 +1698,34 @@ func (m *EnrichingProjection) GetMessagesEnriched(ctx context.Context, behalfUse
 
 		searchString = sanitizer.TrimAmdSanitize(m.policy, searchString)
 
-		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, messageId)
+		const fakeUserId = dto.NonExistentUser
+		if isForPublic {
+			// to use below for getting GetChatsBasicExtended() and then get this chat by fakeUserId in enrichMessage()
+			behalfUserIds = []int64{fakeUserId}
+		}
+
+		messages, err := m.cp.GetMessages(ctx, tx, chatId, size, startingFromItemId, includeStartingFrom, reverse, searchString, requestedMessageIds, behalfUserIds)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error getting messages", logger.AttributeError, err)
 			return nil, err
 		}
 
-		const fakeUserId = dto.NonExistentUser
-
-		if messageId != nil {
-			if len(messages) > 1 {
-				return nil, fmt.Errorf("By id = %d %v messages got", *messageId, len(messages))
+		if isForPublic && len(messages) != 0 {
+			var messagesTmp = []dto.MessageDto{}
+			msg := messages[0]
+			if msg.Published { // here we check if the message published, if no - we gonna respond the empty slice
+				messagesTmp = append(messagesTmp, msg)
 			}
-
-			if len(messages) == 1 {
-				if !isForPublic { // this !isForPublic check is to skip this patching for public message
-					var messagesTmp = []dto.MessageDto{}
-					for _, userId := range behalfUserIds {
-						msg := messages[0]
-						msg.BehalfUserId = userId
-						messagesTmp = append(messagesTmp, msg)
-					}
-					messages = messagesTmp
-				} else { // is for public
-					var messagesTmp = []dto.MessageDto{}
-					msg := messages[0]
-					if msg.Published { // here we check if the message published, if no - we gonna respond the empty slice
-						msg.BehalfUserId = fakeUserId // to use below for getting GetChatsBasicExtended() and then get this chat by fakeUserId in enrichMessage()
-						messagesTmp = append(messagesTmp, msg)
-					}
-					messages = messagesTmp
-				}
-			}
-		} else if len(behalfUserIds) == 1 {
-			for i := range messages {
-				messages[i].BehalfUserId = behalfUserIds[0]
-			}
-		} else {
-			return nil, fmt.Errorf("Unknown invariant")
+			messages = messagesTmp
 		}
 
 		messageIds := make([]int64, 0)
+		messageIdMap := make(map[int64]struct{})
 		for _, message := range messages {
-			messageIds = append(messageIds, message.Id)
+			messageIdMap[message.Id] = struct{}{}
+		}
+		for messageId := range messageIdMap {
+			messageIds = append(messageIds, messageId)
 		}
 
 		reactions, err := m.getReactions(ctx, tx, chatId, messageIds)
@@ -2087,6 +2141,35 @@ func (m *CommonProjection) GetMessageDataForAuthorization(ctx context.Context, c
 	return d, nil
 }
 
+func (m *CommonProjection) GetMessageDataForAuthorizationMessageCreatedBatch(ctx context.Context, co db.CommonOperations, userIds []int64, chatId int64) (map[int64]dto.MessageAuthorizationDataBatch, error) {
+	d := []dto.MessageAuthorizationDataBatch{}
+	// it's ok if message is not found - sql handles it
+	err := sqlscan.Select(ctx, co, &d, `
+		with requested_participants as (
+			select * from unnest(cast ($1 as bigint[])) as t(user_id)
+		)	
+		select 
+			(cp.user_id is not null) as is_chat_participant,
+			rp.user_id,
+			coalesce(cc.tet_a_tet, false) as chat_is_tet_a_tet,
+			coalesce(cp.chat_admin, false) as is_chat_admin,
+			coalesce(cc.regular_participant_can_write_message, false) chat_can_write_message
+		from requested_participants rp 
+		left join chat_participant cp on (rp.user_id = cp.user_id and cp.chat_id = $2)
+		cross join (select * from chat_common where id = $2) cc
+	`, userIds, chatId)
+	if err != nil {
+		return nil, err
+	}
+
+	res := map[int64]dto.MessageAuthorizationDataBatch{}
+	for _, itm := range d {
+		res[itm.UserId] = itm
+	}
+
+	return res, nil
+}
+
 func makeReactions(users map[int64]*dto.User, reactionsList []dto.ReactionDto) []dto.Reaction {
 	var convertedReactionsOfMessageToReturn = make([]dto.Reaction, 0, len(reactionsList))
 	for _, dbReaction := range reactionsList {
@@ -2168,10 +2251,11 @@ func makeEmbed(
 	return nil, nil
 }
 
-func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageId *int64) ([]dto.MessageDto, error) {
+func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperations, chatId int64, size int32, startingFromItemId *int64, includeStartingFrom, reverse bool, searchString string, messageIds []int64, behaldUserIds []int64) ([]dto.MessageDto, error) {
 	type messageDto struct {
 		Id             int64        `db:"id"`
 		OwnerId        int64        `db:"owner_id"`
+		BehalfUserId   int64        `db:"behalf_user_id"`
 		Content        string       `db:"content"`
 		BlogPost       bool         `db:"blog_post"`
 		Embed          pgtype.JSONB `db:"embed"`
@@ -2182,14 +2266,14 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		Published      bool         `db:"published"`
 	}
 
-	if startingFromItemId != nil && messageId != nil {
-		return nil, fmt.Errorf("wrong invariant: both startingFromItemId and messageId provided")
+	if startingFromItemId != nil && len(messageIds) != 0 {
+		return nil, fmt.Errorf("wrong invariant: both startingFromItemId and messageIds provided")
 	}
 
 	mar := []dto.MessageDto{}
 	ma := []messageDto{}
 
-	queryArgs := []any{chatId, size}
+	queryArgs := []any{chatId, size, behaldUserIds}
 
 	order := ""
 	nonEquality := ""
@@ -2243,19 +2327,23 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 
 	orderClause := fmt.Sprintf(" order by m.id %s ", order)
 
-	if messageId != nil {
-		messageIdV := *messageId
+	if len(messageIds) != 0 {
+		messageIdV := messageIds
 		queryArgs = append(queryArgs, messageIdV)
-		messageIdClause := fmt.Sprintf(" and m.id = $%d ", len(queryArgs))
+		messageIdClause := fmt.Sprintf(" and m.id = any($%d) ", len(queryArgs))
 
 		conditionClause = messageIdClause
-		orderClause = ""
+		orderClause += ", bh.behalf_user_id "
 	}
 
 	err := sqlscan.Select(ctx, co, &ma, fmt.Sprintf(`
+			with requested_behalfs as (
+				select * from unnest(cast ($3 as bigint[])) as t(behalf_user_id)
+			)
 			select 
 			    m.id,
 			    m.owner_id,
+				bh.behalf_user_id,
 			    m.content,
 			    m.blog_post,
 				m.embed,
@@ -2265,6 +2353,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 				m.pinned,
 				m.published
 			from message m
+			cross join requested_behalfs bh
 			where m.chat_id = $1 %s 
 			%s
 			%s 
@@ -2280,6 +2369,7 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		mc := dto.MessageDto{
 			Id:             mm.Id,
 			OwnerId:        mm.OwnerId,
+			BehalfUserId:   mm.BehalfUserId,
 			Content:        mm.Content,
 			BlogPost:       mm.BlogPost,
 			CreateDateTime: mm.CreateDateTime,

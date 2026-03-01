@@ -11,7 +11,6 @@ import (
 	"go-cqrs-chat-example/preview"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
-	"slices"
 	"time"
 
 	"github.com/qdm12/reprint"
@@ -334,41 +333,6 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 	return errOuter
 }
 
-// called in cases when chat should lift because of changing update_date_time
-// in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
-func (m *CommonProjection) OnChatViewRefreshedUnreadMessagesActionIncreaseForPartitionChat(ctx context.Context, additionalData *AdditionalData, participantIds []int64, chatId int64, unreadMessagesAction UnreadMessagesAction, messageOwnerId int64) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		// in oder not to have a potential race condition
-		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
-		// we shouldn't upsert into chat_user_view
-		// we can only update it here
-
-		if unreadMessagesAction == UnreadMessagesActionIncrease {
-			var ownerIdP *int64
-			if slices.Contains(participantIds, messageOwnerId) { // for batches with[out] owner
-				ownerIdP = &messageOwnerId
-			}
-
-			// owner
-			if ownerIdP != nil {
-				err := m.fastForwardParticipantMessageReadId(ctx, tx, *ownerIdP, chatId, additionalData.CreatedAt)
-				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
-				}
-			}
-		} else {
-			m.lgr.ErrorContext(ctx, fmt.Sprintf("Wrong unreadMessagesAction = %v", unreadMessagesAction))
-		}
-
-		return nil
-	})
-
-	if errOuter != nil {
-		return errOuter
-	}
-	return nil
-}
-
 func (m *CommonProjection) OnChatViewRefreshedLastMessageActionRefreshForPartitionChat(ctx context.Context, chatId int64, lastMessageAction LastMessageAction) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 
@@ -392,61 +356,61 @@ func (m *CommonProjection) OnChatViewRefreshedLastMessageActionRefreshForPartiti
 }
 
 // called in cases when chat should lift because of changing update_date_time
-// in other cases (for example, read all the messafes in the chat), when no need to update th timestamp - we should use another method
-func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Context, additionalData *AdditionalData, participantId int64, chatId int64, unreadMessagesAction UnreadMessagesAction, lastMessageAction LastMessageAction, delta int, messageOwnerId int64, chatAction ChatAction, actionableMessageId *int64) error {
+// in other cases (for example, read all the messages in the chat), when no need to update th timestamp - we should use another method
+func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(
+	ctx context.Context,
+	updatedAt time.Time,
+	participantId int64, // current participant
+	chatId int64,
+	unreadMessagesAction UnreadMessagesAction,
+	messagesDelta []MessageWithOwner, // len() == N => means N messages were inserted on removed
+	chatAction ChatAction,
+) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-		// in oder not to have a potential race condition
+		// in order not to have a potential race condition
 		// for example "by upserting refresh view we can resurrect view of the newly removed participant in case message add"
 		// we shouldn't upsert into chat_user_view
 		// we can only update it here
 
-		var participantIdWithoutMessageOwner *int64
-		var ownerIdP *int64
-
-		if participantId == messageOwnerId {
-			ownerIdP = &participantId
-		} else {
-			participantIdWithoutMessageOwner = &participantId
-		}
-
 		wasUpdated := false
-		if unreadMessagesAction == UnreadMessagesActionIncrease {
+		if unreadMessagesAction == UnreadMessagesActionIncrease { // ~ MessageCreated
+			var myHighestMessageId int64
+			var myDelta int
 
-			// not owners
-			if participantIdWithoutMessageOwner != nil && delta > 0 {
-				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, *participantIdWithoutMessageOwner, chatId, delta)
-				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
+			for _, msg := range messagesDelta {
+				if msg.OwnerId == participantId {
+					if msg.MessageId > myHighestMessageId {
+						myHighestMessageId = msg.MessageId
+					}
 				}
 			}
 
-			// owner
-			if ownerIdP != nil {
-				err := m.fastForwardLastRead(ctx, tx, *ownerIdP, chatId)
-				if err != nil {
-					return fmt.Errorf("error during increasing unread messages: %w", err)
+			for _, msg := range messagesDelta {
+				if msg.OwnerId != participantId {
+					if msg.MessageId > myHighestMessageId {
+						myDelta += 1
+					}
 				}
+			}
 
-				// update red dot
-				err = m.updateHasUnreads(ctx, tx, *ownerIdP)
+			if myHighestMessageId > 0 {
+				err := m.setUnreadMessages(ctx, tx, participantId, chatId, myHighestMessageId, SetUnreadedMessagesActionCalculateUnreadsFromTheProvidedMessage) // includes updateHasUnreads()
+				if err != nil {
+					return err
+				}
+			} else if myDelta > 0 {
+				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, participantId, chatId, myDelta)
 				if err != nil {
 					return err
 				}
 			}
 
 			wasUpdated = true
-		} else if unreadMessagesAction == UnreadMessagesActionDecrease {
-			if actionableMessageId == nil {
-				m.lgr.ErrorContext(ctx, "Wrong invariant - UnreadMessagesActionDecrease requires non-nil actionableMessageId")
-				return nil
-			}
+		} else if unreadMessagesAction == UnreadMessagesActionDecrease { // ~ MessageDeleted
 
-			// not owners
-			if participantIdWithoutMessageOwner != nil && delta > 0 {
-				err := m.decreaseUnreadsAndSetHasUnreads(ctx, tx, *participantIdWithoutMessageOwner, chatId, delta, *actionableMessageId)
-				if err != nil {
-					return fmt.Errorf("error during decreasing unread messages: %w", err)
-				}
+			err := m.setUnreadMessages(ctx, tx, participantId, chatId, dto.NoId, SetUnreadedMessagesActionCalculateUnreadsFromTheUsersLastSavedReadedMessage)
+			if err != nil {
+				return err
 			}
 
 			wasUpdated = true
@@ -470,7 +434,7 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Conte
 		if wasUpdated {
 			_, err := tx.ExecContext(ctx, `
 				update chat_user_view set update_date_time = $3 where user_id = $1 and id = $2
-			`, participantId, chatId, additionalData.CreatedAt)
+			`, participantId, chatId, updatedAt)
 			if err != nil {
 				return err
 			}
@@ -486,14 +450,33 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(ctx context.Conte
 }
 
 func (m *CommonProjection) checkChatExists(ctx context.Context, co db.CommonOperations, chatId int64) (bool, error) {
-	var chatExists bool
-
-	err := sqlscan.Get(ctx, co, &chatExists, "select exists (select * from chat_common where id = $1)", chatId)
-
+	res, err := m.checkAreChatsExist(ctx, co, []int64{chatId})
 	if err != nil {
 		return false, err
 	}
-	return chatExists, nil
+
+	return res[chatId], nil
+}
+
+func (m *CommonProjection) checkAreChatsExist(ctx context.Context, co db.CommonOperations, chatIds []int64) (map[int64]bool, error) {
+	var existedChatIds []int64
+
+	err := sqlscan.Select(ctx, co, &existedChatIds, "select id from chat_common where id = any($1)", chatIds)
+
+	if err != nil {
+		return nil, err
+	}
+
+	res := map[int64]bool{}
+	for _, chatId := range chatIds {
+		res[chatId] = false
+	}
+
+	for _, chatId := range existedChatIds {
+		res[chatId] = true
+	}
+
+	return res, nil
 }
 
 func (m *EnrichingProjection) ChatFilter(ctx context.Context, co db.CommonOperations, behalfUserId, chatId int64, searchString string) (bool, error) {
@@ -648,7 +631,7 @@ func (m *EnrichingProjection) GetChatsEnriched(ctx context.Context, behalfPartic
 	return d.resultChats, d.intermediateUsers, nil
 }
 
-func (m *EnrichingProjection) getChatInfoForMessageNotification(ctx context.Context, co db.CommonOperations, chatId, behalfUserId int64) (*dto.ChatInfoForNotification, error) {
+func (m *EnrichingProjection) getChatInfoForMessageNotification(ctx context.Context, co db.CommonOperations, chatId int64) (*dto.ChatInfoForNotification, error) {
 	var chatBasic dto.ChatInfoForNotification
 
 	err := sqlscan.Get(ctx, co, &chatBasic, `
@@ -692,15 +675,23 @@ func (m *EnrichingProjection) patchChatInfoForMessageNotification(ctx context.Co
 	}
 }
 
-func (m *EnrichingProjection) getTetATetOpposite(ctx context.Context, co db.CommonOperations, chatId, behalfUserId int64) (*int64, error) {
-	var oppositeUserId *int64
+func (m *EnrichingProjection) getTetATetOpposites(ctx context.Context, co db.CommonOperations, chatId int64, behalfUserIds []int64) (map[int64]*int64, error) {
+	var res = []struct {
+		RequestedParticipantId int64  `db:"requested_participant_id"`
+		OppositeParticipantId  *int64 `db:"opposite_participant_id"`
+	}{}
 
-	err := sqlscan.Get(ctx, co, &oppositeUserId, `
+	err := sqlscan.Select(ctx, co, &res, `
+		with requested_participants as (
+			select * from unnest(cast ($1 as bigint[])) as t(user_id)
+		)
 		select 
-		    cp.user_id
-		from chat_participant cp
-		where cp.chat_id = $1 and cp.user_id != $2
-	`, chatId, behalfUserId)
+			rp.user_id as requested_participant_id,
+		    cp.user_id as opposite_participant_id
+		from requested_participants rp 
+		left join chat_participant cp on (cp.user_id != rp.user_id and cp.chat_id = $2)
+		join chat_common cc on (cc.id = cp.chat_id and cc.tet_a_tet = true and cc.id = $2)
+	`, behalfUserIds, chatId)
 	if errors.Is(err, sql.ErrNoRows) {
 		// there were no rows, but otherwise no error occurred
 		return nil, nil
@@ -708,7 +699,12 @@ func (m *EnrichingProjection) getTetATetOpposite(ctx context.Context, co db.Comm
 		return nil, err
 	}
 
-	return oppositeUserId, nil
+	ret := map[int64]*int64{}
+	for _, r := range res {
+		ret[r.RequestedParticipantId] = r.OppositeParticipantId
+	}
+
+	return ret, nil
 }
 
 func (m *EnrichingProjection) getParticipantsOnlineForTetATetMap(ctx context.Context, userIds []int64) (map[int64]bool, error) {

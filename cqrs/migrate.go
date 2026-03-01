@@ -338,6 +338,22 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *KafkaProducer, lgr *lo
 						return err
 					}
 
+					// corresponding increase
+					ui := &ChatViewRefreshed{
+						ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
+						AllParticipantIdsExcepting: []int64{},
+						ChatId:                     oldMessage.ChatId,
+						UnreadMessagesAction:       UnreadMessagesActionIncrease,
+						MessagesDelta:              []MessageWithOwner{{MessageId: mc.MessageCommoned.Id, OwnerId: oldMessage.OwnerId}},
+						LastMessageAction:          LastMessageActionRefresh,
+						EventTime:                  oldMessage.CreateDateTime,
+					}
+
+					errInner := eventBus.Publish(ctx, ui)
+					if errInner != nil {
+						return errInner
+					}
+
 					// * * * migrate pinned
 					if oldMessage.Pinned {
 						cpin := &MessagePinned{
@@ -516,14 +532,16 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *KafkaProducer, lgr *lo
 
 		for _, oldParticipant := range oldParticipants {
 			lgr.InfoContext(ctx, "Starting migrating participant's chat on the offset", "participant_offset", participantOffset, logger.AttributeChatId, oldParticipant.ChatId, logger.AttributeUserId, oldParticipant.UserId)
+			addd := GenerateMessageAdditionalData(nil, oldParticipant.UserId)
 			ui := &ChatViewRefreshed{
-				AdditionalData:             GenerateMessageAdditionalData(nil, oldParticipant.UserId),
 				ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
 				AllParticipantIdsExcepting: []int64{},
 				ChatId:                     oldParticipant.ChatId,
 				UnreadMessagesAction:       UnreadMessagesActionRefresh,
 				LastMessageAction:          LastMessageActionRefresh,
 				ChatAction:                 ChatActionRefresh,
+				EventTime:                  addd.CreatedAt,
+				CorrelationId:              addd.CorrelationId,
 			}
 
 			err = eventBus.Publish(ctx, ui)

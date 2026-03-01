@@ -45,11 +45,11 @@ func (p *KafkaProducer) Publish(ctx context.Context, msg CqrsEvent) error {
 
 	var topic string
 
-	kind := msg.GetEventKind()
+	kind := msg.GetEventPartitioningBy()
 	switch kind {
-	case EventKindChat:
+	case EventPartitioningByChatId:
 		topic = p.cfg.Kafka.TopicChat.Topic
-	case EventKindUser:
+	case EventPartitioningByUserId:
 		topic = p.cfg.Kafka.TopicUser.Topic
 	default:
 		return fmt.Errorf("Unknown kind: %v", kind)
@@ -147,6 +147,7 @@ type KafkaListener struct {
 	kotelService     *kotel.Kotel
 	tracer           *kotel.Tracer
 	lc               fx.Lifecycle
+	batchOptimizer   *BatchOptimizer
 }
 
 func NewKafkaListener(
@@ -156,7 +157,7 @@ func NewKafkaListener(
 	kotelService *kotel.Kotel,
 	tracer *kotel.Tracer,
 	lc fx.Lifecycle,
-
+	batchOptimizer *BatchOptimizer,
 ) *KafkaListener {
 	return &KafkaListener{
 		lgr:              lgr,
@@ -165,6 +166,7 @@ func NewKafkaListener(
 		kotelService:     kotelService,
 		tracer:           tracer,
 		lc:               lc,
+		batchOptimizer:   batchOptimizer,
 	}
 }
 
@@ -172,66 +174,131 @@ func ListenChatTopic(
 	p *KafkaListener,
 	lc fx.Lifecycle,
 ) error {
-	eventFunctionMapping := map[string]func(eventId, eventType string, record *kgo.Record) (context.Context, error){
-		EventChatCreated: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatCreated)
+	parseFunctionMapping := map[string]func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error){
+		EventChatCreated: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*ChatCreated](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventChatEdited: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatEdited)
+		EventChatEdited: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*ChatEdited](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventChatDeleted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatRemoved)
-		},
-		// this event need to be in event-chat topic, because only this topic is backupable
-		EventChatPinned: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatPinned)
+		EventChatDeleted: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*ChatDeleted](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
 		// this event need to be in event-chat topic, because only this topic is backupable
-		EventChatNotificationSettingsSetted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatNotificationSettingsSetted)
-		},
-		EventChatViewRefreshed: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnChatViewRefreshed)
-		},
-		EventParticipantsAdded: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantAdded)
-		},
-		EventParticipantsDeleted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantRemoved)
-		},
-		EventParticipantsChanged: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnParticipantChanged)
-		},
-		EventMessageCreated: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageCreated)
-		},
-		EventMessageEdited: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageEdited)
-		},
-		EventMessageDeleted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageRemoved)
+		EventChatPinned: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*ChatPinned](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
 		// this event need to be in event-chat topic, because only this topic is backupable
-		EventMessageReaded: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUnreadMessageReaded)
+		EventChatNotificationSettingsSetted: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*ChatNotificationSettingsSetted](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventMessageBlogPostMade: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageBlogPostMade)
+		EventChatViewRefreshed: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*ChatViewRefreshed](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventMessageReactionFlipped: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessageReactionFlipped)
+		EventParticipantsAdded: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*ParticipantsAdded](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventMessagePinned: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessagePinned)
+		EventParticipantsDeleted: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*ParticipantDeleted](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventMessagePublished: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnMessagePublished)
+		EventParticipantsChanged: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*ParticipantChanged](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventProjectionsResetted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnTechnicalProjectionsTruncated)
+		EventMessageCreated: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*MessageCreated](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventTechnicalAbandonedChatRemoved: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnTechnicalAbandonedChatRemoved)
+		EventMessageEdited: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*MessageEdited](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
+		},
+		EventMessageDeleted: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*MessageDeleted](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
+		},
+		// this event need to be in event-chat topic, because only this topic is backupable
+		EventMessageReaded: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*MessageReaded](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
+		},
+		EventMessageBlogPostMade: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*MessageBlogPostMade](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
+		},
+		EventMessageReactionFlipped: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*MessageReactionFlipped](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
+		},
+		EventMessagePinned: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*MessagePinned](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
+		},
+		EventMessagePublished: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*MessagePublished](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
+		},
+		EventProjectionsResetted: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*ProjectionsTruncated](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
+		},
+		EventTechnicalAbandonedChatRemoved: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*TechnicalAbandonedChatRemoved](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
+		},
+	}
+
+	batchFunctionMapping := map[string]func(b BatchEvent) (context.Context, error){
+		EventChatCreated: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnChatCreated))
+		},
+		EventChatEdited: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnChatEdited))
+		},
+		EventChatDeleted: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnChatRemoved))
+		},
+		// this event need to be in event-chat topic, because only this topic is backupable
+		EventChatPinned: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnChatPinned))
+		},
+		// this event need to be in event-chat topic, because only this topic is backupable
+		EventChatNotificationSettingsSetted: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnChatNotificationSettingsSetted))
+		},
+		EventChatViewRefreshed: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnChatViewRefreshed))
+		},
+		EventParticipantsAdded: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnParticipantAdded))
+		},
+		EventParticipantsDeleted: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnParticipantRemoved))
+		},
+		EventParticipantsChanged: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnParticipantChanged))
+		},
+
+		BatchMessagesCreated: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, p.cqrsEventHandler.OnBatchMessagesCreated)
+		},
+
+		EventMessageEdited: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessageEdited))
+		},
+		EventMessageDeleted: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessageRemoved))
+		},
+		// this event need to be in event-chat topic, because only this topic is backupable
+		EventMessageReaded: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUnreadMessageReaded))
+		},
+		EventMessageBlogPostMade: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessageBlogPostMade))
+		},
+		EventMessageReactionFlipped: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessageReactionFlipped))
+		},
+		EventMessagePinned: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessagePinned))
+		},
+		EventMessagePublished: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessagePublished))
+		},
+		EventProjectionsResetted: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnTechnicalProjectionsTruncated))
+		},
+		EventTechnicalAbandonedChatRemoved: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnTechnicalAbandonedChatRemoved))
 		},
 	}
 
@@ -239,7 +306,8 @@ func ListenChatTopic(
 		"chat-subscriber",
 		p.cfg.Kafka.TopicChat.Topic,
 		p.cfg.Kafka.ConsumerGroupChat,
-		eventFunctionMapping,
+		parseFunctionMapping,
+		batchFunctionMapping,
 		lc,
 	)
 	if err != nil {
@@ -254,28 +322,53 @@ func ListenUserTopic(
 	lc fx.Lifecycle,
 ) error {
 
-	eventFunctionMapping := map[string]func(eventId, eventType string, record *kgo.Record) (context.Context, error){
-		EventUserChatPinned: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatPinned)
+	parseFunctionMapping := map[string]func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error){
+		EventUserChatPinned: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserChatPinned](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventUserChatNotificationSettingsSetted: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatNotificationSettingsSetted)
+		EventUserChatNotificationSettingsSetted: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserChatNotificationSettingsSetted](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventUserMessageReaded: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserUnreadMessageReaded)
+		EventUserMessageReaded: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserMessageReaded](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
 		// we introduced a dedicated event-user topic in order to eliminate the distributed deadlock in event_handler_chat.go::OnChatViewRefreshed(),
 		// which would be due to mutating userId-partitioned chat_user_view and has_unread_messages tables from the chatId-partitioned event-chat topic
 		// see also https://docs.citusdata.com/en/v13.0/reference/common_errors.html#canceling-the-transaction-since-it-was-involved-in-a-distributed-deadlock
 		// https://www.cybertec-postgresql.com/en/postgresql-understanding-deadlocks/
-		EventUserChatViewCreated: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewCreated)
+		EventUserChatViewCreated: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserChatViewCreated](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventUserChatViewUpdated: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewUpdated)
+		EventUserChatViewUpdated: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserChatViewUpdated](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
 		},
-		EventUserChatViewRemoved: func(eventId, eventType string, record *kgo.Record) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, eventId, eventType, record, p.tracer, p.cqrsEventHandler.OnUserChatViewRemoved)
+		EventUserChatViewRemoved: func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserChatViewRemoved](p.lgr, p.cfg, eventId, eventType, record, p.tracer)
+		},
+	}
+
+	batchFunctionMapping := map[string]func(b BatchEvent) (context.Context, error){
+		EventUserChatPinned: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserChatPinned))
+		},
+		EventUserChatNotificationSettingsSetted: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserChatNotificationSettingsSetted))
+		},
+		EventUserMessageReaded: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserUnreadMessageReaded))
+		},
+		// we introduced a dedicated event-user topic in order to eliminate the distributed deadlock in event_handler_chat.go::OnChatViewRefreshed(),
+		// which would be due to mutating userId-partitioned chat_user_view and has_unread_messages tables from the chatId-partitioned event-chat topic
+		// see also https://docs.citusdata.com/en/v13.0/reference/common_errors.html#canceling-the-transaction-since-it-was-involved-in-a-distributed-deadlock
+		// https://www.cybertec-postgresql.com/en/postgresql-understanding-deadlocks/
+		EventUserChatViewCreated: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserChatViewCreated))
+		},
+		EventUserChatViewUpdated: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserChatViewUpdated))
+		},
+		EventUserChatViewRemoved: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserChatViewRemoved))
 		},
 	}
 
@@ -283,7 +376,8 @@ func ListenUserTopic(
 		"user-subscriber",
 		p.cfg.Kafka.TopicUser.Topic,
 		p.cfg.Kafka.ConsumerGroupUser,
-		eventFunctionMapping,
+		parseFunctionMapping,
+		batchFunctionMapping,
 		lc,
 	)
 	if err != nil {
@@ -291,6 +385,26 @@ func ListenUserTopic(
 	}
 
 	return nil
+}
+
+func unwrapSingleBatch[T CqrsEvent](
+	handler func(ctx context.Context, event T) error,
+) func(event BatchEvent) (context.Context, error) {
+	return func(b BatchEvent) (context.Context, error) {
+		sin, ok := b.(*SingleEventBatch)
+		if !ok {
+			return b.GetContext(), fmt.Errorf("Expected *SingleEventBatch, was: %T", b)
+		}
+
+		var t T
+		t, ok = sin.event.(T)
+		if !ok {
+			return b.GetContext(), fmt.Errorf("Expected %T, was: %T", t, sin.event)
+		}
+
+		err := handler(sin.ctx, t)
+		return sin.ctx, err
+	}
 }
 
 func NewKotelTracer(tracerProvider *sdktrace.TracerProvider, pr propagation.TextMapPropagator) *kotel.Tracer {
@@ -313,7 +427,8 @@ func NewKotel(tracer *kotel.Tracer) *kotel.Kotel {
 func (p *KafkaListener) runKafkaListener(
 	name string,
 	topic, consumerGroup string,
-	eventFunctionMapping map[string]func(eventId, eventType string, record *kgo.Record) (context.Context, error),
+	parseFunctionMapping map[string]func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error),
+	batchFunctionMapping map[string]func(b BatchEvent) (context.Context, error),
 	lc fx.Lifecycle,
 ) error {
 	// One client can both produce and consume!
@@ -335,10 +450,12 @@ func (p *KafkaListener) runKafkaListener(
 
 	p.lgr.Info("Starting " + name + " subscriber")
 
+	retryStop := make(chan struct{}, 1)
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
 			p.lgr.Info("Begin stopping kafka " + name + " subscriber")
 
+			retryStop <- struct{}{}
 			cl.Close()
 			return nil
 		},
@@ -362,8 +479,8 @@ func (p *KafkaListener) runKafkaListener(
 			fetches.EachPartition(func(partition kgo.FetchTopicPartition) {
 				// defer recover
 				defer func() {
-					if err := recover(); err != nil {
-						p.lgr.Error("In processing topic panic recovered in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, err)
+					if rerr := recover(); err != nil {
+						p.lgr.Error("In processing topic panic recovered in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, rerr)
 					}
 				}()
 
@@ -376,24 +493,38 @@ func (p *KafkaListener) runKafkaListener(
 					return
 				}
 
-				p.lgr.Debug("got records in "+name+" subscriber", "partition", partition.Partition, "len", len(records))
-				lastSuccessful, errCtx, err := p.processEventBatch(records, eventFunctionMapping)
-				if err != nil {
-					if errCtx != nil {
-						p.lgr.ErrorContext(errCtx, "Got error during processing in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, err)
-					} else {
-						p.lgr.Error("Got error during processing in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, err)
-					}
-					return // not commit the offset
-				}
+				for {
+					select {
+					case <-retryStop:
+						p.lgr.Info("Exiting processing retrier in " + name + " subscriber")
+						return
+					default:
+						p.lgr.Debug("got records in "+name+" subscriber", "partition", partition.Partition, "len", len(records))
+						lastSuccessful, errCtx, perr := p.processEventBatch(records, parseFunctionMapping, batchFunctionMapping)
+						if perr != nil {
+							if errCtx != nil {
+								p.lgr.ErrorContext(errCtx, "Got error during processing in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, perr)
+							} else {
+								p.lgr.Error("Got error during processing in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, perr)
+							}
 
-				if lastSuccessful != nil {
-					p.lgr.Debug("Begin committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
-					if err = cl.CommitRecords(ctx, lastSuccessful); err != nil {
-						p.lgr.Error("Error during committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
-					} else {
-						p.lgr.Debug("Offset was successfully committed", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
+							// https://github.com/twmb/franz-go/issues/590#issuecomment-1759883590
+							continue // retry
+						} else { // batch was processed successfully
+							if lastSuccessful != nil {
+								p.lgr.Debug("Begin committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
+								if cerr := cl.CommitRecords(ctx, lastSuccessful); cerr != nil {
+									p.lgr.Error("Error during committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset, logger.AttributeError, cerr)
+
+									continue // retry
+								} else {
+									p.lgr.Debug("Offset was successfully committed", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
+								}
+							}
+						}
 					}
+
+					break
 				}
 			})
 			cl.AllowRebalance()
@@ -403,7 +534,24 @@ func (p *KafkaListener) runKafkaListener(
 	return nil
 }
 
-func processEvent[T CqrsEvent](lgr *logger.LoggerWrapper, cfg *config.AppConfig, eventId, eventType string, record *kgo.Record, tracer *kotel.Tracer, handler func(ctx context.Context, event T) error) (context.Context, error) {
+func processEvent[T BatchEvent](lgr *logger.LoggerWrapper, cfg *config.AppConfig, batchEvent BatchEvent, handler func(event T) (context.Context, error)) (context.Context, error) {
+	var ev T
+	var ok bool
+
+	ev, ok = batchEvent.(T)
+	if !ok {
+		return nil, fmt.Errorf("error during processing %v: expected %T, but got %T", batchEvent, ev, batchEvent)
+	}
+
+	ctx, err := handler(ev)
+	if err != nil {
+		return ctx, err
+	}
+
+	return ctx, nil
+}
+
+func prepareEvent[T CqrsEvent](lgr *logger.LoggerWrapper, cfg *config.AppConfig, eventId, eventType string, record *kgo.Record, tracer *kotel.Tracer) (T, context.Context, error) {
 	ctx, span := tracer.WithProcessSpan(record)
 	defer span.End()
 
@@ -423,18 +571,70 @@ func processEvent[T CqrsEvent](lgr *logger.LoggerWrapper, cfg *config.AppConfig,
 	mi, err := parseRecord[T](record)
 	if err != nil {
 		lgr.ErrorContext(ctx, "Error during unmarshalling", logger.AttributeError, err)
-		return ctx, err
-	}
-	err = handler(ctx, mi)
-	if err != nil {
-		return ctx, err
+		return mi, ctx, err
 	}
 
-	return ctx, nil
+	return mi, ctx, nil
 }
 
-func (p *KafkaListener) processEventBatch(records []*kgo.Record, eventFunctionMapping map[string]func(eventId string, eventType string, record *kgo.Record) (context.Context, error)) (*kgo.Record, context.Context, error) {
-	var lastSuccessful *kgo.Record
+type EventHolder struct {
+	event CqrsEvent
+	ctx   context.Context
+}
+
+type BatchOptimizer struct {
+	lgr *logger.LoggerWrapper
+}
+
+func NewBatchOptimizer(
+	lgr *logger.LoggerWrapper,
+) *BatchOptimizer {
+	return &BatchOptimizer{
+		lgr: lgr,
+	}
+}
+
+func (p *BatchOptimizer) Optimize(events []EventHolder) ([]BatchEvent, context.Context, error) {
+	batchItems := []BatchEvent{}
+
+	// we don't split by chatId (partitionKey) here, actual batchItem should care about it
+	// try to append event to any of batches
+	for _, eventHolder := range events {
+
+		// try to append to any of existing batch items
+		var anyConsumed = false
+		for _, bi := range batchItems {
+			anyConsumed = bi.TryAppend(eventHolder)
+			if anyConsumed {
+				break
+			}
+		}
+
+		// initialize the first batch or
+		// if not appended to any of batch then create a new batch
+		if !anyConsumed {
+			bi, ctx, err := eventHolder.MakeBatchItem()
+			if err != nil {
+				return nil, ctx, err
+			}
+			batchItems = append(batchItems, bi)
+		}
+	}
+
+	if len(events) > len(batchItems) {
+		p.lgr.Info(fmt.Sprintf("Batch optimizer reduced %d events into %d", len(events), len(batchItems)))
+	}
+
+	return batchItems, nil, nil
+}
+
+func (p *KafkaListener) processEventBatch(
+	records []*kgo.Record, // assumes records from the one partition
+	parseFunctionMapping map[string]func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error),
+	batchFunctionMapping map[string]func(b BatchEvent) (context.Context, error),
+) (*kgo.Record, context.Context, error) {
+
+	events := []EventHolder{}
 
 	for _, record := range records {
 		eventId, eventType, err := parseKnownEventHeaders(record)
@@ -442,22 +642,48 @@ func (p *KafkaListener) processEventBatch(records []*kgo.Record, eventFunctionMa
 			return nil, nil, err
 		}
 
-		f, ok := eventFunctionMapping[eventType]
+		f, ok := parseFunctionMapping[eventType]
 		if !ok {
 			return nil, nil, fmt.Errorf("unknown event type %v", eventType)
 		}
-		ctx, err := f(eventId, eventType, record)
+		parsedEvent, ctx, err := f(eventId, eventType, record)
 		if err != nil {
 			return nil, ctx, err
 		}
+		events = append(events, EventHolder{
+			event: parsedEvent,
+			ctx:   ctx,
+		})
+	}
 
-		lastSuccessful = record
+	batchItems, errCtx, err := p.batchOptimizer.Optimize(events)
+	if err != nil {
+		return nil, errCtx, err
+	}
+
+	// apply batches
+	for _, batchItem := range batchItems {
+		f, ok := batchFunctionMapping[batchItem.GetBatchType()]
+		if !ok {
+			return nil, nil, fmt.Errorf("unknown batch type %v", batchItem.GetBatchType())
+		}
+		ctx, err := f(batchItem)
+		if err != nil {
+			return nil, ctx, err
+		}
+	}
+
+	// In order not to mess with offsets
+	// we commit only the latest
+	var lastSuccessful *kgo.Record
+	if len(records) > 0 {
+		lastSuccessful = records[len(records)-1]
 	}
 
 	return lastSuccessful, nil, nil
 }
 
-func parseRecord[T any](record *kgo.Record) (T, error) {
+func parseRecord[T CqrsEvent](record *kgo.Record) (T, error) {
 	var res T
 	if record == nil {
 		return res, errors.New("record is nil")

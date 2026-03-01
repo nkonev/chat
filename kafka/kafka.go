@@ -342,6 +342,12 @@ func isEndOnAllPartitions(
 
 	ofs, err := admCl.FetchOffsetsForTopics(context.Background(), consumerGroup, ktc.Topic)
 	if err != nil {
+		if errors.Is(err, kerr.UnknownTopicOrPartition) {
+			return false, nil
+		}
+		if errors.Is(err, kerr.CoordinatorNotAvailable) {
+			return false, nil
+		}
 		return false, fmt.Errorf("unable to fetch group offsets: %w", err)
 	}
 

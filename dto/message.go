@@ -321,6 +321,14 @@ type MessageAuthorizationData struct {
 	ChatCanPublishMessage bool   `db:"chat_can_publish_message"`
 }
 
+type MessageAuthorizationDataBatch struct {
+	UserId              int64 `db:"user_id"`
+	IsParticipant       bool  `db:"is_chat_participant"`
+	IsChatAdmin         bool  `db:"is_chat_admin"`
+	ChatIsTetATet       bool  `db:"chat_is_tet_a_tet"`
+	ChatCanWriteMessage bool  `db:"chat_can_write_message"`
+}
+
 type MessagePinningData struct {
 	IsParticipant     bool `db:"is_chat_participant"`
 	IsChatAdmin       bool `db:"is_chat_admin"`

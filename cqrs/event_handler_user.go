@@ -118,7 +118,7 @@ func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserCha
 
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, logger.AttributeUserId, event.UserId)
 
-	errp := m.commonProjection.OnChatViewRefreshedForPartitionUser(ctx, event.AdditionalData, event.UserId, event.ChatId, event.UnreadMessagesAction, event.LastMessageAction, event.Delta, event.AdditionalData.BehalfUserId, event.ChatAction, event.ActionableMessageId)
+	errp := m.commonProjection.OnChatViewRefreshedForPartitionUser(ctx, event.EventTime, event.UserId, event.ChatId, event.UnreadMessagesAction, event.MessagesDelta, event.ChatAction)
 	if errp != nil {
 		return errp
 	}
@@ -137,7 +137,7 @@ func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserCha
 	}
 
 	for _, cv := range chatViews {
-		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dto.GlobalUserEvent{
 			UserId:           cv.BehalfUserId,
 			EventType:        eventType,
 			ChatNotification: &cv,
@@ -147,7 +147,7 @@ func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserCha
 		}
 
 		if event.UnreadMessagesAction != UnreadMessagesActionUnspecified {
-			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dto.GlobalUserEvent{
 				UserId:    cv.BehalfUserId,
 				EventType: eventTypeUnreadMessagesChanged,
 				HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{

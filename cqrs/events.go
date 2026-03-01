@@ -39,7 +39,7 @@ const (
 type CqrsEvent interface {
 	GetPartitionKey() string
 	GetEventType() string
-	GetEventKind() EventKind
+	GetEventPartitioningBy() EventPartitioningBy
 }
 
 type AdditionalData struct {
@@ -120,7 +120,7 @@ func (p *ParticipantsAdded) GetParticipantIds() []int64 {
 type GetParticipantsType int16
 
 const (
-	GetParticipantsTypeUnspecified = iota
+	GetParticipantsTypeUnspecified GetParticipantsType = iota
 	GetParticipantsTypeNormal
 	GetParticipantsTypeAllInChatExcepting
 	GetParticipantsTypeAllInAllChats // test only
@@ -258,7 +258,7 @@ type MessageEmbedded struct {
 type UnreadMessagesAction int16
 
 const (
-	UnreadMessagesActionUnspecified = iota
+	UnreadMessagesActionUnspecified UnreadMessagesAction = iota
 	UnreadMessagesActionRefresh
 	UnreadMessagesActionIncrease
 	UnreadMessagesActionDecrease
@@ -267,21 +267,21 @@ const (
 type LastMessageAction int16
 
 const (
-	LastMessageActionUnspecified = iota
+	LastMessageActionUnspecified LastMessageAction = iota
 	LastMessageActionRefresh
 )
 
 type ChatAction int16
 
 const (
-	ChatActionUnspecified = iota
+	ChatActionUnspecified ChatAction = iota
 	ChatActionRefresh
 )
 
 type ReadMessagesAction int16
 
 const (
-	ReadMessagesActionUnspecified = iota
+	ReadMessagesActionUnspecified ReadMessagesAction = iota
 	ReadMessagesActionOneMessage
 	ReadMessagesActionAllMessagesInOneChat
 	ReadMessagesActionAllChats
@@ -290,22 +290,27 @@ const (
 type ParticipantsMode int16
 
 const (
-	ParticipantsModeUnspecified = iota
+	ParticipantsModeUnspecified ParticipantsMode = iota
 	ParticipantsModeAllParticipantIdsExcepting
 	ParticipantsModeOnlyParticipantIds
 )
 
+type MessageWithOwner struct {
+	MessageId int64 `json:"messageId"`
+	OwnerId   int64 `json:"ownerId"`
+}
+
 type ChatViewRefreshed struct {
-	AdditionalData             *AdditionalData      `json:"additionalData"`
 	ParticipantsMode           ParticipantsMode     `json:"participantsMode"`
 	AllParticipantIdsExcepting []int64              `json:"allParticipantIdsExcepting"`
 	OnlyParticipantIds         []int64              `json:"onlyParticipantIds"`
 	ChatId                     int64                `json:"chatId"`
 	UnreadMessagesAction       UnreadMessagesAction `json:"unreadMessagesAction"`
+	MessagesDelta              []MessageWithOwner   `json:"messagesDelta"` // for UnreadMessagesActionIncrease or UnreadMessagesActionDecrease
 	LastMessageAction          LastMessageAction    `json:"lastMessageAction"`
-	Delta                      int                  `json:"delta"`
 	ChatAction                 ChatAction           `json:"chatAction"`
-	ActionableMessageId        *int64               `json:"actionableMessageId"`
+	EventTime                  time.Time            `json:"eventTime"`
+	CorrelationId              *string              `json:"correlationId"`
 }
 
 type UserMessageReaded struct {
@@ -368,14 +373,14 @@ type UserChatViewCreated struct {
 }
 
 type UserChatViewUpdated struct {
-	AdditionalData       *AdditionalData      `json:"additionalData"`
 	ChatId               int64                `json:"chatId"`
 	UserId               int64                `json:"userId"`
 	UnreadMessagesAction UnreadMessagesAction `json:"unreadMessagesAction"`
+	MessagesDelta        []MessageWithOwner   `json:"messagesDelta"` // for UnreadMessagesActionIncrease or UnreadMessagesActionDecrease
 	LastMessageAction    LastMessageAction    `json:"lastMessageAction"`
-	Delta                int                  `json:"delta"`
 	ChatAction           ChatAction           `json:"chatAction"`
-	ActionableMessageId  *int64               `json:"actionableMessageId"`
+	EventTime            time.Time            `json:"eventTime"`
+	CorrelationId        *string              `json:"correlationId"`
 }
 
 type UserChatViewRemoved struct {
@@ -394,21 +399,21 @@ func GenerateMessageAdditionalData(correlationId *string, behalfUserId int64) *A
 	}
 }
 
-type EventKind int16
+type EventPartitioningBy int16
 
 const (
-	EventKindUnspecified = iota
-	EventKindChat
-	EventKindUser
+	EventPartitioningByUnspecified EventPartitioningBy = iota
+	EventPartitioningByChatId
+	EventPartitioningByUserId
 )
 
-func (k EventKind) String() string {
+func (k EventPartitioningBy) String() string {
 	switch k {
-	case EventKindUnspecified:
+	case EventPartitioningByUnspecified:
 		return "unspecified"
-	case EventKindChat:
+	case EventPartitioningByChatId:
 		return "chat"
-	case EventKindUser:
+	case EventPartitioningByUserId:
 		return "user"
 	}
 	return "unknown"
@@ -614,102 +619,102 @@ func (s *UserChatViewRemoved) GetEventType() string {
 	return EventUserChatViewRemoved
 }
 
-func (s *ChatCreated) GetEventKind() EventKind {
-	return EventKindChat
+func (s *ChatCreated) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *ChatEdited) GetEventKind() EventKind {
-	return EventKindChat
+func (s *ChatEdited) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *ChatDeleted) GetEventKind() EventKind {
-	return EventKindChat
+func (s *ChatDeleted) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *ParticipantsAdded) GetEventKind() EventKind {
-	return EventKindChat
+func (s *ParticipantsAdded) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *ParticipantDeleted) GetEventKind() EventKind {
-	return EventKindChat
+func (s *ParticipantDeleted) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *ParticipantChanged) GetEventKind() EventKind {
-	return EventKindChat
+func (s *ParticipantChanged) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *ProjectionsTruncated) GetEventKind() EventKind {
-	return EventKindChat
+func (s *ProjectionsTruncated) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *UserChatPinned) GetEventKind() EventKind {
-	return EventKindUser
+func (s *UserChatPinned) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByUserId
 }
 
-func (s *UserChatNotificationSettingsSetted) GetEventKind() EventKind {
-	return EventKindUser
+func (s *UserChatNotificationSettingsSetted) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByUserId
 }
 
-func (s *ChatPinned) GetEventKind() EventKind {
-	return EventKindChat
+func (s *ChatPinned) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *ChatNotificationSettingsSetted) GetEventKind() EventKind {
-	return EventKindChat
+func (s *ChatNotificationSettingsSetted) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *MessageCreated) GetEventKind() EventKind {
-	return EventKindChat
+func (s *MessageCreated) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *MessageEdited) GetEventKind() EventKind {
-	return EventKindChat
+func (s *MessageEdited) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *ChatViewRefreshed) GetEventKind() EventKind {
-	return EventKindChat
+func (s *ChatViewRefreshed) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *UserMessageReaded) GetEventKind() EventKind {
-	return EventKindUser
+func (s *UserMessageReaded) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByUserId
 }
 
-func (s *MessageReaded) GetEventKind() EventKind {
-	return EventKindChat
+func (s *MessageReaded) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *MessageBlogPostMade) GetEventKind() EventKind {
-	return EventKindChat
+func (s *MessageBlogPostMade) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *MessageDeleted) GetEventKind() EventKind {
-	return EventKindChat
+func (s *MessageDeleted) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *MessagePinned) GetEventKind() EventKind {
-	return EventKindChat
+func (s *MessagePinned) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *MessagePublished) GetEventKind() EventKind {
-	return EventKindChat
+func (s *MessagePublished) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *MessageReactionFlipped) GetEventKind() EventKind {
-	return EventKindChat
+func (s *MessageReactionFlipped) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *TechnicalAbandonedChatRemoved) GetEventKind() EventKind {
-	return EventKindChat
+func (s *TechnicalAbandonedChatRemoved) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
 }
 
-func (s *UserChatViewCreated) GetEventKind() EventKind {
-	return EventKindUser
+func (s *UserChatViewCreated) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByUserId
 }
 
-func (s *UserChatViewUpdated) GetEventKind() EventKind {
-	return EventKindUser
+func (s *UserChatViewUpdated) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByUserId
 }
 
-func (s *UserChatViewRemoved) GetEventKind() EventKind {
-	return EventKindUser
+func (s *UserChatViewRemoved) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByUserId
 }

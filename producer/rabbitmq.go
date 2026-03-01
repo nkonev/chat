@@ -83,13 +83,17 @@ func NewRabbitOutputEventsPublisher(lgr *logger.LoggerWrapper, connection *rabbi
 	if err != nil {
 		return nil, err
 	}
-	return &RabbitOutputEventsPublisher{
+	p := &RabbitOutputEventsPublisher{
 		channel:      cha,
 		lgr:          lgr,
 		typeRegistry: typeRegistry,
 		enabled:      false, // events are disabled during fast-forwarding
 		cfg:          cfg,
-	}, nil
+	}
+
+	p.enabled = !cfg.RabbitMQ.SkipPublishOutputEventsOnRewind
+
+	return p, nil
 }
 
 func EnableOutputEvents(p *RabbitOutputEventsPublisher) {
@@ -215,6 +219,10 @@ func NewRabbitTestInputEventsPublisher(lgr *logger.LoggerWrapper, connection *ra
 }
 
 func (rp *RabbitNotificationEventsPublisher) Publish(ctx context.Context, correlationId *string, aDto interface{}) error {
+	if !rp.enabled {
+		return nil
+	}
+
 	headers := myRabbitmq.InjectAMQPHeaders(ctx)
 	if correlationId != nil {
 		headers[correlationIdName] = *correlationId
@@ -264,6 +272,7 @@ type RabbitNotificationEventsPublisher struct {
 	channel      *rabbitmq.Channel
 	lgr          *logger.LoggerWrapper
 	typeRegistry *type_registry.TypeRegistryInstance
+	enabled      bool
 	cfg          *config.AppConfig
 }
 
@@ -272,10 +281,18 @@ func NewRabbitNotificationEventsPublisher(lgr *logger.LoggerWrapper, connection 
 	if err != nil {
 		return nil, err
 	}
-	return &RabbitNotificationEventsPublisher{
+	p := &RabbitNotificationEventsPublisher{
 		channel:      cha,
 		lgr:          lgr,
 		typeRegistry: typeRegistry,
 		cfg:          cfg,
-	}, nil
+	}
+
+	p.enabled = !cfg.RabbitMQ.SkipPublishNotificationEventsOnRewind
+
+	return p, nil
+}
+
+func EnableNotificationEvents(p *RabbitNotificationEventsPublisher) {
+	p.enabled = true
 }

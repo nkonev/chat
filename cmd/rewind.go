@@ -76,6 +76,7 @@ Then exits.
 			cqrs.NewEventHandler,
 			type_registry.NewTypeRegistryInstance,
 			cqrs.NewKafkaListener,
+			cqrs.NewBatchOptimizer,
 		),
 		fx.Invoke(
 			db.RunMigrations,
