@@ -398,7 +398,9 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(
 				if err != nil {
 					return err
 				}
-			} else if myDelta > 0 {
+			}
+
+			if myDelta > 0 {
 				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, participantId, chatId, myDelta)
 				if err != nil {
 					return err
