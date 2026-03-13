@@ -333,28 +333,6 @@ func (m *CommonProjection) OnChatNotificationSettingsSetted(ctx context.Context,
 	return errOuter
 }
 
-func (m *CommonProjection) OnChatViewRefreshedLastMessageActionRefreshForPartitionChat(ctx context.Context, chatId int64, lastMessageAction LastMessageAction) error {
-	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
-
-		// it's not forgotten else, it's the different action
-		if lastMessageAction == LastMessageActionRefresh {
-			err := m.setLastMessage(ctx, tx, chatId)
-			if err != nil {
-				return err
-			}
-		} else {
-			m.lgr.ErrorContext(ctx, fmt.Sprintf("Wrong lastMessageAction = %v", lastMessageAction))
-		}
-
-		return nil
-	})
-
-	if errOuter != nil {
-		return errOuter
-	}
-	return nil
-}
-
 // called in cases when chat should lift because of changing update_date_time
 // in other cases (for example, read all the messages in the chat), when no need to update th timestamp - we should use another method
 func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(
@@ -362,9 +340,6 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(
 	updatedAt time.Time,
 	participantId int64, // current participant
 	chatId int64,
-	unreadMessagesAction UnreadMessagesAction,
-	messagesDelta []MessageWithOwner, // len() == N => means N messages were inserted on removed
-	chatAction ChatAction,
 ) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// in order not to have a potential race condition
@@ -372,74 +347,15 @@ func (m *CommonProjection) OnChatViewRefreshedForPartitionUser(
 		// we shouldn't upsert into chat_user_view
 		// we can only update it here
 
-		wasUpdated := false
-		if unreadMessagesAction == UnreadMessagesActionIncrease { // ~ MessageCreated
-			var myHighestMessageId int64
-			var myDelta int
-
-			for _, msg := range messagesDelta {
-				if msg.OwnerId == participantId {
-					if msg.MessageId > myHighestMessageId {
-						myHighestMessageId = msg.MessageId
-					}
-				}
-			}
-
-			for _, msg := range messagesDelta {
-				if msg.OwnerId != participantId {
-					if msg.MessageId > myHighestMessageId {
-						myDelta += 1
-					}
-				}
-			}
-
-			if myHighestMessageId > 0 {
-				err := m.setUnreadMessages(ctx, tx, participantId, chatId, myHighestMessageId, SetUnreadedMessagesActionCalculateUnreadsFromTheProvidedMessage) // includes updateHasUnreads()
-				if err != nil {
-					return err
-				}
-			}
-
-			if myDelta > 0 {
-				err := m.increaseUnreadsAndSetHasUnreads(ctx, tx, participantId, chatId, myDelta)
-				if err != nil {
-					return err
-				}
-			}
-
-			wasUpdated = true
-		} else if unreadMessagesAction == UnreadMessagesActionDecrease { // ~ MessageDeleted
-
-			err := m.setUnreadMessages(ctx, tx, participantId, chatId, dto.NoId, SetUnreadedMessagesActionCalculateUnreadsFromTheUsersLastSavedReadedMessage)
-			if err != nil {
-				return err
-			}
-
-			wasUpdated = true
-		} else if unreadMessagesAction == UnreadMessagesActionRefresh {
-
-			err := m.setUnreadMessages(ctx, tx, participantId, chatId, dto.NoId, SetUnreadedMessagesActionCalculateUnreadsFromTheUsersLastSavedReadedMessage)
-			if err != nil {
-				return err
-			}
-
-			wasUpdated = true
-		}
-
-		if chatAction == ChatActionRefresh {
-			// for the cases like renaming chat, ...
-			// the db was updated earlier, here we need to update chat_user_view.update_date_time
-			wasUpdated = true
-		}
+		// for the cases like renaming chat, ...
+		// the db was updated earlier, here we need to update chat_user_view.update_date_time
 
 		// to eliminate unnecessary chat_user_view writes in participant changed
-		if wasUpdated {
-			_, err := tx.ExecContext(ctx, `
+		_, err := tx.ExecContext(ctx, `
 				update chat_user_view set update_date_time = $3 where user_id = $1 and id = $2
 			`, participantId, chatId, updatedAt)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
 		}
 
 		return nil

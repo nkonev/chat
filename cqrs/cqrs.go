@@ -188,9 +188,6 @@ func ListenChatTopic(
 		EventChatNotificationSettingsSetted: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
 			return prepareEvent[*ChatNotificationSettingsSetted](p.lgr, p.cfg, metadata, record, p.tracer)
 		},
-		EventChatViewRefreshed: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
-			return prepareEvent[*ChatViewRefreshed](p.lgr, p.cfg, metadata, record, p.tracer)
-		},
 		EventParticipantsAdded: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
 			return prepareEvent[*ParticipantsAdded](p.lgr, p.cfg, metadata, record, p.tracer)
 		},
@@ -250,9 +247,6 @@ func ListenChatTopic(
 		// this event need to be in event-chat topic, because only this topic is backupable
 		EventChatNotificationSettingsSetted: func(b BatchEvent) (context.Context, error) {
 			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnChatNotificationSettingsSetted))
-		},
-		EventChatViewRefreshed: func(b BatchEvent) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnChatViewRefreshed))
 		},
 		EventParticipantsAdded: func(b BatchEvent) (context.Context, error) {
 			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnParticipantAdded))
@@ -332,14 +326,20 @@ func ListenUserTopic(
 		// which would be due to mutating userId-partitioned chat_user_view and has_unread_messages tables from the chatId-partitioned event-chat topic
 		// see also https://docs.citusdata.com/en/v13.0/reference/common_errors.html#canceling-the-transaction-since-it-was-involved-in-a-distributed-deadlock
 		// https://www.cybertec-postgresql.com/en/postgresql-understanding-deadlocks/
-		EventUserChatViewCreated: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
-			return prepareEvent[*UserChatViewCreated](p.lgr, p.cfg, metadata, record, p.tracer)
+		EventUserChatParticipantAdded: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserChatParticipantAdded](p.lgr, p.cfg, metadata, record, p.tracer)
 		},
-		EventUserChatViewUpdated: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
-			return prepareEvent[*UserChatViewUpdated](p.lgr, p.cfg, metadata, record, p.tracer)
+		EventUserChatEdited: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserChatEdited](p.lgr, p.cfg, metadata, record, p.tracer)
 		},
-		EventUserChatViewRemoved: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
-			return prepareEvent[*UserChatViewRemoved](p.lgr, p.cfg, metadata, record, p.tracer)
+		EventUserChatParticipantRemoved: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserChatParticipantRemoved](p.lgr, p.cfg, metadata, record, p.tracer)
+		},
+		EventUserMessagesCreated: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserMessagesCreatedEvent](p.lgr, p.cfg, metadata, record, p.tracer)
+		},
+		EventUserMessageDeleted: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*UserMessageDeletedEvent](p.lgr, p.cfg, metadata, record, p.tracer)
 		},
 	}
 
@@ -357,14 +357,20 @@ func ListenUserTopic(
 		// which would be due to mutating userId-partitioned chat_user_view and has_unread_messages tables from the chatId-partitioned event-chat topic
 		// see also https://docs.citusdata.com/en/v13.0/reference/common_errors.html#canceling-the-transaction-since-it-was-involved-in-a-distributed-deadlock
 		// https://www.cybertec-postgresql.com/en/postgresql-understanding-deadlocks/
-		EventUserChatViewCreated: func(b BatchEvent) (context.Context, error) {
+		EventUserChatParticipantAdded: func(b BatchEvent) (context.Context, error) {
 			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserChatViewCreated))
 		},
-		EventUserChatViewUpdated: func(b BatchEvent) (context.Context, error) {
+		EventUserChatEdited: func(b BatchEvent) (context.Context, error) {
 			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserChatViewUpdated))
 		},
-		EventUserChatViewRemoved: func(b BatchEvent) (context.Context, error) {
+		EventUserChatParticipantRemoved: func(b BatchEvent) (context.Context, error) {
 			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserChatViewRemoved))
+		},
+		EventUserMessagesCreated: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserMessagesCreated))
+		},
+		EventUserMessageDeleted: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnUserMessagesDeleted))
 		},
 	}
 

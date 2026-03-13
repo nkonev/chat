@@ -10,6 +10,7 @@ import (
 	"go-cqrs-chat-example/logger"
 	"go-cqrs-chat-example/sanitizer"
 	"go-cqrs-chat-example/utils"
+	"time"
 
 	"github.com/georgysavva/scany/v2/sqlscan"
 )
@@ -65,7 +66,7 @@ func (m *CommonProjection) OnParticipantAdded(ctx context.Context, event *Partic
 	return res, nil
 }
 
-func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userId int64, chatId int64, additionalData *AdditionalData) error {
+func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userId int64, chatId int64, eventTime time.Time) error {
 	return db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		// no problems here because
 		// a) we've already added participants in the previous step
@@ -88,7 +89,7 @@ func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userId int
 		on conflict(user_id, id) do update set
 			pinned = excluded.pinned
 			, update_date_time = excluded.update_date_time 
-		`, userId, chatId, additionalData.CreatedAt)
+		`, userId, chatId, eventTime)
 		if err != nil {
 			return err
 		}
@@ -102,7 +103,7 @@ func (m *CommonProjection) OnUserChatViewCreated(ctx context.Context, userId int
 	})
 }
 
-func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participantIds []int64, chatId int64, isRemoveAllParticipantsFromChat, wereRemovedUsersFromAaa bool) error {
+func (m *CommonProjection) OnParticipantRemoved(ctx context.Context, participantIds []int64, chatId int64, isRemoveAllParticipantsFromChat bool) error {
 	errOuter := db.Transact(ctx, m.db, func(tx *db.Tx) error {
 		chatExists, err := m.checkChatExists(ctx, tx, chatId)
 		if err != nil {

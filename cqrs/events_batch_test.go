@@ -7,7 +7,6 @@ import (
 	"go-cqrs-chat-example/logger"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,23 +37,8 @@ func TestBasic(t *testing.T) {
 			ctx:   context.Background(),
 		},
 		{
-			event: NewChatViewRefreshedIncrease(chatId, []MessageWithOwner{{
-				MessageId: messageId1,
-				OwnerId:   userId1,
-			}}, time.Now(), nil),
-			ctx: context.Background(),
-		},
-
-		{
 			event: messageCreated2,
 			ctx:   context.Background(),
-		},
-		{
-			event: NewChatViewRefreshedIncrease(chatId, []MessageWithOwner{{
-				MessageId: messageId2,
-				OwnerId:   userId2,
-			}}, time.Now(), nil),
-			ctx: context.Background(),
 		},
 	}
 
@@ -68,14 +52,6 @@ func TestBasic(t *testing.T) {
 	require.Equal(t, 2, len(messageCreateBatch.MessageCreateds))
 	require.Equal(t, *messageCreated1, messageCreateBatch.MessageCreateds[0])
 	require.Equal(t, *messageCreated2, messageCreateBatch.MessageCreateds[1])
-
-	assert.NotNil(t, messageCreateBatch.ChatViewRefreshed)
-	require.Equal(t, ParticipantsModeAllParticipantIdsExcepting, messageCreateBatch.ChatViewRefreshed.ParticipantsMode)
-	require.Equal(t, 0, len(messageCreateBatch.ChatViewRefreshed.AllParticipantIdsExcepting))
-	require.Equal(t, chatId, messageCreateBatch.ChatViewRefreshed.ChatId)
-	require.Equal(t, UnreadMessagesActionIncrease, messageCreateBatch.ChatViewRefreshed.UnreadMessagesAction)
-	require.Equal(t, 2, len(messageCreateBatch.ChatViewRefreshed.MessagesDelta))
-	require.Equal(t, LastMessageActionRefresh, messageCreateBatch.ChatViewRefreshed.LastMessageAction)
 }
 
 func mockMessageCreated(

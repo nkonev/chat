@@ -21,7 +21,7 @@ import (
 	"github.com/georgysavva/scany/v2/sqlscan"
 )
 
-func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId int64, createdTime time.Time, blogAboutP *bool) (*int64, error) {
+func (m *CommonProjection) refreshBlog(ctx context.Context, co db.CommonOperations, chatId int64, createdTime time.Time, blogAboutP *bool) (*int64, error) {
 	var blogInpData = struct {
 		ChatId      int64   `db:"chat_id"`
 		MessageId   *int64  `db:"message_id"`
@@ -30,7 +30,7 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 		BlogAbout   bool    `db:"blog_about"`
 	}{}
 
-	err := sqlscan.Get(ctx, tx, &blogInpData, `
+	err := sqlscan.Get(ctx, co, &blogInpData, `
 	with blog_message as (
 		select m.* from message m where m.chat_id = $1 and m.blog_post = true order by create_date_time desc limit 1
 	)
@@ -56,7 +56,7 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 		blogAboutVar = *blogAboutP
 
 		if blogAboutVar {
-			err = sqlscan.Get(ctx, tx, &previousBlogAbout, "select id from blog where blog_about limit 1")
+			err = sqlscan.Get(ctx, co, &previousBlogAbout, "select id from blog where blog_about limit 1")
 			if errors.Is(err, sql.ErrNoRows) {
 				// ok
 			} else if err != nil {
@@ -64,7 +64,7 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 			}
 
 			if previousBlogAbout != nil {
-				_, err = tx.ExecContext(ctx, "update blog set blog_about = false where blog_about = true")
+				_, err = co.ExecContext(ctx, "update blog set blog_about = false where blog_about = true")
 				if err != nil {
 					return nil, err
 				}
@@ -74,7 +74,7 @@ func (m *CommonProjection) refreshBlog(ctx context.Context, tx *db.Tx, chatId in
 
 	imageUrl := getBlogPostImage(ctx, m.lgr, blogInpData.MessageText, blogInpData.ChatAvatar, blogInpData.ChatId, blogInpData.MessageId)
 
-	_, errInner := tx.ExecContext(ctx, `
+	_, errInner := co.ExecContext(ctx, `
 				with blog_message as (
 					select m.* from message m where m.chat_id = $1 and m.blog_post = true limit 1
 				),

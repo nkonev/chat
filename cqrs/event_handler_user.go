@@ -10,12 +10,12 @@ import (
 	"slices"
 )
 
-func (m *EventHandler) OnUserChatViewCreated(ctx context.Context, event *UserChatViewCreated) error {
+func (m *EventHandler) OnUserChatViewCreated(ctx context.Context, event *UserChatParticipantAdded) error {
 	eventTypeParticipantAdded := dto.EventTypeParticipantAdded
 
 	userIds := []int64{event.UserId}
 
-	err := m.commonProjection.OnUserChatViewCreated(ctx, event.UserId, event.ChatId, event.AdditionalData)
+	err := m.commonProjection.OnUserChatViewCreated(ctx, event.UserId, event.ChatId, event.EventTime)
 	if err != nil {
 		return err
 	}
@@ -43,12 +43,12 @@ func (m *EventHandler) OnUserChatViewCreated(ctx context.Context, event *UserCha
 			EventType:        eventTypeChatCreated,
 			ChatNotification: &cv,
 		}
-		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dt)
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dt)
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 		}
 
-		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dto.GlobalUserEvent{
 			UserId:    cv.BehalfUserId,
 			EventType: eventTypeUnreadMessagesChanged,
 			HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
@@ -60,7 +60,7 @@ func (m *EventHandler) OnUserChatViewCreated(ctx context.Context, event *UserCha
 		}
 
 		if event.TetATet {
-			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dto.GlobalUserEvent{
 				UserId:    cv.BehalfUserId,
 				EventType: dto.EventTypeChatTetATetUpserted,
 				ChatTetATetUpsertedDto: &dto.ChatTetATetUpsertedDto{
@@ -88,7 +88,7 @@ func (m *EventHandler) OnUserChatViewCreated(ctx context.Context, event *UserCha
 		// for every participant of chat we send an info about the newly added participants
 		for _, behalfUserId := range sortedParticipants {
 			hisParticipantsViews := participantsByBehalfs[behalfUserId]
-			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+			errInn = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dto.ChatEvent{
 				EventType:    eventTypeParticipantAdded,
 				UserId:       behalfUserId,
 				ChatId:       event.ChatId,
@@ -107,9 +107,8 @@ func (m *EventHandler) OnUserChatViewCreated(ctx context.Context, event *UserCha
 	return nil
 }
 
-func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserChatViewUpdated) error {
+func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserChatEdited) error {
 	eventType := dto.EventTypeChatEdited
-	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
 
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("chat.%s", eventType))
 	defer messageSpan.End()
@@ -118,22 +117,18 @@ func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserCha
 
 	m.lgr.DebugContext(ctx, "Sending notification about the chat to participants", "event_type", eventType, logger.AttributeUserId, event.UserId)
 
-	errp := m.commonProjection.OnChatViewRefreshedForPartitionUser(ctx, event.EventTime, event.UserId, event.ChatId, event.UnreadMessagesAction, event.MessagesDelta, event.ChatAction)
-	if errp != nil {
-		return errp
+	if event.ChatAction == ChatActionRefresh {
+		errp := m.commonProjection.OnChatViewRefreshedForPartitionUser(ctx, event.EventTime, event.UserId, event.ChatId)
+		if errp != nil {
+			return errp
+		}
+	} else if event.ChatAction == ChatActionRedraw {
+		eventType = dto.EventTypeChatRedraw
 	}
 
 	chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId, false)
 	if err != nil {
 		return err
-	}
-
-	var hasUnreadMessages = map[int64]bool{}
-	if event.UnreadMessagesAction != UnreadMessagesActionUnspecified {
-		hasUnreadMessages, err = m.commonProjection.GetHasUnreadMessages(ctx, userIds)
-		if err != nil {
-			return err
-		}
 	}
 
 	for _, cv := range chatViews {
@@ -145,25 +140,12 @@ func (m *EventHandler) OnUserChatViewUpdated(ctx context.Context, event *UserCha
 		if err != nil {
 			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
 		}
-
-		if event.UnreadMessagesAction != UnreadMessagesActionUnspecified {
-			err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dto.GlobalUserEvent{
-				UserId:    cv.BehalfUserId,
-				EventType: eventTypeUnreadMessagesChanged,
-				HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
-					HasUnreadMessages: hasUnreadMessages[cv.BehalfUserId],
-				},
-			})
-			if err != nil {
-				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
-			}
-		}
 	}
 	return nil
 
 }
 
-func (m *EventHandler) OnUserChatViewRemoved(ctx context.Context, event *UserChatViewRemoved) error {
+func (m *EventHandler) OnUserChatViewRemoved(ctx context.Context, event *UserChatParticipantRemoved) error {
 	eventType := dto.EventTypeChatDeleted
 	eventTypeUnreadMessagesChanged := dto.EventTypeHasUnreadMessagesChanged
 
@@ -178,8 +160,8 @@ func (m *EventHandler) OnUserChatViewRemoved(ctx context.Context, event *UserCha
 		return err
 	}
 
-	if !event.IsChatPubliclyAvailable {
-		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+	if !event.IsChatPubliclyAvailable || event.IsChatRemoving {
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dto.GlobalUserEvent{
 			UserId:         event.UserId,
 			EventType:      eventType,
 			ChatDeletedDto: &dto.ChatDeletedDto{Id: event.ChatId},
@@ -189,7 +171,7 @@ func (m *EventHandler) OnUserChatViewRemoved(ctx context.Context, event *UserCha
 		}
 	}
 
-	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dto.GlobalUserEvent{
 		UserId:    event.UserId,
 		EventType: eventTypeUnreadMessagesChanged,
 		HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
@@ -301,6 +283,25 @@ func (m *EventHandler) OnUserChatPinned(ctx context.Context, event *UserChatPinn
 		return err
 	}
 
+	userIds := []int64{event.AdditionalData.BehalfUserId}
+
+	chatViews, _, err := m.enrichingProjection.GetChatsEnriched(ctx, userIds, int32(len(userIds)), nil, true, false, dto.NoSearchString, &event.ChatId, false)
+	if err != nil {
+		return err
+	}
+
+	for _, cv := range chatViews {
+		dt := dto.GlobalUserEvent{
+			UserId:           cv.BehalfUserId,
+			EventType:        dto.EventTypeChatEdited,
+			ChatNotification: &cv,
+		}
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dt)
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
+		}
+	}
+
 	return nil
 }
 
@@ -342,4 +343,100 @@ func (m *EventHandler) OnUserChatNotificationSettingsSetted(ctx context.Context,
 	}
 
 	return nil
+}
+
+func (m *EventHandler) OnUserMessagesCreated(ctx context.Context, event *UserMessagesCreatedEvent) error {
+	eventTypeChatUnreadMessagesChanged := dto.EventTypeChatUnreadMessagesChanged
+
+	if len(event.MessageCreateds) == 0 {
+		m.lgr.InfoContext(ctx, "Zero MessageCreateds", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.UserId)
+		return nil
+	}
+
+	err := m.commonProjection.OnUserMessagesCreated(ctx, m.db, event)
+	if err != nil {
+		return err
+	}
+
+	cvb, err := m.commonProjection.GetChatUserViewBasic(ctx, m.db, event.ChatId, event.UserId)
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during getting chat UserViewBasic", logger.AttributeError, err)
+	} else {
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.MessageCreateds[0].AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+			UserId:    event.UserId,
+			EventType: eventTypeChatUnreadMessagesChanged,
+			UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
+				ChatId:             cvb.ChatId,
+				UnreadMessages:     cvb.UnreadMessages,
+				LastUpdateDateTime: cvb.UpdateDateTime,
+			},
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
+		}
+	}
+
+	hasUnreadMessages, err := m.commonProjection.GetHasUnreadMessages(ctx, []int64{event.UserId})
+	if err != nil {
+		return err
+	}
+
+	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.MessageCreateds[0].AdditionalData.GetCorrelationId(), dto.GlobalUserEvent{
+		UserId:    event.UserId,
+		EventType: dto.EventTypeHasUnreadMessagesChanged,
+		HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+			HasUnreadMessages: hasUnreadMessages[event.UserId],
+		},
+	})
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
+	}
+
+	return nil
+}
+
+func (m *EventHandler) OnUserMessagesDeleted(ctx context.Context, event *UserMessageDeletedEvent) error {
+	eventTypeChatUnreadMessagesChanged := dto.EventTypeChatUnreadMessagesChanged
+
+	err := m.commonProjection.OnUserMessageDeleted(ctx, m.db, event)
+	if err != nil {
+		return err
+	}
+
+	cvb, err := m.commonProjection.GetChatUserViewBasic(ctx, m.db, event.ChatId, event.UserId)
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during getting chat UserViewBasic", logger.AttributeError, err)
+	} else {
+		err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dto.GlobalUserEvent{
+			UserId:    event.UserId,
+			EventType: eventTypeChatUnreadMessagesChanged,
+			UnreadMessagesNotification: &dto.ChatUnreadMessageChanged{
+				ChatId:             cvb.ChatId,
+				UnreadMessages:     cvb.UnreadMessages,
+				LastUpdateDateTime: cvb.UpdateDateTime,
+			},
+		})
+		if err != nil {
+			m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
+		}
+	}
+
+	hasUnreadMessages, err := m.commonProjection.GetHasUnreadMessages(ctx, []int64{event.UserId})
+	if err != nil {
+		return err
+	}
+
+	err = m.rabbitmqOutputEventPublisher.Publish(ctx, event.CorrelationId, dto.GlobalUserEvent{
+		UserId:    event.UserId,
+		EventType: dto.EventTypeHasUnreadMessagesChanged,
+		HasUnreadMessagesChanged: &dto.HasUnreadMessagesChanged{
+			HasUnreadMessages: hasUnreadMessages[event.UserId],
+		},
+	})
+	if err != nil {
+		m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, err)
+	}
+
+	return nil
+
 }

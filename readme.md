@@ -74,7 +74,7 @@ curl -i -X DELETE  -H 'X-Auth-Userid: 1' --url 'http://localhost:1235/api/chat/1
 curl -Ss -X GET -H 'X-Auth-Userid: 2' --url 'http://localhost:1235/api/chat/has-new-messages' | jq
 
 # read
-curl -i -X PUT -H 'X-Auth-Userid: 2' --url 'http://localhost:1235/api/chat/1/message/500/read'
+curl -i -X PUT -H 'X-Auth-Userid: 2' --url 'http://localhost:1235/api/chat/1/message/read/500'
 
 # ... or set to consider (contribute)
 curl -i -X PUT -H 'Content-Type: application/json' -H 'X-Auth-Userid: 2' --url 'http://localhost:1235/api/chat/2/notification' -d '{"considerMessagesOfThisChatAsUnread": false}'
