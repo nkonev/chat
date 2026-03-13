@@ -24,7 +24,6 @@ const (
 	EventChatNotificationSettingsSetted     = "chatNotificationSettingsSetted"
 	EventMessageCreated                     = "messageCreated"
 	EventMessageEdited                      = "messageEdited"
-	EventChatViewRefreshed                  = "chatViewRefreshed"
 	EventUserMessageReaded                  = "userMessageReaded"
 	EventMessageReaded                      = "messageReaded"
 	EventMessageBlogPostMade                = "messageBlogPostMade"
@@ -33,9 +32,11 @@ const (
 	EventMessagePublished                   = "messagePublished"
 	EventMessageReactionFlipped             = "messageReactionFlipped"
 	EventTechnicalAbandonedChatRemoved      = "technicalAbandonedChatRemoved"
-	EventUserChatViewCreated                = "userChatViewCreated"
-	EventUserChatViewUpdated                = "userChatViewUpdated"
-	EventUserChatViewRemoved                = "userChatViewRemoved"
+	EventUserChatParticipantAdded           = "userChatParticipantAdded"
+	EventUserChatEdited                     = "userChatEdited"
+	EventUserChatParticipantRemoved         = "userChatParticipantRemoved"
+	EventUserMessagesCreated                = "userMessagesCreated"
+	EventUserMessageDeleted                 = "userMessageDeleted"
 )
 
 type CqrsEvent interface {
@@ -271,10 +272,37 @@ func (f *MessageCommoned) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*res)(f))
 }
 
+type MessageOwner struct {
+	MessageId int64
+	OwnerId   int64
+	Time      time.Time
+}
+
 type MessageCreated struct {
 	MessageCommoned MessageCommoned `json:"messageCommoned"`
 	AdditionalData  *AdditionalData `json:"additionalData"`
 	Metadata        *Metadata       `json:"-"`
+}
+
+type UserMessageCreated struct {
+	Id             int64           `json:"id"` // message id
+	ChatId         int64           `json:"chatId"`
+	AdditionalData *AdditionalData `json:"additionalData"`
+}
+
+type UserMessagesCreatedEvent struct {
+	ChatId          int64                `json:"chatId"`
+	UserId          int64                `json:"userId"`
+	MessageCreateds []UserMessageCreated `json:"messageCreated"`
+	Metadata        *Metadata            `json:"-"`
+}
+
+type UserMessageDeletedEvent struct {
+	ChatId        int64     `json:"chatId"`
+	UserId        int64     `json:"userId"`
+	MessageId     int64     `json:"messageId"`
+	CorrelationId *string   `json:"correlationId"`
+	Metadata      *Metadata `json:"-"`
 }
 
 type MessageEdited struct {
@@ -290,27 +318,12 @@ type MessageEmbedded struct {
 	EmbedType string `json:"embedType"`
 }
 
-type UnreadMessagesAction int16
-
-const (
-	UnreadMessagesActionUnspecified UnreadMessagesAction = iota
-	UnreadMessagesActionRefresh
-	UnreadMessagesActionIncrease
-	UnreadMessagesActionDecrease
-)
-
-type LastMessageAction int16
-
-const (
-	LastMessageActionUnspecified LastMessageAction = iota
-	LastMessageActionRefresh
-)
-
 type ChatAction int16
 
 const (
 	ChatActionUnspecified ChatAction = iota
 	ChatActionRefresh
+	ChatActionRedraw
 )
 
 type ReadMessagesAction int16
@@ -329,25 +342,6 @@ const (
 	ParticipantsModeAllParticipantIdsExcepting
 	ParticipantsModeOnlyParticipantIds
 )
-
-type MessageWithOwner struct {
-	MessageId int64 `json:"messageId"`
-	OwnerId   int64 `json:"ownerId"`
-}
-
-type ChatViewRefreshed struct {
-	ParticipantsMode           ParticipantsMode     `json:"participantsMode"`
-	AllParticipantIdsExcepting []int64              `json:"allParticipantIdsExcepting"`
-	OnlyParticipantIds         []int64              `json:"onlyParticipantIds"`
-	ChatId                     int64                `json:"chatId"`
-	UnreadMessagesAction       UnreadMessagesAction `json:"unreadMessagesAction"`
-	MessagesDelta              []MessageWithOwner   `json:"messagesDelta"` // for UnreadMessagesActionIncrease or UnreadMessagesActionDecrease
-	LastMessageAction          LastMessageAction    `json:"lastMessageAction"`
-	ChatAction                 ChatAction           `json:"chatAction"`
-	EventTime                  time.Time            `json:"eventTime"`
-	CorrelationId              *string              `json:"correlationId"`
-	Metadata                   *Metadata            `json:"-"`
-}
 
 type UserMessageReaded struct {
 	AdditionalData     *AdditionalData    `json:"additionalData"`
@@ -409,33 +403,33 @@ type TechnicalAbandonedChatRemoved struct {
 	Metadata *Metadata `json:"-"`
 }
 
-type UserChatViewCreated struct {
-	AdditionalData *AdditionalData `json:"additionalData"`
-	Metadata       *Metadata       `json:"-"`
-	ChatId         int64           `json:"chatId"`
-	UserId         int64           `json:"userId"`
-	TetATet        bool            `json:"tetATet"`
+type UserChatParticipantAdded struct {
+	EventTime     time.Time `json:"eventTime"`
+	CorrelationId *string   `json:"correlationId"`
+	Metadata      *Metadata `json:"-"`
+	ChatId        int64     `json:"chatId"`
+	UserId        int64     `json:"userId"`
+	TetATet       bool      `json:"tetATet"`
 }
 
-type UserChatViewUpdated struct {
-	ChatId               int64                `json:"chatId"`
-	UserId               int64                `json:"userId"`
-	UnreadMessagesAction UnreadMessagesAction `json:"unreadMessagesAction"`
-	MessagesDelta        []MessageWithOwner   `json:"messagesDelta"` // for UnreadMessagesActionIncrease or UnreadMessagesActionDecrease
-	LastMessageAction    LastMessageAction    `json:"lastMessageAction"`
-	ChatAction           ChatAction           `json:"chatAction"`
-	EventTime            time.Time            `json:"eventTime"`
-	CorrelationId        *string              `json:"correlationId"`
-	Metadata             *Metadata            `json:"-"`
+type UserChatEdited struct {
+	ChatId        int64      `json:"chatId"`
+	UserId        int64      `json:"userId"`
+	ChatAction    ChatAction `json:"chatAction"`
+	EventTime     time.Time  `json:"eventTime"`
+	CorrelationId *string    `json:"correlationId"`
+	Metadata      *Metadata  `json:"-"`
 }
 
-type UserChatViewRemoved struct {
-	AdditionalData          *AdditionalData `json:"additionalData"`
-	Metadata                *Metadata       `json:"-"`
-	ChatId                  int64           `json:"chatId"`
-	UserId                  int64           `json:"userId"`
-	WereRemovedUsersFromAaa bool            `json:"wereRemovedUsersFromAaa"`
-	IsChatPubliclyAvailable bool            `json:"isChatPubliclyAvailable"`
+type UserChatParticipantRemoved struct {
+	EventTime               time.Time `json:"eventTime"`
+	CorrelationId           *string   `json:"correlationId"`
+	Metadata                *Metadata `json:"-"`
+	ChatId                  int64     `json:"chatId"`
+	UserId                  int64     `json:"userId"`
+	WereRemovedUsersFromAaa bool      `json:"wereRemovedUsersFromAaa"`
+	IsChatPubliclyAvailable bool      `json:"isChatPubliclyAvailable"`
+	IsChatRemoving          bool      `json:"isChatRemoving"`
 }
 
 func GenerateMessageAdditionalData(correlationId *string, behalfUserId int64) *AdditionalData {
@@ -514,12 +508,16 @@ func (s *MessageCreated) GetPartitionKey() string {
 	return utils.ToString(s.MessageCommoned.ChatId)
 }
 
-func (s *MessageEdited) GetPartitionKey() string {
-	return utils.ToString(s.MessageCommoned.ChatId)
+func (s *UserMessagesCreatedEvent) GetPartitionKey() string {
+	return utils.ToString(s.UserId)
 }
 
-func (s *ChatViewRefreshed) GetPartitionKey() string {
-	return utils.ToString(s.ChatId)
+func (s *UserMessageDeletedEvent) GetPartitionKey() string {
+	return utils.ToString(s.UserId)
+}
+
+func (s *MessageEdited) GetPartitionKey() string {
+	return utils.ToString(s.MessageCommoned.ChatId)
 }
 
 func (s *UserMessageReaded) GetPartitionKey() string {
@@ -554,15 +552,15 @@ func (s *TechnicalAbandonedChatRemoved) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
-func (s *UserChatViewCreated) GetPartitionKey() string {
+func (s *UserChatParticipantAdded) GetPartitionKey() string {
 	return utils.ToString(s.UserId)
 }
 
-func (s *UserChatViewUpdated) GetPartitionKey() string {
+func (s *UserChatEdited) GetPartitionKey() string {
 	return utils.ToString(s.UserId)
 }
 
-func (s *UserChatViewRemoved) GetPartitionKey() string {
+func (s *UserChatParticipantRemoved) GetPartitionKey() string {
 	return utils.ToString(s.UserId)
 }
 
@@ -614,12 +612,16 @@ func (s *MessageCreated) GetEventType() string {
 	return EventMessageCreated
 }
 
-func (s *MessageEdited) GetEventType() string {
-	return EventMessageEdited
+func (s *UserMessagesCreatedEvent) GetEventType() string {
+	return EventUserMessagesCreated
 }
 
-func (s *ChatViewRefreshed) GetEventType() string {
-	return EventChatViewRefreshed
+func (s *UserMessageDeletedEvent) GetEventType() string {
+	return EventUserMessageDeleted
+}
+
+func (s *MessageEdited) GetEventType() string {
+	return EventMessageEdited
 }
 
 func (s *UserMessageReaded) GetEventType() string {
@@ -654,16 +656,16 @@ func (s *TechnicalAbandonedChatRemoved) GetEventType() string {
 	return EventTechnicalAbandonedChatRemoved
 }
 
-func (s *UserChatViewCreated) GetEventType() string {
-	return EventUserChatViewCreated
+func (s *UserChatParticipantAdded) GetEventType() string {
+	return EventUserChatParticipantAdded
 }
 
-func (s *UserChatViewUpdated) GetEventType() string {
-	return EventUserChatViewUpdated
+func (s *UserChatEdited) GetEventType() string {
+	return EventUserChatEdited
 }
 
-func (s *UserChatViewRemoved) GetEventType() string {
-	return EventUserChatViewRemoved
+func (s *UserChatParticipantRemoved) GetEventType() string {
+	return EventUserChatParticipantRemoved
 }
 
 func (s *ChatCreated) GetMetadata() *Metadata {
@@ -714,11 +716,15 @@ func (s *MessageCreated) GetMetadata() *Metadata {
 	return s.Metadata
 }
 
-func (s *MessageEdited) GetMetadata() *Metadata {
+func (s *UserMessagesCreatedEvent) GetMetadata() *Metadata {
 	return s.Metadata
 }
 
-func (s *ChatViewRefreshed) GetMetadata() *Metadata {
+func (s *UserMessageDeletedEvent) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *MessageEdited) GetMetadata() *Metadata {
 	return s.Metadata
 }
 
@@ -754,15 +760,15 @@ func (s *TechnicalAbandonedChatRemoved) GetMetadata() *Metadata {
 	return s.Metadata
 }
 
-func (s *UserChatViewCreated) GetMetadata() *Metadata {
+func (s *UserChatParticipantAdded) GetMetadata() *Metadata {
 	return s.Metadata
 }
 
-func (s *UserChatViewUpdated) GetMetadata() *Metadata {
+func (s *UserChatEdited) GetMetadata() *Metadata {
 	return s.Metadata
 }
 
-func (s *UserChatViewRemoved) GetMetadata() *Metadata {
+func (s *UserChatParticipantRemoved) GetMetadata() *Metadata {
 	return s.Metadata
 }
 
@@ -814,11 +820,15 @@ func (s *MessageCreated) SetMetadata(m *Metadata) {
 	s.Metadata = m
 }
 
-func (s *MessageEdited) SetMetadata(m *Metadata) {
+func (s *UserMessagesCreatedEvent) SetMetadata(m *Metadata) {
 	s.Metadata = m
 }
 
-func (s *ChatViewRefreshed) SetMetadata(m *Metadata) {
+func (s *UserMessageDeletedEvent) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *MessageEdited) SetMetadata(m *Metadata) {
 	s.Metadata = m
 }
 
@@ -854,15 +864,15 @@ func (s *TechnicalAbandonedChatRemoved) SetMetadata(m *Metadata) {
 	s.Metadata = m
 }
 
-func (s *UserChatViewCreated) SetMetadata(m *Metadata) {
+func (s *UserChatParticipantAdded) SetMetadata(m *Metadata) {
 	s.Metadata = m
 }
 
-func (s *UserChatViewUpdated) SetMetadata(m *Metadata) {
+func (s *UserChatEdited) SetMetadata(m *Metadata) {
 	s.Metadata = m
 }
 
-func (s *UserChatViewRemoved) SetMetadata(m *Metadata) {
+func (s *UserChatParticipantRemoved) SetMetadata(m *Metadata) {
 	s.Metadata = m
 }
 
@@ -914,11 +924,15 @@ func (s *MessageCreated) GetEventPartitioningBy() EventPartitioningBy {
 	return EventPartitioningByChatId
 }
 
-func (s *MessageEdited) GetEventPartitioningBy() EventPartitioningBy {
-	return EventPartitioningByChatId
+func (s *UserMessagesCreatedEvent) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByUserId
 }
 
-func (s *ChatViewRefreshed) GetEventPartitioningBy() EventPartitioningBy {
+func (s *UserMessageDeletedEvent) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByUserId
+}
+
+func (s *MessageEdited) GetEventPartitioningBy() EventPartitioningBy {
 	return EventPartitioningByChatId
 }
 
@@ -954,14 +968,14 @@ func (s *TechnicalAbandonedChatRemoved) GetEventPartitioningBy() EventPartitioni
 	return EventPartitioningByChatId
 }
 
-func (s *UserChatViewCreated) GetEventPartitioningBy() EventPartitioningBy {
+func (s *UserChatParticipantAdded) GetEventPartitioningBy() EventPartitioningBy {
 	return EventPartitioningByUserId
 }
 
-func (s *UserChatViewUpdated) GetEventPartitioningBy() EventPartitioningBy {
+func (s *UserChatEdited) GetEventPartitioningBy() EventPartitioningBy {
 	return EventPartitioningByUserId
 }
 
-func (s *UserChatViewRemoved) GetEventPartitioningBy() EventPartitioningBy {
+func (s *UserChatParticipantRemoved) GetEventPartitioningBy() EventPartitioningBy {
 	return EventPartitioningByUserId
 }

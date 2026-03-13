@@ -398,7 +398,7 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user3HasUnreadMessagesNew41)
 
-		err = testRestClient.PutUserChatNotificationSettings(ctx, user2, chat1Id, true)
+		err = testRestClient.PutUserChatNotificationSettings(ctx, user2, chat1Id, true) // restore
 		require.NoError(t, err, "error in setting contribute into has new messages")
 		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, admCl, lc), "error in waiting for processing events")
 		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, admCl, lc), "error in waiting for processing events")
@@ -415,6 +415,8 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in getting has unread messages")
 		assert.Equal(t, true, user2HasUnreadMessagesNew42)
 
+		testOutputEventsAccumulator.Clean()
+
 		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, messageId4)
 		require.NoError(t, err, "error in delete message")
 		err = testRestClient.DeleteMessage(ctx, user1, chat1Id, messageId2)
@@ -423,6 +425,21 @@ func TestUnreads(t *testing.T) {
 		require.NoError(t, err, "error in delete message")
 		require.NoError(t, kafka.WaitForAllEventsProcessedChat(lgr, cfg, admCl, lc), "error in waiting for processing events")
 		require.NoError(t, kafka.WaitForAllEventsProcessedUser(lgr, cfg, admCl, lc), "error in waiting for processing events")
+
+		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
+					e.UserId == user1 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == false
+			},
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
+					e.UserId == user2 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == false
+			},
+		}))
 
 		user1HasUnreadMessagesNew5, err := testRestClient.GetHasUnreadMessages(ctx, user1)
 		require.NoError(t, err, "error in getting has unread messages")
@@ -3219,18 +3236,6 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatEdited &&
-					e.UserId == user1 &&
-					e.ChatNotification.ChatViewDto.Id == chat1Id &&
-					e.ChatNotification.ChatViewDto.Title == chat1Name &&
-					len(e.ChatNotification.Participants) == 2 &&
-					e.ChatNotification.Participants[0].Id == user2 &&
-					e.ChatNotification.Participants[0].Login == user2Login &&
-					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
-			},
-			func(ee any) bool {
-				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == dto.EventTypeChatEdited &&
 					e.UserId == user2 &&
 					e.ChatNotification.ChatViewDto.Id == chat1Id &&
 					e.ChatNotification.ChatViewDto.Title == chat1Name &&
@@ -3238,7 +3243,8 @@ func TestAddChangeAndDeleteParticipant(t *testing.T) {
 					e.ChatNotification.Participants[0].Id == user2 &&
 					e.ChatNotification.Participants[0].Login == user2Login &&
 					e.ChatNotification.Participants[1].Id == user1 &&
-					e.ChatNotification.Participants[1].Login == user1Login
+					e.ChatNotification.Participants[1].Login == user1Login &&
+					e.ChatNotification.CanAddParticipant == true // we test that user2 now can do it because he became a chat admin
 			},
 		}))
 
@@ -3366,7 +3372,12 @@ func TestCreateMessage(t *testing.T) {
 					e.MessageNotification.Owner.Id == user1 &&
 					e.MessageNotification.Owner.Login == user1Login
 			},
-
+			func(ee any) bool {
+				e, ok := ee.(*dto.GlobalUserEvent)
+				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
+					e.UserId == user1 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == false // it's not being change for himself
+			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeChatEdited &&
@@ -3386,8 +3397,8 @@ func TestCreateMessage(t *testing.T) {
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
 				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
-					e.UserId == user1 &&
-					e.HasUnreadMessagesChanged.HasUnreadMessages == false // it's not being change for himself
+					e.UserId == user2 &&
+					e.HasUnreadMessagesChanged.HasUnreadMessages == true // a cumulative indicator representing unreads in all the chats, user dor the red dot
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
@@ -3404,12 +3415,6 @@ func TestCreateMessage(t *testing.T) {
 					e.ChatNotification.Participants[1].Id == user1 &&
 					e.ChatNotification.Participants[1].Login == user1Login &&
 					e.ChatNotification.UnreadMessages == 1
-			},
-			func(ee any) bool {
-				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == dto.EventTypeHasUnreadMessagesChanged &&
-					e.UserId == user2 &&
-					e.HasUnreadMessagesChanged.HasUnreadMessages == true // a cumulative indicator representing unreads in all the chats, user dor the red dot
 			},
 		}))
 	})
@@ -4735,15 +4740,15 @@ func TestDeleteLeftoversFromDb(t *testing.T) {
 		require.NoError(t, testOutputEventsAccumulator.AwaitForBufferContainsSpecifiedEvents(cfg.RabbitMQ.MaxWaitForEvents, false, []func(e any) bool{
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == dto.EventTypeChatRedraw &&
+				return ok && e.EventType == dto.EventTypeChatDeleted &&
 					e.UserId == user1 &&
-					e.ChatNotification.Id == chat3Id
+					e.ChatDeletedDto.Id == chat3Id
 			},
 			func(ee any) bool {
 				e, ok := ee.(*dto.GlobalUserEvent)
-				return ok && e.EventType == dto.EventTypeChatRedraw &&
+				return ok && e.EventType == dto.EventTypeChatDeleted &&
 					e.UserId == user2 &&
-					e.ChatNotification.Id == chat3Id
+					e.ChatDeletedDto.Id == chat3Id
 			},
 		}))
 

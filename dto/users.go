@@ -3,6 +3,7 @@ package dto
 import "time"
 
 const NoId = -1
+const NoSize = -1
 const NonExistentUser = -65000
 const DeletedUser = -1
 const AllUsers = -2

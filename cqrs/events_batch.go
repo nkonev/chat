@@ -46,7 +46,6 @@ type MessageCreatedEventBatch struct {
 	ChatId              int64
 	FirstElementContext context.Context
 	MessageCreateds     []MessageCreated
-	ChatViewRefreshed   *ChatViewRefreshed
 
 	// Closed implies that we cannot add any event to the batch
 	closedForAppendingNew bool
@@ -63,25 +62,6 @@ func (p *MessageCreatedEventBatch) TryAppend(event EventHolder) bool {
 			return false
 		}
 		p.MessageCreateds = append(p.MessageCreateds, *typed)
-
-		return true
-	case *ChatViewRefreshed:
-		if typed.ChatId != p.ChatId {
-			return false
-		}
-		// matches ChatViewRefreshed{} in MessageCreate command
-		if typed.ParticipantsMode != ParticipantsModeAllParticipantIdsExcepting ||
-			len(typed.AllParticipantIdsExcepting) != 0 ||
-			typed.UnreadMessagesAction != UnreadMessagesActionIncrease ||
-			typed.LastMessageAction != LastMessageActionRefresh ||
-			typed.ChatAction != ChatActionUnspecified {
-			return false
-		}
-
-		if p.ChatViewRefreshed == nil {
-			p.ChatViewRefreshed = NewChatViewRefreshedIncrease(p.ChatId, []MessageWithOwner{}, typed.EventTime, typed.CorrelationId)
-		}
-		p.ChatViewRefreshed.MessagesDelta = append(p.ChatViewRefreshed.MessagesDelta, typed.MessagesDelta...)
 
 		return true
 	// those events make gotten authorization (canReadMessage) invalid

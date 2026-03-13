@@ -338,22 +338,6 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *KafkaProducer, lgr *lo
 						return err
 					}
 
-					// corresponding increase
-					ui := &ChatViewRefreshed{
-						ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
-						AllParticipantIdsExcepting: []int64{},
-						ChatId:                     oldMessage.ChatId,
-						UnreadMessagesAction:       UnreadMessagesActionIncrease,
-						MessagesDelta:              []MessageWithOwner{{MessageId: mc.MessageCommoned.Id, OwnerId: oldMessage.OwnerId}},
-						LastMessageAction:          LastMessageActionRefresh,
-						EventTime:                  oldMessage.CreateDateTime,
-					}
-
-					errInner := eventBus.Publish(ctx, ui)
-					if errInner != nil {
-						return errInner
-					}
-
 					// * * * migrate pinned
 					if oldMessage.Pinned {
 						cpin := &MessagePinned{
@@ -507,55 +491,6 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *KafkaProducer, lgr *lo
 			break
 		}
 		chatPinnedOffset += utils.DefaultSize
-	}
-
-	// apply refresh to participant's chat data
-	participantOffset := 0
-	for {
-		lgr.InfoContext(ctx, "Starting setting participant's chat data bunch on the offset", "participant_offset", participantOffset)
-		type oldChatParticipant struct {
-			ChatId int64 `db:"chat_id"`
-			UserId int64 `db:"user_id"`
-		}
-		oldParticipants := []oldChatParticipant{}
-		err = pgxscan.Select(ctx, connOldDb, &oldParticipants, `
-					select
-						user_id,
-						chat_id
-					from chat_participant
-					order by user_id, chat_id
-					limit $1 offset $2
-				`, utils.DefaultSize, participantOffset)
-		if err != nil {
-			return fmt.Errorf("error during get old partcipants: %w", err)
-		}
-
-		for _, oldParticipant := range oldParticipants {
-			lgr.InfoContext(ctx, "Starting migrating participant's chat on the offset", "participant_offset", participantOffset, logger.AttributeChatId, oldParticipant.ChatId, logger.AttributeUserId, oldParticipant.UserId)
-			addd := GenerateMessageAdditionalData(nil, oldParticipant.UserId)
-			ui := &ChatViewRefreshed{
-				ParticipantsMode:           ParticipantsModeAllParticipantIdsExcepting,
-				AllParticipantIdsExcepting: []int64{},
-				ChatId:                     oldParticipant.ChatId,
-				UnreadMessagesAction:       UnreadMessagesActionRefresh,
-				LastMessageAction:          LastMessageActionRefresh,
-				ChatAction:                 ChatActionRefresh,
-				EventTime:                  addd.CreatedAt,
-				CorrelationId:              addd.CorrelationId,
-			}
-
-			err = eventBus.Publish(ctx, ui)
-			if err != nil {
-				return err
-			}
-			lgr.InfoContext(ctx, "Finishing migrating participant's chat on the offset", "participant_offset", participantOffset, logger.AttributeChatId, oldParticipant.ChatId, logger.AttributeUserId, oldParticipant.UserId)
-		}
-
-		lgr.InfoContext(ctx, "Finishing setting participant's chat data bunch on the offset", "participant_offset", participantOffset)
-		if len(oldParticipants) < utils.DefaultSize {
-			break
-		}
-		participantOffset += utils.DefaultSize
 	}
 
 	err = commonProjection.SetIsNeedToSkipMigrate(ctx)
