@@ -439,7 +439,6 @@ func (p *KafkaListener) runKafkaListener(
 		kgo.ConsumerGroup(consumerGroup),
 		kgo.ConsumeTopics(topic),
 		kgo.WithHooks(p.kotelService.Hooks()...),
-		kgo.DisableAutoCommit(),
 		kgo.BlockRebalanceOnPoll(),
 		// kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()), // was need for to work after import in the previous implementation. now TestImport can work without it
 		kgo.FetchMaxWait(p.cfg.Kafka.Consumer.FetchMaxWait),
@@ -466,6 +465,7 @@ func (p *KafkaListener) runKafkaListener(
 	go func() {
 		for {
 			// https://github.com/twmb/franz-go/blob/master/examples/group_committing/main.go
+			// we use autocommit as the simplest option
 			fetches := cl.PollRecords(ctx, p.cfg.Kafka.Consumer.BatchSize)
 			if fetches.IsClientClosed() {
 				p.lgr.Info("Client is closed, exiting " + name + " subscriber")
@@ -485,35 +485,11 @@ func (p *KafkaListener) runKafkaListener(
 				p.processWithRetry(partition, retryStop, name, records, parseFunctionMapping, batchFunctionMapping)
 			})
 
-			// we have to collect offsets this way (see https://github.com/twmb/franz-go/blob/ae75cacb982c34f3fe61d06092b70f8e9182359e/examples/group_committing/main.go#L142)
-			// manual separate commits by partition lead us to non-committing some offsets
-			var rs []*kgo.Record
-			fetches.EachRecord(func(r *kgo.Record) {
-				rs = append(rs, r)
-			})
-
-			// batch was processed successfully
-			p.commitOffsetsWithRetry(cl, rs)
-
 			cl.AllowRebalance()
 		}
 	}()
 
 	return nil
-}
-
-func (p *KafkaListener) commitOffsetsWithRetry(cl *kgo.Client, rs []*kgo.Record) {
-	for {
-		p.lgr.Debug("Begin committing offsets")
-		if cerr := cl.CommitRecords(context.Background(), rs...); cerr != nil {
-			p.lgr.Error("Error during committing offsets", logger.AttributeError, cerr)
-
-			continue
-		}
-
-		p.lgr.Debug("Offsets were successfully committed")
-		break
-	}
 }
 
 func (p *KafkaListener) processWithRetry(tp kgo.FetchTopicPartition, retryStop chan struct{}, name string, records []*kgo.Record, parseFunctionMapping map[string]func(eventId string, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error), batchFunctionMapping map[string]func(b BatchEvent) (context.Context, error)) {
