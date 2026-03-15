@@ -17,6 +17,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kversion"
 	"go.uber.org/fx"
 )
 
@@ -31,6 +32,7 @@ func ConfigureKafkaAdmin(
 ) (*kadm.Client, error) {
 	adm, err := kgo.NewClient(
 		kgo.SeedBrokers(cfg.Kafka.BootstrapServers...),
+		kgo.MinVersions(kversion.V4_1_0()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create admin client: %w", err)
@@ -417,6 +419,7 @@ func Export(
 		kgo.ConsumePartitions(map[string]map[int32]kgo.Offset{
 			cfg.Kafka.TopicChat.Topic: reqStartOffs,
 		}),
+		kgo.MinVersions(kversion.V4_1_0()),
 	)
 	if err != nil {
 		return err
@@ -542,6 +545,7 @@ func Import(
 
 	cl, err := kgo.NewClient(
 		kgo.SeedBrokers(cfg.Kafka.BootstrapServers...),
+		kgo.MinVersions(kversion.V4_1_0()),
 	)
 	if err != nil {
 		return err

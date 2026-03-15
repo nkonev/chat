@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kversion"
 	"go.opentelemetry.io/otel/trace"
 
 	"go-cqrs-chat-example/config"
@@ -122,6 +123,7 @@ func ConfigurePublisher(
 	cl, err := kgo.NewClient(
 		kgo.SeedBrokers(cfg.Kafka.BootstrapServers...),
 		kgo.WithHooks(kotelService.Hooks()...),
+		kgo.MinVersions(kversion.V4_1_0()),
 	)
 	if err != nil {
 		return nil, err
@@ -443,6 +445,7 @@ func (p *KafkaListener) runKafkaListener(
 		kgo.BlockRebalanceOnPoll(),
 		// kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()), // was need for to work after import in the previous implementation. now TestImport can work without it
 		kgo.FetchMaxWait(p.cfg.Kafka.Consumer.FetchMaxWait),
+		kgo.MinVersions(kversion.V4_1_0()),
 	)
 	if err != nil {
 		return err
