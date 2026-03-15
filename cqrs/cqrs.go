@@ -524,7 +524,7 @@ func (p *KafkaListener) processWithRetry(tp kgo.FetchTopicPartition, retryStop c
 			return
 		default:
 			p.lgr.Debug("got records in "+name+" subscriber", "partition", tp.Partition, "len", len(records))
-			errCtx, perr := p.processEventBatch(records, parseFunctionMapping, batchFunctionMapping)
+			errCtx, perr := p.processEventBatch(records, name, tp, parseFunctionMapping, batchFunctionMapping)
 			if perr != nil {
 				if errCtx != nil {
 					p.lgr.ErrorContext(errCtx, "Got error during processing in "+name+" subscriber", "topic", tp.Topic, "partition", tp.Partition, logger.AttributeError, perr)
@@ -637,25 +637,41 @@ func (p *BatchOptimizer) Optimize(events []EventHolder) ([]BatchEvent, context.C
 
 func (p *KafkaListener) processEventBatch(
 	records []*kgo.Record, // assumes records from the one partition
+	name string,
+	tp kgo.FetchTopicPartition,
 	parseFunctionMapping map[string]func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error),
 	batchFunctionMapping map[string]func(b BatchEvent) (context.Context, error),
-) (context.Context, error) {
+) (retErrCtx context.Context, retErr error) {
+	// defer recover
+	defer func() {
+		if rerr := recover(); rerr != nil {
+			ferr := fmt.Errorf("Recovered: %v", rerr)
+			p.lgr.Error("In processing records panic recovered in "+name+" subscriber", "topic", tp.Topic, "partition", tp.Partition, logger.AttributeError, ferr)
+
+			retErr = ferr
+			return
+		}
+	}()
 
 	events := []EventHolder{}
 
 	for _, record := range records {
 		eventId, eventType, err := parseKnownEventHeaders(record)
 		if err != nil {
-			return nil, err
+			retErr = err
+			return
 		}
 
 		f, ok := parseFunctionMapping[eventType]
 		if !ok {
-			return nil, fmt.Errorf("unknown event type %v", eventType)
+			retErr = fmt.Errorf("unknown event type %v", eventType)
+			return
 		}
 		parsedEvent, ctx, err := f(eventId, eventType, record)
 		if err != nil {
-			return ctx, err
+			retErr = err
+			retErrCtx = ctx
+			return
 		}
 		events = append(events, EventHolder{
 			event: parsedEvent,
@@ -665,18 +681,23 @@ func (p *KafkaListener) processEventBatch(
 
 	batchItems, errCtx, err := p.batchOptimizer.Optimize(events)
 	if err != nil {
-		return errCtx, err
+		retErr = err
+		retErrCtx = errCtx
+		return
 	}
 
 	// apply batches
 	for _, batchItem := range batchItems {
 		f, ok := batchFunctionMapping[batchItem.GetBatchType()]
 		if !ok {
-			return nil, fmt.Errorf("unknown batch type %v", batchItem.GetBatchType())
+			retErr = fmt.Errorf("unknown batch type %v", batchItem.GetBatchType())
+			return
 		}
 		ctx, err := f(batchItem)
 		if err != nil {
-			return ctx, err
+			retErr = err
+			retErrCtx = ctx
+			return
 		}
 	}
 

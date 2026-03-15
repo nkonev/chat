@@ -1401,6 +1401,10 @@ func (m *CommonProjection) GetChatBasic(ctx context.Context, co db.CommonOperati
 	return &cht, nil
 }
 
+func getDeletedChatName(chatId int64) string {
+	return fmt.Sprintf("deleted_chat_%d", chatId)
+}
+
 // result: map[userId][chatId]*dto.BasicChatDtoExtended
 func (m *CommonProjection) GetChatsBasicExtended(ctx context.Context, co db.CommonOperations, chatIds []int64, behalfParticipantIds []int64) (map[int64]map[int64]*dto.BasicChatDtoExtended, error) {
 	result := map[int64]map[int64]*dto.BasicChatDtoExtended{}

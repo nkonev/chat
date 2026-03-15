@@ -1979,12 +1979,16 @@ func (m *CommonProjection) getChatNameForNotification(ctx context.Context, co db
 	if err != nil {
 		return "", err
 	}
-	chatName := chatBasic.Title
-	if chatBasic.TetATet {
-		chatName = ""
+	var chatName string
+	if chatBasic != nil {
+		chatName = chatBasic.Title
+		if chatBasic.TetATet {
+			chatName = ""
+		}
+	} else {
+		chatName = getDeletedChatName(chatId)
 	}
 	return chatName, nil
-
 }
 
 func enrichMessage(
