@@ -477,61 +477,68 @@ func (p *KafkaListener) runKafkaListener(
 			})
 
 			fetches.EachPartition(func(partition kgo.FetchTopicPartition) {
-				// defer recover
-				defer func() {
-					if rerr := recover(); err != nil {
-						p.lgr.Error("In processing topic panic recovered in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, rerr)
-					}
-				}()
-
-				if partition.Err != nil {
-					p.lgr.Error("Got partition error in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, partition.Err)
-					return
-				}
 				records := partition.Records
 				if len(records) == 0 {
 					return
 				}
 
-				for {
-					select {
-					case <-retryStop:
-						p.lgr.Info("Exiting processing retrier in " + name + " subscriber")
-						return
-					default:
-						p.lgr.Debug("got records in "+name+" subscriber", "partition", partition.Partition, "len", len(records))
-						lastSuccessful, errCtx, perr := p.processEventBatch(records, parseFunctionMapping, batchFunctionMapping)
-						if perr != nil {
-							if errCtx != nil {
-								p.lgr.ErrorContext(errCtx, "Got error during processing in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, perr)
-							} else {
-								p.lgr.Error("Got error during processing in "+name+" subscriber", "topic", partition.Topic, "partition", partition.Partition, logger.AttributeError, perr)
-							}
-
-							// https://github.com/twmb/franz-go/issues/590#issuecomment-1759883590
-							continue // retry
-						} else { // batch was processed successfully
-							if lastSuccessful != nil {
-								p.lgr.Debug("Begin committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
-								if cerr := cl.CommitRecords(ctx, lastSuccessful); cerr != nil {
-									p.lgr.Error("Error during committing offset", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset, logger.AttributeError, cerr)
-
-									continue // retry
-								} else {
-									p.lgr.Debug("Offset was successfully committed", "topic", partition.Topic, "partition", partition.Partition, "offset", lastSuccessful.Offset)
-								}
-							}
-						}
-					}
-
-					break
-				}
+				p.processWithRetry(partition, retryStop, name, records, parseFunctionMapping, batchFunctionMapping)
 			})
+
+			// we have to collect offsets this way (see https://github.com/twmb/franz-go/blob/ae75cacb982c34f3fe61d06092b70f8e9182359e/examples/group_committing/main.go#L142)
+			// manual separate commits by partition lead us to non-committing some offsets
+			var rs []*kgo.Record
+			fetches.EachRecord(func(r *kgo.Record) {
+				rs = append(rs, r)
+			})
+
+			// batch was processed successfully
+			p.commitOffsetsWithRetry(cl, rs)
+
 			cl.AllowRebalance()
 		}
 	}()
 
 	return nil
+}
+
+func (p *KafkaListener) commitOffsetsWithRetry(cl *kgo.Client, rs []*kgo.Record) {
+	for {
+		p.lgr.Debug("Begin committing offsets")
+		if cerr := cl.CommitRecords(context.Background(), rs...); cerr != nil {
+			p.lgr.Error("Error during committing offsets", logger.AttributeError, cerr)
+
+			continue
+		}
+
+		p.lgr.Debug("Offsets were successfully committed")
+		break
+	}
+}
+
+func (p *KafkaListener) processWithRetry(tp kgo.FetchTopicPartition, retryStop chan struct{}, name string, records []*kgo.Record, parseFunctionMapping map[string]func(eventId string, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error), batchFunctionMapping map[string]func(b BatchEvent) (context.Context, error)) {
+	for {
+		select {
+		case <-retryStop:
+			p.lgr.Info("Exiting processing retrier in " + name + " subscriber")
+			return
+		default:
+			p.lgr.Debug("got records in "+name+" subscriber", "partition", tp.Partition, "len", len(records))
+			errCtx, perr := p.processEventBatch(records, parseFunctionMapping, batchFunctionMapping)
+			if perr != nil {
+				if errCtx != nil {
+					p.lgr.ErrorContext(errCtx, "Got error during processing in "+name+" subscriber", "topic", tp.Topic, "partition", tp.Partition, logger.AttributeError, perr)
+				} else {
+					p.lgr.Error("Got error during processing in "+name+" subscriber", "topic", tp.Topic, "partition", tp.Partition, logger.AttributeError, perr)
+				}
+
+				// https://github.com/twmb/franz-go/issues/590#issuecomment-1759883590
+				continue // retry
+			}
+		}
+
+		break
+	}
 }
 
 func processEvent[T BatchEvent](lgr *logger.LoggerWrapper, cfg *config.AppConfig, batchEvent BatchEvent, handler func(event T) (context.Context, error)) (context.Context, error) {
@@ -632,23 +639,23 @@ func (p *KafkaListener) processEventBatch(
 	records []*kgo.Record, // assumes records from the one partition
 	parseFunctionMapping map[string]func(eventId, eventType string, record *kgo.Record) (CqrsEvent, context.Context, error),
 	batchFunctionMapping map[string]func(b BatchEvent) (context.Context, error),
-) (*kgo.Record, context.Context, error) {
+) (context.Context, error) {
 
 	events := []EventHolder{}
 
 	for _, record := range records {
 		eventId, eventType, err := parseKnownEventHeaders(record)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		f, ok := parseFunctionMapping[eventType]
 		if !ok {
-			return nil, nil, fmt.Errorf("unknown event type %v", eventType)
+			return nil, fmt.Errorf("unknown event type %v", eventType)
 		}
 		parsedEvent, ctx, err := f(eventId, eventType, record)
 		if err != nil {
-			return nil, ctx, err
+			return ctx, err
 		}
 		events = append(events, EventHolder{
 			event: parsedEvent,
@@ -658,29 +665,22 @@ func (p *KafkaListener) processEventBatch(
 
 	batchItems, errCtx, err := p.batchOptimizer.Optimize(events)
 	if err != nil {
-		return nil, errCtx, err
+		return errCtx, err
 	}
 
 	// apply batches
 	for _, batchItem := range batchItems {
 		f, ok := batchFunctionMapping[batchItem.GetBatchType()]
 		if !ok {
-			return nil, nil, fmt.Errorf("unknown batch type %v", batchItem.GetBatchType())
+			return nil, fmt.Errorf("unknown batch type %v", batchItem.GetBatchType())
 		}
 		ctx, err := f(batchItem)
 		if err != nil {
-			return nil, ctx, err
+			return ctx, err
 		}
 	}
 
-	// In order not to mess with offsets
-	// we commit only the latest
-	var lastSuccessful *kgo.Record
-	if len(records) > 0 {
-		lastSuccessful = records[len(records)-1]
-	}
-
-	return lastSuccessful, nil, nil
+	return nil, nil
 }
 
 func parseRecord[T CqrsEvent](record *kgo.Record) (T, error) {
