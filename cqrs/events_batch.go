@@ -36,7 +36,7 @@ func (p *SingleEventBatch) TryAppend(event EventHolder) bool {
 	return false
 }
 func (p *SingleEventBatch) GetBatchType() string {
-	return p.EventHolder.event.GetEventType()
+	return p.EventHolder.event.GetMetadata().EventType
 }
 func (p *SingleEventBatch) GetContext() context.Context {
 	return p.ctx

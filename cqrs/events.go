@@ -6,6 +6,8 @@ import (
 	"go-cqrs-chat-example/dto"
 	"go-cqrs-chat-example/utils"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -39,6 +41,8 @@ const (
 type CqrsEvent interface {
 	GetPartitionKey() string
 	GetEventType() string
+	GetMetadata() *Metadata
+	SetMetadata(*Metadata)
 	GetEventPartitioningBy() EventPartitioningBy
 }
 
@@ -56,8 +60,27 @@ func (p *AdditionalData) GetCorrelationId() *string {
 	return p.CorrelationId
 }
 
+// Kafka headers
+type Metadata struct {
+	EventId   string
+	EventType string
+}
+
+func NewMetadata(eventType string) *Metadata {
+	uv7, err := uuid.NewV7()
+	if err != nil {
+		panic(err)
+	}
+
+	return &Metadata{
+		EventId:   uv7.String(),
+		EventType: eventType,
+	}
+}
+
 type ChatCreated struct {
 	AdditionalData                      *AdditionalData `json:"additionalData"`
+	Metadata                            *Metadata       `json:"-"`
 	ChatId                              int64           `json:"chatId"`
 	Title                               string          `json:"title"`
 	TetATet                             bool            `json:"tetATet"`
@@ -77,6 +100,7 @@ type ChatCreated struct {
 
 type ChatEdited struct {
 	AdditionalData                      *AdditionalData `json:"additionalData"`
+	Metadata                            *Metadata       `json:"-"`
 	ChatId                              int64           `json:"chatId"`
 	Title                               string          `json:"title"`
 	Blog                                bool            `json:"blog"`
@@ -94,11 +118,13 @@ type ChatEdited struct {
 
 type ChatDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 }
 
 type ParticipantsAdded struct {
 	AdditionalData *AdditionalData        `json:"additionalData"`
+	Metadata       *Metadata              `json:"-"`
 	Participants   []ParticipantWithAdmin `json:"participants"`
 	ChatId         int64                  `json:"chatId"`
 	IsChatCreating bool                   `json:"isChatCreating"`
@@ -128,6 +154,7 @@ const (
 
 type ParticipantDeleted struct {
 	AdditionalData             *AdditionalData     `json:"additionalData"`
+	Metadata                   *Metadata           `json:"-"`
 	GetParticipantsType        GetParticipantsType `json:"getParticipantsType"`
 	ParticipantIds             []int64             `json:"participantIds"`
 	AllParticipantIdsExcepting []int64             `json:"allParticipantIdsExcepting"`
@@ -139,34 +166,40 @@ type ParticipantDeleted struct {
 
 type ParticipantChanged struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ParticipantId  int64           `json:"participantId"`
 	ChatId         int64           `json:"chatId"`
 	NewAdmin       bool            `json:"newAdmin"`
 }
 
 type ProjectionsTruncated struct {
+	Metadata *Metadata `json:"-"`
 }
 
 type UserChatPinned struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 	Pinned         bool            `json:"pinned"`
 }
 
 type UserChatNotificationSettingsSetted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 	Setted         bool            `json:"setted"`
 }
 
 type ChatPinned struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 	Pinned         bool            `json:"pinned"`
 }
 
 type ChatNotificationSettingsSetted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 	Setted         bool            `json:"setted"`
 }
@@ -241,12 +274,14 @@ func (f *MessageCommoned) MarshalJSON() ([]byte, error) {
 type MessageCreated struct {
 	MessageCommoned MessageCommoned `json:"messageCommoned"`
 	AdditionalData  *AdditionalData `json:"additionalData"`
+	Metadata        *Metadata       `json:"-"`
 }
 
 type MessageEdited struct {
 	MessageCommoned MessageCommoned `json:"messageCommoned"`
 	AdditionalData  *AdditionalData `json:"additionalData"`
 	IsEmbedSync     bool            `json:"isEmbedSync"`
+	Metadata        *Metadata       `json:"-"`
 }
 
 type MessageEmbedded struct {
@@ -311,10 +346,12 @@ type ChatViewRefreshed struct {
 	ChatAction                 ChatAction           `json:"chatAction"`
 	EventTime                  time.Time            `json:"eventTime"`
 	CorrelationId              *string              `json:"correlationId"`
+	Metadata                   *Metadata            `json:"-"`
 }
 
 type UserMessageReaded struct {
 	AdditionalData     *AdditionalData    `json:"additionalData"`
+	Metadata           *Metadata          `json:"-"`
 	ChatId             int64              `json:"chatId"`
 	MessageId          int64              `json:"messageId"`
 	ReadMessagesAction ReadMessagesAction `json:"readMessagesAction"`
@@ -322,6 +359,7 @@ type UserMessageReaded struct {
 
 type MessageReaded struct {
 	AdditionalData     *AdditionalData    `json:"additionalData"`
+	Metadata           *Metadata          `json:"-"`
 	ChatId             int64              `json:"chatId"`
 	MessageId          int64              `json:"messageId"`
 	ReadMessagesAction ReadMessagesAction `json:"readMessagesAction"`
@@ -329,6 +367,7 @@ type MessageReaded struct {
 
 type MessageBlogPostMade struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
 	BlogPost       bool            `json:"blogPost"`
@@ -336,12 +375,14 @@ type MessageBlogPostMade struct {
 
 type MessageDeleted struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
 }
 
 type MessagePinned struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
 	Pinned         bool            `json:"pinned"`
@@ -349,6 +390,7 @@ type MessagePinned struct {
 
 type MessagePublished struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
 	Published      bool            `json:"published"`
@@ -356,17 +398,20 @@ type MessagePublished struct {
 
 type MessageReactionFlipped struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 	MessageId      int64           `json:"messageId"`
 	Reaction       string          `json:"reaction"`
 }
 
 type TechnicalAbandonedChatRemoved struct {
-	ChatId int64 `json:"chatId"`
+	ChatId   int64     `json:"chatId"`
+	Metadata *Metadata `json:"-"`
 }
 
 type UserChatViewCreated struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
 	UserId         int64           `json:"userId"`
 	TetATet        bool            `json:"tetATet"`
@@ -381,10 +426,12 @@ type UserChatViewUpdated struct {
 	ChatAction           ChatAction           `json:"chatAction"`
 	EventTime            time.Time            `json:"eventTime"`
 	CorrelationId        *string              `json:"correlationId"`
+	Metadata             *Metadata            `json:"-"`
 }
 
 type UserChatViewRemoved struct {
 	AdditionalData          *AdditionalData `json:"additionalData"`
+	Metadata                *Metadata       `json:"-"`
 	ChatId                  int64           `json:"chatId"`
 	UserId                  int64           `json:"userId"`
 	WereRemovedUsersFromAaa bool            `json:"wereRemovedUsersFromAaa"`
@@ -617,6 +664,206 @@ func (s *UserChatViewUpdated) GetEventType() string {
 
 func (s *UserChatViewRemoved) GetEventType() string {
 	return EventUserChatViewRemoved
+}
+
+func (s *ChatCreated) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *ChatEdited) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *ChatDeleted) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *ParticipantsAdded) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *ParticipantDeleted) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *ParticipantChanged) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *ProjectionsTruncated) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *UserChatPinned) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *ChatPinned) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *UserChatNotificationSettingsSetted) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *ChatNotificationSettingsSetted) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *MessageCreated) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *MessageEdited) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *ChatViewRefreshed) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *UserMessageReaded) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *MessageReaded) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *MessageBlogPostMade) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *MessageDeleted) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *MessagePinned) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *MessagePublished) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *MessageReactionFlipped) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *TechnicalAbandonedChatRemoved) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *UserChatViewCreated) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *UserChatViewUpdated) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *UserChatViewRemoved) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *ChatCreated) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *ChatEdited) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *ChatDeleted) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *ParticipantsAdded) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *ParticipantDeleted) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *ParticipantChanged) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *ProjectionsTruncated) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *UserChatPinned) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *ChatPinned) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *UserChatNotificationSettingsSetted) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *ChatNotificationSettingsSetted) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *MessageCreated) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *MessageEdited) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *ChatViewRefreshed) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *UserMessageReaded) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *MessageReaded) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *MessageBlogPostMade) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *MessageDeleted) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *MessagePinned) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *MessagePublished) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *MessageReactionFlipped) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *TechnicalAbandonedChatRemoved) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *UserChatViewCreated) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *UserChatViewUpdated) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *UserChatViewRemoved) SetMetadata(m *Metadata) {
+	s.Metadata = m
 }
 
 func (s *ChatCreated) GetEventPartitioningBy() EventPartitioningBy {
