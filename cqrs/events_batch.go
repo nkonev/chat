@@ -4,18 +4,18 @@ import "context"
 
 const (
 	BatchMessagesCreated = "batchMessagesCreated"
+	BatchReactionFlipped = "batchReactionFlipped"
 )
 
 func (p *EventHolder) MakeBatchItem() (BatchEvent, context.Context, error) {
 	switch typed := p.event.(type) {
 	case *MessageCreated:
-		return &MessageCreatedEventBatch{
-			ChatId: typed.MessageCommoned.ChatId,
-			MessageCreateds: []MessageCreated{
-				*typed,
-			},
-			FirstElementContext: p.ctx,
-		}, p.ctx, nil
+		return NewMessageCreatedEventBatch(
+				p.ctx,
+				typed.MessageCommoned.ChatId,
+				typed,
+			),
+			p.ctx, nil
 	default:
 		return &SingleEventBatch{
 			*p,
@@ -50,6 +50,16 @@ type MessageCreatedEventBatch struct {
 
 	// Closed implies that we cannot add any event to the batch
 	closedForAppendingNew bool
+}
+
+func NewMessageCreatedEventBatch(firstElementContext context.Context, chatId int64, messageCreated *MessageCreated) *MessageCreatedEventBatch {
+	return &MessageCreatedEventBatch{
+		ChatId: chatId,
+		MessageCreateds: []MessageCreated{
+			*messageCreated,
+		},
+		FirstElementContext: firstElementContext,
+	}
 }
 
 func (p *MessageCreatedEventBatch) TryAppend(event EventHolder) bool {
@@ -103,5 +113,68 @@ func (p *MessageCreatedEventBatch) GetBatchType() string {
 	return BatchMessagesCreated
 }
 func (p *MessageCreatedEventBatch) GetContext() context.Context {
+	return p.FirstElementContext
+}
+
+type ReactionFlippedEventBatch struct {
+	ChatId              int64
+	FirstElementContext context.Context
+	ReactionFilppeds    []MessageReactionFlip
+
+	// Closed implies that we cannot add any event to the batch
+	closedForAppendingNew bool
+}
+
+func (p *ReactionFlippedEventBatch) TryAppend(event EventHolder) bool {
+	if p.closedForAppendingNew {
+		return false
+	}
+
+	switch typed := event.event.(type) {
+	case *MessageReactionFlip:
+		if typed.MessageCommoned.ChatId != p.ChatId {
+			return false
+		}
+		p.MessageCreateds = append(p.MessageCreateds, *typed)
+
+		return true
+	case *ChatViewRefreshed:
+		if typed.ChatId != p.ChatId {
+			return false
+		}
+		// matches ChatViewRefreshed{} in MessageCreate command
+		if typed.ParticipantsMode != ParticipantsModeAllParticipantIdsExcepting ||
+			len(typed.AllParticipantIdsExcepting) != 0 ||
+			typed.UnreadMessagesAction != UnreadMessagesActionIncrease ||
+			typed.LastMessageAction != LastMessageActionRefresh ||
+			typed.ChatAction != ChatActionUnspecified {
+			return false
+		}
+
+		if p.ChatViewRefreshed == nil {
+			p.ChatViewRefreshed = NewChatViewRefreshedIncrease(p.ChatId, []MessageWithOwner{}, typed.EventTime, typed.CorrelationId)
+		}
+		p.ChatViewRefreshed.MessagesDelta = append(p.ChatViewRefreshed.MessagesDelta, typed.MessagesDelta...)
+
+		return true
+	// those events make gotten authorization (canReadMessage) invalid
+	case *ChatEdited:
+		p.closedForAppendingNew = true
+		return false
+	case *ParticipantDeleted:
+		p.closedForAppendingNew = true
+		return false
+	case *ParticipantChanged:
+		p.closedForAppendingNew = true
+		return false
+	}
+
+	return false
+}
+
+func (p *ReactionFlippedEventBatch) GetBatchType() string {
+	return BatchReactionFlipped
+}
+func (p *ReactionFlippedEventBatch) GetContext() context.Context {
 	return p.FirstElementContext
 }
