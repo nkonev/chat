@@ -453,6 +453,8 @@ func (p *KafkaListener) runKafkaListener(
 			p.lgr.Info("Begin stopping kafka " + name + " subscriber")
 
 			retryStop <- struct{}{}
+
+			// handle excess commit offsets in case error in processWithRetry on program exit (1/3)
 			cl.Close()
 			return nil
 		},
@@ -473,24 +475,38 @@ func (p *KafkaListener) runKafkaListener(
 				p.lgr.Error("Got fetch error in "+name+" subscriber", "topic", to, "partition", pa, logger.AttributeError, err)
 			})
 
+			var lastErr error
+			var stopped bool
+			var shouldStopWithoutCommitting bool
 			fetches.EachPartition(func(partition kgo.FetchTopicPartition) {
 				records := partition.Records
 				if len(records) == 0 {
 					return
 				}
 
-				p.processWithRetry(partition, retryStop, name, records, parseFunctionMapping, batchFunctionMapping)
+				stopped, lastErr = p.processWithRetry(partition, retryStop, name, records, parseFunctionMapping, batchFunctionMapping)
+				shouldStopWithoutCommitting = stopped && lastErr != nil
+				if shouldStopWithoutCommitting {
+					return
+				}
 			})
 
-			// we have to collect offsets this way (see https://github.com/twmb/franz-go/blob/ae75cacb982c34f3fe61d06092b70f8e9182359e/examples/group_committing/main.go#L142)
-			// manual separate commits by partition lead us to non-committing some offsets
-			var rs []*kgo.Record
-			fetches.EachRecord(func(r *kgo.Record) {
-				rs = append(rs, r)
-			})
+			// handle excess commit offsets in case error in processWithRetry on program exit (2/3)
+			if !shouldStopWithoutCommitting {
 
-			// batch was processed successfully
-			p.commitOffsetsWithRetry(cl, rs)
+				// we have to collect offsets this way (see https://github.com/twmb/franz-go/blob/ae75cacb982c34f3fe61d06092b70f8e9182359e/examples/group_committing/main.go#L142)
+				// manual separate commits by partition lead us to non-committing some offsets
+				var rs []*kgo.Record
+				fetches.EachRecord(func(r *kgo.Record) {
+					rs = append(rs, r)
+				})
+
+				// We commit manually because in order to
+				// handle excess commit offsets in case error in processWithRetry on program exit (3/3)
+				p.commitOffsetsWithRetry(cl, rs)
+			} else {
+				p.lgr.Error("Got last error in "+name+" subscriber, not committing the offset because the client was stopped", logger.AttributeError, lastErr)
+			}
 
 			cl.AllowRebalance()
 		}
@@ -513,20 +529,22 @@ func (p *KafkaListener) commitOffsetsWithRetry(cl *kgo.Client, rs []*kgo.Record)
 	}
 }
 
-func (p *KafkaListener) processWithRetry(tp kgo.FetchTopicPartition, retryStop chan struct{}, name string, records []*kgo.Record, parseFunctionMapping map[string]func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error), batchFunctionMapping map[string]func(b BatchEvent) (context.Context, error)) {
+func (p *KafkaListener) processWithRetry(tp kgo.FetchTopicPartition, retryStop chan struct{}, name string, records []*kgo.Record, parseFunctionMapping map[string]func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error), batchFunctionMapping map[string]func(b BatchEvent) (context.Context, error)) (bool, error) {
+	var lastError error
 	for {
 		select {
 		case <-retryStop:
 			p.lgr.Info("Exiting processing retrier in " + name + " subscriber")
-			return
+			return true, lastError
 		default:
 			p.lgr.Debug("got records in "+name+" subscriber", "partition", tp.Partition, "len", len(records))
-			errCtx, perr := p.processEventBatch(records, name, tp, parseFunctionMapping, batchFunctionMapping)
-			if perr != nil {
+			var errCtx context.Context
+			errCtx, lastError = p.processEventBatch(records, name, tp, parseFunctionMapping, batchFunctionMapping)
+			if lastError != nil {
 				if errCtx != nil {
-					p.lgr.ErrorContext(errCtx, "Got error during processing in "+name+" subscriber", "topic", tp.Topic, "partition", tp.Partition, logger.AttributeError, perr)
+					p.lgr.ErrorContext(errCtx, "Got error during processing in "+name+" subscriber", "topic", tp.Topic, "partition", tp.Partition, logger.AttributeError, lastError)
 				} else {
-					p.lgr.Error("Got error during processing in "+name+" subscriber", "topic", tp.Topic, "partition", tp.Partition, logger.AttributeError, perr)
+					p.lgr.Error("Got error during processing in "+name+" subscriber", "topic", tp.Topic, "partition", tp.Partition, logger.AttributeError, lastError)
 				}
 
 				// https://github.com/twmb/franz-go/issues/590#issuecomment-1759883590
@@ -536,6 +554,8 @@ func (p *KafkaListener) processWithRetry(tp kgo.FetchTopicPartition, retryStop c
 
 		break
 	}
+
+	return false, lastError
 }
 
 func processEvent[T BatchEvent](lgr *logger.LoggerWrapper, cfg *config.AppConfig, batchEvent BatchEvent, handler func(event T) (context.Context, error)) (context.Context, error) {
