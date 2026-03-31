@@ -2315,6 +2315,10 @@ func (m *CommonProjection) GetMessages(ctx context.Context, co db.CommonOperatio
 		return nil, fmt.Errorf("wrong invariant: both startingFromItemId and messageIds provided")
 	}
 
+	if size == dto.NoSize && len(messageIds) == 0 {
+		return nil, fmt.Errorf("wrong invariant: NoSize requires enumerated message ids")
+	}
+
 	mar := []dto.MessageDto{}
 	ma := []messageDto{}
 

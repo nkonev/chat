@@ -1070,6 +1070,10 @@ func (m *CommonProjection) GetChats(ctx context.Context, co db.CommonOperations,
 		RegularParticipantCanAddParticipant bool             `db:"regular_participant_can_add_participant"`
 	}
 
+	if size == dto.NoSize {
+		return nil, fmt.Errorf("wrong invariant: NoSize is not implemented")
+	}
+
 	list := []chatDto{}
 	res := []dto.ChatViewDto{}
 

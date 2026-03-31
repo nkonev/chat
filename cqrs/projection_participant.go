@@ -263,6 +263,10 @@ func (m *CommonProjection) UnsafeDeleteParticipantForTest(ctx context.Context, c
 // output: behalfUserId:[]*dto.UserViewEnrichedDto
 // note: the map is not sorted  by Go's definition
 func (m *EnrichingProjection) GetParticipantsEnriched(ctx context.Context, behalfUserIds []int64, chatId int64, size int32, offset int64, searchString string, needCount bool, userIds []int64) (map[int64][]*dto.UserViewEnrichedDto, int64, error) {
+	if size == dto.NoSize {
+		return nil, 0, fmt.Errorf("wrong invariant: NoSize is not implemented")
+	}
+
 	isSingleBehalf := len(behalfUserIds) == 1
 
 	if isSingleBehalf {
