@@ -493,6 +493,49 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *KafkaProducer, lgr *lo
 		chatPinnedOffset += utils.DefaultSize
 	}
 
+	// * * migrate user chat message readeds
+	userChatMessageReadedOffset := 0
+	for {
+		lgr.InfoContext(ctx, "Starting migrating user chat message readed bunch on the offset", "user_chat_message_readed_offset", userChatMessageReadedOffset)
+		type userChatMessageReaded struct {
+			ChatId        int64 `db:"chat_id"`
+			UserId        int64 `db:"user_id"`
+			LastMessageId int64 `db:"last_message_id"`
+		}
+		oldUserChatMessageReadeds := []userChatMessageReaded{}
+		err = pgxscan.Select(ctx, connOldDb, &oldUserChatMessageReadeds, `
+					select
+						chat_id
+						,user_id
+						,last_message_id
+					from message_read
+					order by chat_id, user_id
+					limit $1 offset $2
+				`, utils.DefaultSize, userChatMessageReadedOffset)
+		if err != nil {
+			return fmt.Errorf("error during get old user chat message readeds: %w", err)
+		}
+
+		for _, oldUSerChatMessageReaded := range oldUserChatMessageReadeds {
+			chpin := &MessageReaded{
+				AdditionalData:     GenerateMessageAdditionalData(nil, oldUSerChatMessageReaded.UserId),
+				ChatId:             oldUSerChatMessageReaded.ChatId,
+				MessageId:          oldUSerChatMessageReaded.LastMessageId,
+				ReadMessagesAction: ReadMessagesActionOneMessage,
+			}
+			err := eventBus.Publish(ctx, chpin)
+			if err != nil {
+				return err
+			}
+		}
+
+		lgr.InfoContext(ctx, "Finishing migrating user chat message readed bunch on the offset", "user_chat_message_readed_offset", userChatMessageReadedOffset)
+		if len(oldUserChatMessageReadeds) < utils.DefaultSize {
+			break
+		}
+		userChatMessageReadedOffset += utils.DefaultSize
+	}
+
 	err = commonProjection.SetIsNeedToSkipMigrate(ctx)
 	if err != nil {
 		return err
