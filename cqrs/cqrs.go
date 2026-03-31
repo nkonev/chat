@@ -213,8 +213,11 @@ func ListenChatTopic(
 		EventMessageBlogPostMade: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
 			return prepareEvent[*MessageBlogPostMade](p.lgr, p.cfg, metadata, record, p.tracer)
 		},
-		EventMessageReactionFlipped: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
-			return prepareEvent[*MessageReactionFlipped](p.lgr, p.cfg, metadata, record, p.tracer)
+		EventMessageReactionCreated: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*MessageReactionCreated](p.lgr, p.cfg, metadata, record, p.tracer)
+		},
+		EventMessageReactionRemoved: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
+			return prepareEvent[*MessageReactionRemoved](p.lgr, p.cfg, metadata, record, p.tracer)
 		},
 		EventMessagePinned: func(metadata *Metadata, record *kgo.Record) (CqrsEvent, context.Context, error) {
 			return prepareEvent[*MessagePinned](p.lgr, p.cfg, metadata, record, p.tracer)
@@ -275,8 +278,11 @@ func ListenChatTopic(
 		EventMessageBlogPostMade: func(b BatchEvent) (context.Context, error) {
 			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessageBlogPostMade))
 		},
-		EventMessageReactionFlipped: func(b BatchEvent) (context.Context, error) {
-			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessageReactionFlipped))
+		EventMessageReactionCreated: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessageReactionCreated))
+		},
+		EventMessageReactionRemoved: func(b BatchEvent) (context.Context, error) {
+			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessageReactionRemoved))
 		},
 		EventMessagePinned: func(b BatchEvent) (context.Context, error) {
 			return processEvent(p.lgr, p.cfg, b, unwrapSingleBatch(p.cqrsEventHandler.OnMessagePinned))

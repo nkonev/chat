@@ -1597,42 +1597,44 @@ func (m *CommonProjection) OnUserMessageDeleted(ctx context.Context, co db.Commo
 	return nil
 }
 
-func (m *CommonProjection) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) (bool, error) {
+func (m *CommonProjection) OnMessageReactionCreated(ctx context.Context, additionalData *AdditionalData, metadata *Metadata, chatId int64, messageId int64, reactionStr string) (bool, error) {
 	wasAdded, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (bool, error) {
 		var wasAddedInner bool
 
-		messageExists, errInner := m.checkMessageExists(ctx, tx, event.ChatId, event.MessageId)
+		messageExists, errInner := m.checkMessageExists(ctx, tx, chatId, messageId)
 		if errInner != nil {
 			return false, errInner
 		}
 
 		if !messageExists {
-			m.lgr.InfoContext(ctx, "Skipping MessageReactionFlipped because there is no message", logger.AttributeChatId, event.ChatId, logger.AttributeMessageId, event.MessageId)
+			m.lgr.InfoContext(ctx, "Skipping MessageReactionCreated because there is no message", logger.AttributeChatId, chatId, logger.AttributeMessageId, messageId)
 			return false, nil
 		}
 
-		var reactionExists bool
-		errInner = sqlscan.Get(ctx, tx, &reactionExists, "SELECT EXISTS(SELECT 1 FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4)", event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction)
+		_, errInner = tx.ExecContext(ctx, `
+				insert into message_reaction(chat_id, message_id, user_id, reaction, create_date_time)
+				values ($1, $2, $3, $4, $5)
+				on conflict (chat_id, message_id, user_id, reaction) do nothing
+			`, chatId, messageId, additionalData.BehalfUserId, reactionStr, additionalData.CreatedAt)
+		if errInner != nil {
+			return false, errInner
+		}
+		wasAddedInner = true
+
+		return wasAddedInner, nil
+	})
+	return wasAdded, errOuter
+}
+
+func (m *CommonProjection) OnMessageReactionDeleted(ctx context.Context, additionalData *AdditionalData, metadata *Metadata, chatId int64, messageId int64, reactionStr string) (bool, error) {
+	wasAdded, errOuter := db.TransactWithResult(ctx, m.db, func(tx *db.Tx) (bool, error) {
+		var wasAddedInner bool
+
+		_, errInner := tx.ExecContext(ctx, "DELETE FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4", chatId, messageId, additionalData.BehalfUserId, reactionStr)
 		if errInner != nil {
 			return false, errInner
 		}
 
-		if !reactionExists {
-			_, errInner = tx.ExecContext(ctx, `
-			insert into message_reaction(chat_id, message_id, user_id, reaction, create_date_time)
-			values ($1, $2, $3, $4, $5)
-			on conflict (chat_id, message_id, user_id, reaction) do nothing
-		`, event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction, event.AdditionalData.CreatedAt)
-			if errInner != nil {
-				return false, errInner
-			}
-			wasAddedInner = true
-		} else {
-			_, errInner = tx.ExecContext(ctx, "DELETE FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4", event.ChatId, event.MessageId, event.AdditionalData.BehalfUserId, event.Reaction)
-			if errInner != nil {
-				return false, errInner
-			}
-		}
 		return wasAddedInner, nil
 	})
 	return wasAdded, errOuter
@@ -1973,6 +1975,16 @@ func (m *CommonProjection) GetReaction(ctx context.Context, co db.CommonOperatio
 	r := reactions[0]
 
 	return r, nil
+}
+
+func (m *CommonProjection) HasMyReaction(ctx context.Context, co db.CommonOperations, chatId, messageId, behalfUserId int64, reaction string) (bool, error) {
+	var reactionExists bool
+	errInner := sqlscan.Get(ctx, co, &reactionExists, "SELECT EXISTS(SELECT 1 FROM message_reaction WHERE chat_id = $1 AND message_id = $2 AND user_id = $3 AND reaction = $4)", chatId, messageId, behalfUserId, reaction)
+	if errInner != nil {
+		return false, errInner
+	}
+
+	return reactionExists, nil
 }
 
 func populateSets(messageId, messageOwnerId int64, additionalUserIdToFetch []int64, embed dto.Embeddable, usersSet map[int64]bool, chatsPreSet map[int64]bool, currentChatId int64, reactions map[int64][]dto.ReactionDto) error {

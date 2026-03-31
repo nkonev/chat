@@ -1171,16 +1171,35 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus *KafkaProduce
 		return NewValidationError("Wrong length of reaction")
 	}
 
-	cp := &MessageReactionFlipped{
-		AdditionalData: s.AdditionalData,
-		ChatId:         s.ChatId,
-		MessageId:      s.MessageId,
-		Reaction:       sanitizedReaction,
-	}
-
-	err = eventBus.Publish(ctx, cp)
+	has, err := commonProjection.HasMyReaction(ctx, dba, s.ChatId, s.MessageId, s.AdditionalData.BehalfUserId, sanitizedReaction)
 	if err != nil {
 		return err
+	}
+
+	if !has {
+		cp := &MessageReactionCreated{
+			AdditionalData: s.AdditionalData,
+			ChatId:         s.ChatId,
+			MessageId:      s.MessageId,
+			Reaction:       sanitizedReaction,
+		}
+
+		err = eventBus.Publish(ctx, cp)
+		if err != nil {
+			return err
+		}
+	} else {
+		cp := &MessageReactionRemoved{
+			AdditionalData: s.AdditionalData,
+			ChatId:         s.ChatId,
+			MessageId:      s.MessageId,
+			Reaction:       sanitizedReaction,
+		}
+
+		err = eventBus.Publish(ctx, cp)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

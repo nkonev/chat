@@ -1746,39 +1746,55 @@ func (m *EventHandler) OnMessageBlogPostMade(ctx context.Context, event *Message
 	return nil
 }
 
-func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *MessageReactionFlipped) error {
+func (m *EventHandler) OnMessageReactionCreated(ctx context.Context, event *MessageReactionCreated) error {
+	return m.onMessageReactionFlipped(ctx, event.AdditionalData, event.Metadata, event.ChatId, event.MessageId, event.Reaction, true)
+}
+
+func (m *EventHandler) OnMessageReactionRemoved(ctx context.Context, event *MessageReactionRemoved) error {
+	return m.onMessageReactionFlipped(ctx, event.AdditionalData, event.Metadata, event.ChatId, event.MessageId, event.Reaction, false)
+}
+
+func (m *EventHandler) onMessageReactionFlipped(ctx context.Context, additionalData *AdditionalData, metadata *Metadata, chatId int64, messageId int64, reactionStr string, created bool) error {
 	ctx, messageSpan := m.tr.Start(ctx, fmt.Sprintf("message.reaction"))
 	defer messageSpan.End()
 
-	adt, err := m.commonProjection.GetChatDataForAuthorization(ctx, m.db, event.AdditionalData.BehalfUserId, event.ChatId)
+	adt, err := m.commonProjection.GetChatDataForAuthorization(ctx, m.db, additionalData.BehalfUserId, chatId)
 	if err != nil {
 		return err
 	}
 
 	if !CanReactOnMessage(adt.ChatCanReactOnMessage, adt.IsParticipant) {
-		m.lgr.InfoContext(ctx, "Skipping OnMessageReactionFlipped because there is no authorization to do so", logger.AttributeChatId, event.ChatId, logger.AttributeUserId, event.AdditionalData.BehalfUserId)
+		m.lgr.InfoContext(ctx, "Skipping OnMessageReactionCreated because there is no authorization to do so", logger.AttributeChatId, chatId, logger.AttributeUserId, additionalData.BehalfUserId)
 		return nil
 	}
 
-	wasAdded, err := m.commonProjection.OnMessageReactionFlipped(ctx, event)
+	var wasAdded bool
+	if created {
+		wasAdded, err = m.commonProjection.OnMessageReactionCreated(ctx, additionalData, metadata, chatId, messageId, reactionStr)
+		if err != nil {
+			return err
+		}
+	} else {
+		wasAdded, err = m.commonProjection.OnMessageReactionDeleted(ctx, additionalData, metadata, chatId, messageId, reactionStr)
+		if err != nil {
+			return err
+		}
+	}
+
+	messageBasic, err := m.commonProjection.GetMessageBasic(ctx, m.db, chatId, messageId)
 	if err != nil {
 		return err
 	}
 
-	messageBasic, err := m.commonProjection.GetMessageBasic(ctx, m.db, event.ChatId, event.MessageId)
+	chatNotificationTitle, err := m.commonProjection.getChatNameForNotification(ctx, m.db, chatId)
 	if err != nil {
-		return err
-	}
-
-	chatNotificationTitle, err := m.commonProjection.getChatNameForNotification(ctx, m.db, event.ChatId)
-	if err != nil {
-		m.lgr.WarnContext(ctx, "Unable to get chatNotificationTitle", logger.AttributeChatId, event.ChatId, logger.AttributeError, err)
+		m.lgr.WarnContext(ctx, "Unable to get chatNotificationTitle", logger.AttributeChatId, chatId, logger.AttributeError, err)
 		// nothing
 	}
 
 	var behalfUserDto *dto.User
 
-	reaction, err := m.commonProjection.GetReaction(ctx, m.db, event.ChatId, event.MessageId, event.Reaction)
+	reaction, err := m.commonProjection.GetReaction(ctx, m.db, chatId, messageId, reactionStr)
 	if err != nil {
 		m.lgr.ErrorContext(ctx, "Error during IterateOverReactionParticipantsIds", logger.AttributeError, err)
 		return nil
@@ -1790,7 +1806,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 	}
 
 	toQueryUserIds := []int64{}
-	toQueryUserIds = append(toQueryUserIds, event.AdditionalData.BehalfUserId)
+	toQueryUserIds = append(toQueryUserIds, additionalData.BehalfUserId)
 	toQueryUserIds = append(toQueryUserIds, reaction.UserIds...)
 
 	users, err := m.aaaRestClient.GetUsers(ctx, toQueryUserIds)
@@ -1798,7 +1814,7 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 		m.lgr.WarnContext(ctx, "unable to get users")
 	}
 	reactionUserMap := utils.ToMap(users)
-	behalfUserDto = reactionUserMap[event.AdditionalData.BehalfUserId]
+	behalfUserDto = reactionUserMap[additionalData.BehalfUserId]
 
 	reactionUsers := make([]*dto.User, 0)
 	for _, userId := range reaction.UserIds {
@@ -1824,17 +1840,17 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 	}
 
 	reactionChangedEvent := dto.ReactionChangedEvent{
-		MessageId: event.MessageId,
+		MessageId: messageId,
 		Reaction:  aReaction,
 	}
 
-	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, event.ChatId, []int64{}, func(participantIds []int64) error {
+	errOuter := m.commonProjection.IterateOverChatParticipantIdsExcepting(ctx, m.db, chatId, []int64{}, func(participantIds []int64) error {
 		for _, participantId := range participantIds {
-			errInner := m.rabbitmqOutputEventPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.ChatEvent{
+			errInner := m.rabbitmqOutputEventPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.ChatEvent{
 				EventType:            eventType,
 				ReactionChangedEvent: &reactionChangedEvent,
 				UserId:               participantId,
-				ChatId:               event.ChatId,
+				ChatId:               chatId,
 			})
 			if errInner != nil {
 				m.lgr.ErrorContext(ctx, "Error during sending to rabbitmq", logger.AttributeError, errInner)
@@ -1850,9 +1866,9 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 	if wasAdded {
 		reactionEventType = dto.EventTypeReactionAdded
 		re := dto.ReactionEvent{
-			UserId:    event.AdditionalData.BehalfUserId,
-			Reaction:  event.Reaction,
-			MessageId: event.MessageId,
+			UserId:    additionalData.BehalfUserId,
+			Reaction:  reactionStr,
+			MessageId: messageId,
 		}
 
 		var messageOwnerId = messageBasic.GetOwnerId()
@@ -1860,14 +1876,14 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 			m.lgr.InfoContext(ctx, "Unable to get message owner for reaction notification")
 		} else {
 			if behalfUserDto == nil {
-				m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", logger.AttributeUserId, event.AdditionalData.BehalfUserId)
+				m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", logger.AttributeUserId, additionalData.BehalfUserId)
 			} else {
-				if messageOwnerId != event.AdditionalData.BehalfUserId { // skip myself
-					err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+				if messageOwnerId != additionalData.BehalfUserId { // skip myself
+					err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.NotificationEvent{
 						EventType:     reactionEventType,
 						ReactionEvent: &re,
 						UserId:        messageOwnerId,
-						ChatId:        event.ChatId,
+						ChatId:        chatId,
 						ByUserId:      behalfUserDto.Id,
 						ByLogin:       behalfUserDto.Login,
 						ByAvatar:      behalfUserDto.Avatar,
@@ -1882,8 +1898,8 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 	} else {
 		reactionEventType = dto.EventTypeReactionDeleted
 		re := dto.ReactionEvent{
-			Reaction:  event.Reaction,
-			MessageId: event.MessageId,
+			Reaction:  reactionStr,
+			MessageId: messageId,
 		}
 
 		var messageOwnerId = messageBasic.GetOwnerId()
@@ -1891,13 +1907,13 @@ func (m *EventHandler) OnMessageReactionFlipped(ctx context.Context, event *Mess
 			m.lgr.InfoContext(ctx, "Unable to get message owner for reaction notification")
 		} else {
 			if behalfUserDto == nil {
-				m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", logger.AttributeUserId, event.AdditionalData.BehalfUserId)
+				m.lgr.InfoContext(ctx, "Unable to get behalf user for reply notification", logger.AttributeUserId, additionalData.BehalfUserId)
 			} else {
-				err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, event.AdditionalData.GetCorrelationId(), dto.NotificationEvent{
+				err = m.rabbitmqNotificationEventsPublisher.Publish(ctx, additionalData.GetCorrelationId(), dto.NotificationEvent{
 					EventType:     reactionEventType,
 					ReactionEvent: &re,
 					UserId:        messageOwnerId,
-					ChatId:        event.ChatId,
+					ChatId:        chatId,
 					ByUserId:      behalfUserDto.Id,
 					ByLogin:       behalfUserDto.Login,
 					ByAvatar:      behalfUserDto.Avatar,

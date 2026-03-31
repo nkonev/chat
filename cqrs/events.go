@@ -30,11 +30,12 @@ const (
 	EventMessageDeleted                     = "messageDeleted"
 	EventMessagePinned                      = "messagePinned"
 	EventMessagePublished                   = "messagePublished"
-	EventMessageReactionFlipped             = "messageReactionFlipped"
-	EventTechnicalAbandonedChatRemoved      = "technicalAbandonedChatRemoved"
+	EventMessageReactionCreated             = "messageReactionCreated"
+	EventMessageReactionRemoved             = "messageReactionDeleted"
+	EventTechnicalAbandonedChatRemoved      = "technicalAbandonedChatDeleted"
 	EventUserChatParticipantAdded           = "userChatParticipantAdded"
 	EventUserChatEdited                     = "userChatEdited"
-	EventUserChatParticipantRemoved         = "userChatParticipantRemoved"
+	EventUserChatParticipantRemoved         = "userChatParticipantDeleted"
 	EventUserMessagesCreated                = "userMessagesCreated"
 	EventUserMessageDeleted                 = "userMessageDeleted"
 )
@@ -390,7 +391,15 @@ type MessagePublished struct {
 	Published      bool            `json:"published"`
 }
 
-type MessageReactionFlipped struct {
+type MessageReactionCreated struct {
+	AdditionalData *AdditionalData `json:"additionalData"`
+	Metadata       *Metadata       `json:"-"`
+	ChatId         int64           `json:"chatId"`
+	MessageId      int64           `json:"messageId"`
+	Reaction       string          `json:"reaction"`
+}
+
+type MessageReactionRemoved struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	Metadata       *Metadata       `json:"-"`
 	ChatId         int64           `json:"chatId"`
@@ -544,7 +553,11 @@ func (s *MessagePublished) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
-func (s *MessageReactionFlipped) GetPartitionKey() string {
+func (s *MessageReactionCreated) GetPartitionKey() string {
+	return utils.ToString(s.ChatId)
+}
+
+func (s *MessageReactionRemoved) GetPartitionKey() string {
 	return utils.ToString(s.ChatId)
 }
 
@@ -648,8 +661,12 @@ func (s *MessagePublished) GetEventType() string {
 	return EventMessagePublished
 }
 
-func (s *MessageReactionFlipped) GetEventType() string {
-	return EventMessageReactionFlipped
+func (s *MessageReactionCreated) GetEventType() string {
+	return EventMessageReactionCreated
+}
+
+func (s *MessageReactionRemoved) GetEventType() string {
+	return EventMessageReactionRemoved
 }
 
 func (s *TechnicalAbandonedChatRemoved) GetEventType() string {
@@ -752,7 +769,11 @@ func (s *MessagePublished) GetMetadata() *Metadata {
 	return s.Metadata
 }
 
-func (s *MessageReactionFlipped) GetMetadata() *Metadata {
+func (s *MessageReactionCreated) GetMetadata() *Metadata {
+	return s.Metadata
+}
+
+func (s *MessageReactionRemoved) GetMetadata() *Metadata {
 	return s.Metadata
 }
 
@@ -856,7 +877,11 @@ func (s *MessagePublished) SetMetadata(m *Metadata) {
 	s.Metadata = m
 }
 
-func (s *MessageReactionFlipped) SetMetadata(m *Metadata) {
+func (s *MessageReactionCreated) SetMetadata(m *Metadata) {
+	s.Metadata = m
+}
+
+func (s *MessageReactionRemoved) SetMetadata(m *Metadata) {
 	s.Metadata = m
 }
 
@@ -960,7 +985,11 @@ func (s *MessagePublished) GetEventPartitioningBy() EventPartitioningBy {
 	return EventPartitioningByChatId
 }
 
-func (s *MessageReactionFlipped) GetEventPartitioningBy() EventPartitioningBy {
+func (s *MessageReactionCreated) GetEventPartitioningBy() EventPartitioningBy {
+	return EventPartitioningByChatId
+}
+
+func (s *MessageReactionRemoved) GetEventPartitioningBy() EventPartitioningBy {
 	return EventPartitioningByChatId
 }
 

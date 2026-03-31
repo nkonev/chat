@@ -405,7 +405,7 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *KafkaProducer, lgr *lo
 					}
 
 					for _, oldReaction := range oldReactions {
-						fl := &MessageReactionFlipped{
+						fl := &MessageReactionCreated{
 							AdditionalData: GenerateMessageAdditionalData(nil, oldReaction.UserId),
 							ChatId:         oldChat.Id,
 							MessageId:      oldMessage.Id,
