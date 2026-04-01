@@ -1,10 +1,8 @@
 # chat application
 
-This chat application built with CQRS (anti) pattern.
-
-Events are stored in Kafka, projections are stored in PostgreSQL.
-
-We can reset our projections and then restore their state from Kafka by resetting offsets and then replaying events.
+A (future) replacement of chat microservice in videochat project, 
+built using CQRS (anti)pattern on top of Kafka as event store 
+and PostgreSQL with Citus sharding extension as projection store.
 
 See [It's Okay To Store Data In Kafka](https://www.confluent.io/blog/okay-store-data-apache-kafka/).
 
