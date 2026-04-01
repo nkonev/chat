@@ -98,6 +98,15 @@ go run . reset
 curl -i -X DELETE --url 'http://localhost:1235/internal/truncate'
 ```
 
+# Migration from old chat
+```bash
+make package
+make infra_down
+make infra
+./chat migrate --performMigration=true
+./chat rewind --rabbitmq.skipPublishOutputEventsOnRewind=true --rabbitmq.skipPublishNotificationEventsOnRewind=true > /tmp/chat.log
+```
+
 # Tracing
 See `Trace-Id` header and put its value into [Jaeger UI](http://localhost:16686)
 
