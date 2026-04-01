@@ -58,6 +58,11 @@ func NewLogger(consoleWriter io.Writer, cfg *config.AppConfig) *LoggerWrapper {
 				Key:   "level",
 				Value: slog.StringValue(strings.ToLower(a.Value.String())),
 			}
+		} else if a.Key == "err" {
+			return slog.Attr{
+				Key:   AttributeError,
+				Value: a.Value,
+			}
 		} else {
 			return a
 		}
