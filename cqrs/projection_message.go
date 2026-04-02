@@ -1216,48 +1216,6 @@ func (m *CommonProjection) setNoUnreadsInAllChats(ctx context.Context, co db.Com
 	return updatedChatsPortion, nil
 }
 
-func (m *CommonProjection) fastForwardParticipantMessageReadIdUpTo(ctx context.Context, co db.CommonOperations, chatId int64, lastReadMessageDateTime time.Time, maxMessageIdsPerParticipantId map[int64]int64) error {
-	if len(maxMessageIdsPerParticipantId) == 0 {
-		return nil
-	}
-
-	participantIds := []int64{}
-	messageIds := []int64{}
-
-	for participantId, upToMessageId := range maxMessageIdsPerParticipantId {
-		participantIds = append(participantIds, participantId)
-		messageIds = append(messageIds, upToMessageId)
-	}
-
-	_, err := co.ExecContext(ctx, `
-	with owners_with_messages as (
-		select * from unnest(
-			 cast($3 as bigint[])
-			,cast($4 as bigint[])
-		) as t (
-			 owner_id
-			,message_id
-		)
-	),
-	input_data as (
-		select 
-			ow.owner_id, 
-			ow.message_id,
-			p.chat_id
-		from owners_with_messages ow
-		join chat_participant p on ow.owner_id = p.user_id
-		where p.chat_id = $1
-	)
-	merge into chat_participant cp
-	using input_data idt
-	on (idt.chat_id, idt.owner_id) = (cp.chat_id, cp.user_id)
-	when matched then update set 
-	   cp_last_read_message_id = idt.message_id
-	  ,cp_last_read_message_date_time = $2
-	`, chatId, lastReadMessageDateTime, participantIds, messageIds)
-	return err
-}
-
 func (m *CommonProjection) fastForwardParticipantMessageReadId(ctx context.Context, co db.CommonOperations, userId, chatId int64, lastReadMessageDateTime time.Time) error {
 	_, err := co.ExecContext(ctx, `
 		with 
