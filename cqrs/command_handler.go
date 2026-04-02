@@ -1179,9 +1179,11 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus *KafkaProduce
 	if !has {
 		cp := &MessageReactionCreated{
 			AdditionalData: s.AdditionalData,
-			ChatId:         s.ChatId,
-			MessageId:      s.MessageId,
-			Reaction:       sanitizedReaction,
+			MessageReactionCommoned: MessageReactionCommoned{
+				ChatId:    s.ChatId,
+				MessageId: s.MessageId,
+				Reaction:  sanitizedReaction,
+			},
 		}
 
 		err = eventBus.Publish(ctx, cp)
@@ -1191,9 +1193,11 @@ func (s *MessageReactionFlip) Handle(ctx context.Context, eventBus *KafkaProduce
 	} else {
 		cp := &MessageReactionRemoved{
 			AdditionalData: s.AdditionalData,
-			ChatId:         s.ChatId,
-			MessageId:      s.MessageId,
-			Reaction:       sanitizedReaction,
+			MessageReactionCommoned: MessageReactionCommoned{
+				ChatId:    s.ChatId,
+				MessageId: s.MessageId,
+				Reaction:  sanitizedReaction,
+			},
 		}
 
 		err = eventBus.Publish(ctx, cp)

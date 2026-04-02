@@ -391,20 +391,22 @@ type MessagePublished struct {
 	Published      bool            `json:"published"`
 }
 
+type MessageReactionCommoned struct {
+	ChatId    int64  `json:"chatId"`
+	MessageId int64  `json:"messageId"`
+	Reaction  string `json:"reaction"`
+}
+
 type MessageReactionCreated struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	Metadata       *Metadata       `json:"-"`
-	ChatId         int64           `json:"chatId"`
-	MessageId      int64           `json:"messageId"`
-	Reaction       string          `json:"reaction"`
+	MessageReactionCommoned
 }
 
 type MessageReactionRemoved struct {
 	AdditionalData *AdditionalData `json:"additionalData"`
 	Metadata       *Metadata       `json:"-"`
-	ChatId         int64           `json:"chatId"`
-	MessageId      int64           `json:"messageId"`
-	Reaction       string          `json:"reaction"`
+	MessageReactionCommoned
 }
 
 type TechnicalAbandonedChatRemoved struct {
