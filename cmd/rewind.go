@@ -33,7 +33,8 @@ and processes the 'need_to_fast_forward_sequences' task
 in "technical" PostgreSQL table.
 Then exits.
 
-`)
+./%s %s --rabbitmq.skipPublishOutputEventsOnRewind=true --rabbitmq.skipPublishNotificationEventsOnRewind=true
+`, ExecutableName, CommandRewindName)
 
 		return
 	}
