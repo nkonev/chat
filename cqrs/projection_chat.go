@@ -1403,3 +1403,20 @@ func (m *CommonProjection) GetExistingChatIds(ctx context.Context, co db.CommonO
 	}
 	return list, nil
 }
+
+func (m *CommonProjection) getChatNameForNotification(ctx context.Context, co db.CommonOperations, chatId int64) (string, error) {
+	chatBasic, err := m.GetChatBasic(ctx, co, chatId)
+	if err != nil {
+		return "", err
+	}
+	var chatName string
+	if chatBasic != nil {
+		chatName = chatBasic.Title
+		if chatBasic.TetATet {
+			chatName = ""
+		}
+	} else {
+		chatName = getDeletedChatName(chatId)
+	}
+	return chatName, nil
+}
