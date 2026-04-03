@@ -1343,7 +1343,7 @@ func (m *CommonProjection) fastForwardChatParticipantMessageReadIdInAllChats(ctx
 	return resChatIds, nil
 }
 
-func (m *CommonProjection) fastForwardLastRead(ctx context.Context, co db.CommonOperations, userId, chatId int64) error {
+func (m *CommonProjection) fastForwardUnreadMessages(ctx context.Context, co db.CommonOperations, userId, chatId int64) error {
 	_, err := co.ExecContext(ctx, `
 		UPDATE chat_user_view 
 		SET unread_messages = 0, cuv_last_read_message_id = (select max(id) from message where chat_id = $2)
@@ -1407,7 +1407,7 @@ func (m *CommonProjection) OnUserUnreadMessageReaded(ctx context.Context, event 
 				return nil
 			} else if event.ReadMessagesAction == ReadMessagesActionAllMessagesInOneChat {
 
-				err := m.fastForwardLastRead(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
+				err := m.fastForwardUnreadMessages(ctx, tx, event.AdditionalData.BehalfUserId, event.ChatId)
 				if err != nil {
 					return err
 				}
