@@ -410,7 +410,6 @@ func (sp *ChatCreate) Handle(ctx context.Context, eventBus *KafkaProducer, dba *
 		ChatId:         chatId,
 		Participants:   make([]ParticipantWithAdmin, 0),
 		IsChatCreating: true,
-		TetATet:        copyCommand.TetATet,
 	}
 	for _, participantId := range copyCommand.ParticipantIds {
 		pa.Participants = append(pa.Participants, ParticipantWithAdmin{

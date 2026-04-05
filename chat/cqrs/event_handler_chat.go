@@ -50,7 +50,7 @@ func (m *EventHandler) OnParticipantAdded(ctx context.Context, event *Participan
 			CorrelationId: event.AdditionalData.CorrelationId,
 			ChatId:        event.ChatId,
 			UserId:        userId,
-			TetATet:       event.TetATet,
+			TetATet:       adt.ChatIsTetATet,
 		}
 		err = m.eventBus.Publish(ctx, ue)
 		if err != nil {

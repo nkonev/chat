@@ -131,7 +131,6 @@ type ParticipantsAdded struct {
 	ChatId         int64                  `json:"chatId"`
 	IsChatCreating bool                   `json:"isChatCreating"`
 	IsJoining      bool                   `json:"isJoining"`
-	TetATet        bool                   `json:"tetATet"`
 }
 
 func (p *ParticipantsAdded) GetParticipantIds() []int64 {

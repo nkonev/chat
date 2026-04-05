@@ -166,7 +166,6 @@ func RunMigrateFromOldDb(cfg *config.AppConfig, eventBus *KafkaProducer, lgr *lo
 					AdditionalData: GenerateMessageAdditionalData(nil, behalfUserId),
 					ChatId:         oldChat.Id,
 					IsChatCreating: true,
-					TetATet:        oldChat.TetATet,
 				}
 
 				for _, oldParticipant := range oldParticipants {
